@@ -343,16 +343,29 @@ class Bcontrol_Loader(object):
                 # datasink is checked.
                 prev_sink = datasink[n]
                 next_sink = datasink[n+1]
-                assert(prev_sink.next_sound_id.stimulus.item() == \
-                    TRIALS_INFO['STIM_NUMBER'][n])
-                assert(prev_sink.next_side.item() == \
-                    TRIALS_INFO['CORRECT_SIDE'][n])
-                assert(prev_sink.next_trial_type.item() == \
-                    TRIALS_INFO['GO_OR_NOGO'][n])
-                assert(next_sink.finished_trial_num.item() == \
-                    TRIALS_INFO['TRIAL_NUMBER'][n])
-                assert(CONSTS[next_sink.finished_trial_outcome.item()] == \
-                    TRIALS_INFO['OUTCOME'][n])
+                try:
+                    assert(prev_sink.next_sound_id.stimulus.item() == \
+                        TRIALS_INFO['STIM_NUMBER'][n])
+                    assert(prev_sink.next_side.item() == \
+                        TRIALS_INFO['CORRECT_SIDE'][n])
+                    assert(prev_sink.next_trial_type.item() == \
+                        TRIALS_INFO['GO_OR_NOGO'][n])
+                    assert(next_sink.finished_trial_num.item() == \
+                        TRIALS_INFO['TRIAL_NUMBER'][n])
+                    assert(CONSTS[next_sink.finished_trial_outcome.item()] == \
+                        TRIALS_INFO['OUTCOME'][n])
+                except AttributeError:
+                    # .item() syntax only required for some versions of scipy
+                    assert(prev_sink.next_sound_id.stimulus == \
+                        TRIALS_INFO['STIM_NUMBER'][n])
+                    assert(prev_sink.next_side == \
+                        TRIALS_INFO['CORRECT_SIDE'][n])
+                    assert(prev_sink.next_trial_type == \
+                        TRIALS_INFO['GO_OR_NOGO'][n])
+                    assert(next_sink.finished_trial_num == \
+                        TRIALS_INFO['TRIAL_NUMBER'][n])
+                    assert(CONSTS[next_sink.finished_trial_outcome] == \
+                        TRIALS_INFO['OUTCOME'][n])
             
             # Sound name is correct
             # assert(SOUNDS_INFO.sound_names[stim_number] == datasink[sound name]
