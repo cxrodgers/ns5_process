@@ -35,6 +35,7 @@ import OpenElectrophy as OE
 import numpy as np
 import os.path
 import matplotlib.mlab as mlab
+import glob
 
 
 
@@ -102,7 +103,7 @@ class KlustaKwikIO(object):
     def write_block(self, block):     
         # Make all file handles
         neuron_list = block._neurons
-        1/0
+        #1/0
         self._make_all_file_handles(neuron_list)
         
         # Will contain info about each segment
@@ -133,20 +134,22 @@ class KlustaKwikIO(object):
 # MAIN SCRIPT BEGINS HERE
 if __name__ == '__main__':
     # Location of data
-    data_dir = '/home/chris/Public/20110420_FF1A_interesting_neuron/0420_001'
+    data_dir = '/home/chris/Public/20110517_CR12B_FF2B/CR12B_0514_001'
+    PRE_STIMULUS_TIME = 0.5
 
     # Location of the Bcontrol file
     #bdata_filename = os.path.join(data_dir, 
     #    'data_@TwoAltChoice_v2_chris_AIR11A_101012a.at')
 
     # Location of OE db
-    db_filename = os.path.join(data_dir, 'datafile_CR_FF1A_110420_001.db')
+    #db_filename = os.path.join(data_dir, 'datafile_CR_CR12B_110507_001.db')
+    db_filename = glob.glob(os.path.join(data_dir, '*.db'))[0]
 
-    # Output of the writer
-    output_filename = os.path.join(data_dir, 'datafile_CR_FF1A_110420_001')
+    # Output of the writers
+    output_filename = os.path.splitext(db_filename)[0]
     
     # Metadata: trial numbers etc
-    #metadata_filename = os.path.join(data_dir, 'metadata.csv')
+    metadata_filename = os.path.join(data_dir, 'metadata.csv')
 
     # Load db
     db = OE.open_db('sqlite:///%s' % db_filename)
@@ -156,37 +159,44 @@ if __name__ == '__main__':
     block = OE.Block().load(id_block)    
     neuron_list = block._neurons
     
-    big_spiketimes = dict()
-    for n in neuron_list:
-        stt = n._spiketrains
-        spike_time_list = []
-        for sttn in stt:            
-            if len(sttn.spike_times) > 0:
-                spike_time_list.append(sttn.spike_times - sttn.t_start)
-        print n.name
-        print len(spike_time_list)
-        big_spiketimes[n.name] = np.concatenate(spike_time_list)
-            
-        
+    # Some alternative code for ipython interactive psths
+    #~ big_spiketimes = dict()
+    #~ for n in neuron_list:
+        #~ stt = n._spiketrains
+        #~ spike_time_list = []
+        #~ for sttn in stt:            
+            #~ if len(sttn.spike_times) > 0:
+                #~ spike_time_list.append(sttn.spike_times - sttn.t_start)
+        #~ print n.name
+        #~ print len(spike_time_list)
+        #~ big_spiketimes[n.name] = np.concatenate(spike_time_list)
     
-
     # Build a writer
-    #w = KlustaKwikIO(filename=output_filename)    
-    #w.write_block(block)
+    w = KlustaKwikIO(filename=output_filename)    
+    w.write_block(block)
     
     # Also dump metadata: btrial num, t_start in samples
-    #~ seg_metadata = list()
-    #~ for seg in block.get_segments():
-        #~ t_starts1 = [sig.t_start for sig in seg._analogsignals]
-        #~ t_starts2 = [st.t_start for st in seg._spiketrains]
-        #~ assert len(np.unique(t_starts1)) == 1
-        #~ assert len(np.unique(t_starts2)) == 1
-        #~ assert np.unique(t_starts1) == np.unique(t_starts2)
-        #~ t_start = np.rint((t_starts1[0] + 0.5) * 30000.).astype(np.int64)
-        #~ seg_metadata.append((seg.name, int(seg.info), t_start))
+    seg_metadata = list()
+    for seg in block.get_segments():
+        t_starts1 = [sig.t_start for sig in seg._analogsignals]
+        t_starts2 = [st.t_start for st in seg._spiketrains]
+        assert len(np.unique(t_starts1)) == 1
+        
+        # You can get errors here where some spiketrains have already the right
+        # t_start and others don't. I think maybe this happens when you re-spike
+        # sort or something.
+        #assert len(np.unique(t_starts2)) == 1
+        #assert np.unique(t_starts1) == np.unique(t_starts2)
+        
+        
+        # This was a stupid bugfix for a stupid bug that is now breaking things
+        # Replaced with PRE_STIMULUS_TIME so at least it's up front
+        t_start = np.rint((t_starts1[0] + PRE_STIMULUS_TIME) * 30000.).astype(np.int64)        
+        
+        seg_metadata.append((seg.name, int(seg.info), t_start))
     
     # Convert seg_metadata to recarray and write to disk
-    #r = np.rec.fromrecords(seg_metadata,
-    #    dtype=[('ntrial','<U32' ), ('btrial_num', np.int), ('stim_onset', np.int64)])
-    #mlab.rec2csv(r, metadata_filename)
+    r = np.rec.fromrecords(seg_metadata,
+        dtype=[('ntrial','<U32' ), ('btrial_num', np.int), ('stim_onset', np.int64)])
+    mlab.rec2csv(r, metadata_filename)
     
