@@ -10,5 +10,5 @@ class TrialSlicer:
     according to provided parameters.
     """
     
-    def __init__(self, timestamps, soft_limits, hard_limits):
+    def __init__(self, timestamps, soft_limits, hard_limits, overlap=0):
         
