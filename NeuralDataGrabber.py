@@ -46,12 +46,28 @@ class NeuralDataGrabber:
             shove_channels = self.shove_channels
         if tetrode_channels is None:
             tetrode_channels = self.tetrode_channels
-        
+                
         # Make a directory for this date
         date_dir = os.path.join(self.data_analysis_dir, date_string)
-        final_dir = os.path.join(date_dir, '001')
         if not os.path.exists(date_dir):
             os.mkdir(date_dir)
+        
+        # Handle 001 and 002 files, if they exist
+        if os.path.exists(os.path.join(self.ndaq_dir, 
+            self.filename_prefix  + date_string + '_001.ns5')):
+            self.handle_behaving(date_dir, date_string, shove_channels, tetrode_channels)
+        else:
+            print ("warning: no 001 file found for %s" % date_string)
+
+        if os.path.exists(os.path.join(self.ndaq_dir, 
+            self.filename_prefix  + date_string + '_002.ns5')):
+            self.handle_WN(date_dir, date_string, shove_channels, tetrode_channels)
+        else:
+            print ("warning: no 002 file found for %s" % date_string)
+    
+    def handle_behaving(self, date_dir, date_string, shove_channels, tetrode_channels):
+        # Handle behaving
+        final_dir = os.path.join(date_dir, '001')        
         if not os.path.exists(final_dir):
             os.mkdir(final_dir)
         
@@ -60,7 +76,7 @@ class NeuralDataGrabber:
             self.filename_prefix + date_string + '_001.ns5')        
         
         # Actually link it
-        self.get_behaving_file(file_to_find, final_dir)
+        self.link_file(file_to_find, final_dir)
         
         # Copy the meta files
         if shove_channels is not None and os.path.exists(shove_channels):
@@ -70,8 +86,30 @@ class NeuralDataGrabber:
             shutil.copyfile(tetrode_channels, 
                 os.path.join(final_dir, 'TETRODE_CHANNELS'))
         
+        # Deal with *.mat file here
     
-    def get_behaving_file(self, filename, final_dir, verbose=True, 
+    def handle_WN(self, date_dir, date_string, shove_channels, tetrode_channels):
+        # Handle WN
+        final_dir = os.path.join(date_dir, '002')        
+        if not os.path.exists(final_dir):
+            os.mkdir(final_dir)
+        
+        # Find the 002 file
+        file_to_find = os.path.join(self.ndaq_dir,
+            self.filename_prefix + date_string + '_002.ns5')
+        
+        # Actually link it
+        self.link_file(file_to_find, final_dir)
+        
+        # Copy the meta files
+        if shove_channels is not None and os.path.exists(shove_channels):
+            shutil.copyfile(shove_channels, 
+                os.path.join(final_dir, 'SHOVE_CHANNELS'))
+        if tetrode_channels is not None and os.path.exists(tetrode_channels):
+            shutil.copyfile(tetrode_channels, 
+                os.path.join(final_dir, 'TETRODE_CHANNELS'))
+    
+    def link_file(self, filename, final_dir, verbose=True, 
         dryrun=False, force_run=False):
         if not os.path.exists(filename):
             raise IOError("Can't find file %s" % filename)
