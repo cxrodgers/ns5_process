@@ -1,3 +1,7 @@
+import sys
+import os
+import shutil
+
 class NeuralDataGrabber:
     """Finds *.ns5 files and builds a data analysis directory."""
     def __init__(self, filename_prefix, ndaq_dir='/media/alfshr/REPO_NDAQ',
@@ -53,7 +57,7 @@ class NeuralDataGrabber:
         
         # Find the 001 file
         file_to_find = os.path.join(self.ndaq_dir,
-            filename_prefix + date_string + '_001.ns5')        
+            self.filename_prefix + date_string + '_001.ns5')        
         
         # Actually link it
         self.get_behaving_file(file_to_find, final_dir)
