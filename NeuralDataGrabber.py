@@ -5,7 +5,9 @@ import shutil
 class NeuralDataGrabber:
     """Finds *.ns5 files and builds a data analysis directory."""
     def __init__(self, filename_prefix, ndaq_dir='/media/alfshr/REPO_NDAQ',
-        data_analysis_dir='.', shove_channels=None, tetrode_channels=None):
+        data_analysis_dir='.', 
+        bcontrol_data_dir='/media/alfshr/REPO_TRWINRIG_DATA',
+        shove_channels=None, tetrode_channels=None):
         """Builds a new object to get data from a certain location.
         
         This object needs to know where the raw *.ns5 files are located.
@@ -30,6 +32,9 @@ class NeuralDataGrabber:
         self.filename_prefix = filename_prefix
         self.ndaq_dir = ndaq_dir
         self.data_analysis_dir = data_analysis_dir
+        self.bcontrol_data_dir = bcontrol_data_dir
+        self.shove_channels = shove_channels
+        self.tetrode_channels = tetrode_channels
     
     def get_date(self, date_string, shove_channels=None, tetrode_channels=None):
         """Finds files from certain date and builds data analysis directory.
