@@ -1,12 +1,14 @@
 import sys
 import os
 import shutil
+import time
+import numpy as np
 
 class NeuralDataGrabber:
     """Finds *.ns5 files and builds a data analysis directory."""
     def __init__(self, filename_prefix, ndaq_dir='/media/alfshr/REPO_NDAQ',
         data_analysis_dir='.', 
-        bcontrol_data_dir='/media/alfshr/REPO_TRWINRIG_DATA',
+        bcontrol_data_dir=None,
         shove_channels=None, tetrode_channels=None):
         """Builds a new object to get data from a certain location.
         
@@ -22,6 +24,7 @@ class NeuralDataGrabber:
             acquire. Typical value would be 'datafile_CR_CR12B_'
         ndaq_dir : directory where *.ns5 files are located
         data_analysis_dir : root of tree to place files
+        bcontrol_data_dir : directory to find behaving *.mat files
         shove_channels : filename to SHOVE_CHANNELS, or None
         tetrode_channels : filename to TETRODE_CHANNELS, or None
         
@@ -92,6 +95,20 @@ class NeuralDataGrabber:
                 os.path.join(final_dir, 'TETRODE_CHANNELS'))
         
         # Deal with *.mat file here
+        if self.bcontrol_data_dir is not None:
+            bc_files = os.listdir(self.bcontrol_data_dir)
+            bc_files.sort()
+            bc_files = [os.path.join(self.bcontrol_data_dir, fi) \
+                for fi in bc_files]
+
+            # Get file times of all files in bcontrol data. Use time.ctime()
+            # to convert to human-readable.
+            file_times = \
+                np.array([os.path.getmtime(bc_file) for bc_file in bc_files])
+            idx = np.argmin(np.abs(file_times - os.path.getmtime(file_to_find)))
+            bdata_file = bc_files[idx]
+            print "I found %s and the diff is %f" % (bdata_file, 
+                os.path.getmtime(bdata_file) - os.path.getmtime(file_to_find))
     
     def handle_WN(self, date_dir, date_string, shove_channels, tetrode_channels):
         # Handle WN
