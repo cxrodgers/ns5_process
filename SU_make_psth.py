@@ -243,10 +243,22 @@ class KK_loader(object):
         
         This matches on tetrode number and returns a dict of the filenames
         keyed by tetrode number.
+        
+        It must end with digits, not including minus sign or anything else.
         """
-        return dict([\
-            (int(glob.re.search(('%s\.(\d+)' % match_string), v).group(1)), v) \
-            for v in filename_list])
+        d = dict()
+        for v in filename_list:
+            # Test whether matches format, ie ends with digits
+            m = glob.re.search(('%s\.(\d+)' % match_string), v)             
+            if m is not None:
+                # Key the tetrode number to the filename
+                tetn = int(m.group(1)) # Group 0 is something else
+                d[tetn] = v
+        return d
+        
+        #~ return dict([\
+            #~ (int(glob.re.search(('%s\.(\d+)' % match_string), v).group(1)), v) \
+            #~ for v in filename_list])
 
     def _load_spike_times(self, fetfilename):
         f = file(fetfilename, 'r')
@@ -432,7 +444,7 @@ def get_bdata_pickle(data_dir):
 
 
 
-def execute(data_dir):
+def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000):
     # BEGIN MAIN SCRIPT HERE
     # Where the files are located
     #~ unit_map = [\
@@ -480,7 +492,7 @@ def execute(data_dir):
         
         # Link the spike times to the trials from whence they came
         spiketrain.add_trial_info(metadata['stim_onset'], metadata['btrial_num'],
-        pre_win=45000, post_win=45000)
+        pre_win=pre_stim_samples, post_win=post_stim_samples)
         
         
         # Plot MUA PSTH of each tetrode
