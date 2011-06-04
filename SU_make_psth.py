@@ -432,7 +432,7 @@ def get_bdata_pickle(data_dir):
 
 
 
-if __name__ == '__main__':
+def execute(data_dir):
     # BEGIN MAIN SCRIPT HERE
     # Where the files are located
     #~ unit_map = [\
@@ -448,7 +448,7 @@ if __name__ == '__main__':
             
     #~ for uu in unit_map:
         #~ # Load data from this directory
-    data_dir = '/home/chris/Public/20110517_CR12B_FF2B/CR12B_0514_001'
+    #data_dir = '/home/chris/Public/20110517_CR12B_FF2B/CR12B_0514_001'
 
 
     # Initialize a KlustKwik loader and run it on the data directory.

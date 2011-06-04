@@ -132,10 +132,24 @@ class KlustaKwikIO(object):
     
 
 # MAIN SCRIPT BEGINS HERE
-if __name__ == '__main__':
+def execute(data_dir, PRE_STIMULUS_TIME=0.5):
+    """Write spike time data and metadata from OE db.
+    
+    Writes spike times from all sorted spikes in OE db to KlustaKwik
+    files in same directory.
+    
+    Also writes a file metadata.csv with the ntrial number (ordering
+    of segments in OE db), the btrial number (trial id in matlab struct,
+    extracted from OE db info field), and the time of stimulus onset.
+    
+    Time of stimulus onset is calculated as the t_start time of that segment
+    in  OE dB, plus the provided PRE_STIMULUS_TIME parameter. Later scripts
+    will use the stimulus onset times to find spikes associated with that
+    trial in the KlustaKwik files.
+    """
     # Location of data
-    data_dir = '/home/chris/Public/20110517_CR12B_FF2B/CR12B_0514_001'
-    PRE_STIMULUS_TIME = 0.5
+    #data_dir = '/home/chris/Public/20110517_CR12B_FF2B/CR12B_0514_001'
+    #PRE_STIMULUS_TIME = 0.5
 
     # Location of the Bcontrol file
     #bdata_filename = os.path.join(data_dir, 
