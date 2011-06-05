@@ -1,11 +1,18 @@
 import numpy as np
 import os.path
 import glob
+import matplotlib
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import bcontrol
 import pickle
 from collections import defaultdict
+matplotlib.rcParams['figure.subplot.hspace'] = .5
+matplotlib.rcParams['figure.subplot.wspace'] = .5
+matplotlib.rcParams['font.size'] = 8.0
+matplotlib.rcParams['xtick.labelsize'] = 'small'
+matplotlib.rcParams['ytick.labelsize'] = 'small'
+
 
 
 def ismember(ar1, ar2):
@@ -345,7 +352,7 @@ class PSTH(object):
         else:
             ax.plot(self._t, self._counts / float(self.n_trials))
         #plt.xlim(self._t.min(), self._t.max())
-        #plt.xticks(np.linspace(self._t.min(), self._t.max(), 4))
+        #plt.xticks(np.linspace(self._t.min(), self._t.max(), 5))
         plt.xticks([])
         plt.yticks(np.arange(np.ceil(self._counts.max() / float(self.n_trials))+1))
     
@@ -444,7 +451,8 @@ def get_bdata_pickle(data_dir):
 
 
 
-def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000):
+def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000,
+    save_fig_dir=None):
     # BEGIN MAIN SCRIPT HERE
     # Where the files are located
     #~ unit_map = [\
@@ -513,11 +521,16 @@ def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000):
             
             
             # And plot
-            plt.figure()
+            f = plt.figure()
             for sn in todays_sorted_psths[tetn][uid].keys():
                 ax = plt.subplot(3, 4, sn)
                 todays_sorted_psths[tetn][uid][sn].plot(ax=ax)
                 plt.title(sn2name[sn])
-            plt.suptitle('SU_%f PSTH on tet %d' % (uid, tetn))
-            plt.show()            
-        
+            ttl = 'SU_%f PSTH on tet %d' % (uid, tetn)
+            plt.suptitle(ttl)
+            
+            if save_fig_dir is None:
+                plt.show()
+            else:
+                plt.savefig(os.path.join(save_fig_dir, ttl + '.png'))
+                plt.close(f)
