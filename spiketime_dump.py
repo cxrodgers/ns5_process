@@ -140,7 +140,8 @@ def get_all_spike_times(neuron_list):
                 spike_time_list.append(sttn.spike_times - sttn.t_start)
         print n.name
         print len(spike_time_list)
-        big_spiketimes[n.name] = np.concatenate(spike_time_list)
+        if len(spike_time_list) > 0:
+            big_spiketimes[n.name] = np.concatenate(spike_time_list)
     
     return big_spiketimes
 
