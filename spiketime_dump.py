@@ -146,7 +146,7 @@ def get_all_spike_times(neuron_list):
     
     return big_spiketimes
 
-def plot_all_PSTHs(data_dir):
+def plot_all_PSTHs(data_dir, PRE_STIMULUS_TIME=0, save_fig_dir=None):
     # Location of OE db
     db_filename = glob.glob(os.path.join(data_dir, '*.db'))[0]
     db = OE.open_db('sqlite:///%s' % db_filename)
@@ -160,9 +160,13 @@ def plot_all_PSTHs(data_dir):
     # Plot PSTHs
     for n_name, spike_time_list in big_spiketimes.items():
         plt.figure()
-        plt.hist(spike_time_list, bins=100)
-        #plt.savefig('test%s.png' % n_name)
-        plt.show()
+        plt.hist(np.array(spike_time_list) - PRE_STIMULUS_TIME, bins=100)
+        plt.title(n_name)
+        if save_fig_dir is not None:
+            plt.savefig(os.path.join(save_fig_dir, 'PSTH_%s.png' % n_name))
+            plt.close()
+        else:
+            plt.show()
         
 
 
