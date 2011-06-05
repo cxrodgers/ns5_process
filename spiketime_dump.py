@@ -35,6 +35,7 @@ import OpenElectrophy as OE
 import numpy as np
 import os.path
 import matplotlib.mlab as mlab
+import matplotlib.pyplot as plt
 import glob
 
 
