@@ -1,3 +1,7 @@
+# I think this can be broken into data container (MultipleUnitSpikeTrain),
+# loading into this container (KK_loader), display object (PSTH),
+# and initializing display object from bcontrol (various helper functions)
+
 import numpy as np
 import os.path
 import glob
