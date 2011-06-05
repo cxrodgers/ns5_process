@@ -129,9 +129,41 @@ class KlustaKwikIO(object):
         
         self._close_all_files()
     
+def get_all_spike_times(neuron_list):
+    # Some alternative code for ipython interactive psths
+    big_spiketimes = dict()
+    for n in neuron_list:
+        stt = n._spiketrains
+        spike_time_list = []
+        for sttn in stt:            
+            if len(sttn.spike_times) > 0:
+                spike_time_list.append(sttn.spike_times - sttn.t_start)
+        print n.name
+        print len(spike_time_list)
+        big_spiketimes[n.name] = np.concatenate(spike_time_list)
     
+    return big_spiketimes
 
-# MAIN SCRIPT BEGINS HERE
+def plot_all_PSTHs(data_dir):
+    # Location of OE db
+    db_filename = glob.glob(os.path.join(data_dir, '*.db'))[0]
+    db = OE.open_db('sqlite:///%s' % db_filename)
+    
+    # Get list of neurons from tetrode block
+    id_block = get_tetrode_block_id()
+    block = OE.Block().load(id_block)    
+    neuron_list = block._neurons    
+    big_spiketimes = get_all_spike_times(neuron_list)
+    
+    # Plot PSTHs
+    for n_name, spike_time_list in big_spiketimes.items():
+        plt.figure()
+        plt.hist(spike_time_list, bins=100)
+        #plt.savefig('test%s.png' % n_name)
+        plt.show()
+        
+
+
 def execute(data_dir, PRE_STIMULUS_TIME=0.5):
     """Write spike time data and metadata from OE db.
     
@@ -173,17 +205,7 @@ def execute(data_dir, PRE_STIMULUS_TIME=0.5):
     block = OE.Block().load(id_block)    
     neuron_list = block._neurons
     
-    # Some alternative code for ipython interactive psths
-    #~ big_spiketimes = dict()
-    #~ for n in neuron_list:
-        #~ stt = n._spiketrains
-        #~ spike_time_list = []
-        #~ for sttn in stt:            
-            #~ if len(sttn.spike_times) > 0:
-                #~ spike_time_list.append(sttn.spike_times - sttn.t_start)
-        #~ print n.name
-        #~ print len(spike_time_list)
-        #~ big_spiketimes[n.name] = np.concatenate(spike_time_list)
+
     
     # Build a writer
     w = KlustaKwikIO(filename=output_filename)    
