@@ -328,12 +328,13 @@ def calc_psth(st):
 
 class PSTH(object):
     def __init__(self, adjusted_spike_times=[], n_trials=0, 
-        F_SAMP=30000., nbins=100):
+        F_SAMP=30000., nbins=100, range=None):
         # Store parameters and data
         self.F_SAMP = F_SAMP
         self.nbins = nbins
         self.n_trials = n_trials
         self.adjusted_spike_times = adjusted_spike_times
+        self.range = range
         
         # Bin and store _counts and _t
         self._calc_psth()
@@ -344,7 +345,7 @@ class PSTH(object):
             self._counts = np.array([])
         else:
             self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
-                self.nbins)
+                bins=self.nbins, range=self.range)
             self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
     
     def plot(self, ax=None):
@@ -393,11 +394,11 @@ def MUA_PSTH_vs_sn2(spiketrain, sn2trials, sn2name, nbins=300):
         tet_psth_vs_sn[sn] = PSTH(keepspikes, len(trial_list), nbins=nbins)
     return tet_psth_vs_sn    
 
-def SUA_PSTH_vs_sn2(spiketrain, uid, sn2trials, sn2name, nbins=300):
+def SUA_PSTH_vs_sn2(spiketrain, uid, sn2trials, sn2name, nbins=300, range=None):
     uu_psth_vs_sn = dict()
     for sn, trial_list in sn2trials.items():
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list, pick_units=[uid])
-        uu_psth_vs_sn[sn] = PSTH(keepspikes, len(trial_list), nbins=nbins)
+        uu_psth_vs_sn[sn] = PSTH(keepspikes, len(trial_list), nbins=nbins, range=range)
     return uu_psth_vs_sn    
     
 
