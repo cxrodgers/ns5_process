@@ -157,7 +157,8 @@ class NeuralDataGrabber:
         else:
             # Nothing within range, use closest file
             idx = np.argmin(np.abs(file_times - ns5_file_time))
-            print "warning: no files within target range, using %s" % \
+            print "warning: no files within target range (" + \
+                time.ctime(ns5_file_time) + "), using " +  \
                 time.ctime(os.path.getmtime(bc_files[idx]))
         found_file = bc_files[idx]
         
