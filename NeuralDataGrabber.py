@@ -39,6 +39,10 @@ class NeuralDataGrabber:
         self.bcontrol_data_dir = bcontrol_data_dir
         self.shove_channels = shove_channels
         self.tetrode_channels = tetrode_channels
+        
+        if self.data_analysis_dir is not None:
+            if not os.path.exists(self.data_analysis_dir):
+                os.mkdir(self.data_analysis_dir)
     
     def get_date(self, date_string, shove_channels=None, tetrode_channels=None,
         verbose=False):
