@@ -531,7 +531,7 @@ def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000,
                 ax = plt.subplot(3, 4, sn)
                 todays_sorted_psths[tetn][uid][sn].plot(ax=ax)
                 plt.title(sn2name[sn])
-            ttl = 'SU_%f PSTH on tet %d' % (uid, tetn)
+            ttl = 'SU_%d PSTH on tet %d' % (uid, tetn)
             plt.suptitle(ttl)
             
             if save_fig_dir is None:
