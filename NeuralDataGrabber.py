@@ -58,9 +58,13 @@ class NeuralDataGrabber:
         """
         if shove_channels is None:
             shove_channels = self.shove_channels
+        elif not os.path.exists(shove_channels):
+            print "warning: %s does not exist for shove_channels" % shove_channels
         if tetrode_channels is None:
             tetrode_channels = self.tetrode_channels
-                
+        elif not os.path.exists(tetrode_channels):
+            print "warning: %s does not exist for tetrode_channels" % tetrode_channels
+
         # Make a directory for this date
         date_dir = os.path.join(self.data_analysis_dir, date_string)
         if not os.path.exists(date_dir):
