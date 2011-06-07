@@ -1,3 +1,6 @@
+import numpy as np
+from collections import defaultdict
+
 class MultipleUnitSpikeTrain(object):
     """Simple container for yoked spike_times and unit_IDs"""
     def __init__(self, spike_times, unit_IDs=None, spike_trials=None, 
@@ -29,20 +32,7 @@ class MultipleUnitSpikeTrain(object):
             return self.peri_onset_spike_times[mask]
         else:
             return self.spike_times[mask]
-    
-    def _pick_spikes_mask_old(self, pick_units=None, pick_trials=None):
-        """Returns a mask of spike_times for specified trials and units.
-        Deprecated, slow.
-        """
-        if pick_units is None:
-            pick_units = self.get_unique_unit_IDs()
-        if pick_trials is None:
-            pick_trials = self.spike_trials
-        mask = \
-            ismember(self.unit_IDs, pick_units) & \
-            ismember(self.spike_trials, pick_trials)
-        return mask
-    
+        
     def _pick_spikes_mask(self, pick_units=None, pick_trials=None):
         """Returns a mask of spike_times for specified trials and units."""
         if pick_units is None:

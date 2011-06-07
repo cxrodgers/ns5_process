@@ -1,3 +1,9 @@
+import numpy as np
+import glob
+import matplotlib.mlab as mlab
+from SpikeTrainContainers import MultipleUnitSpikeTrain
+import os.path
+
 
 class KK_loader(object):
     """Loads spike info from KlustaKwik-compatible files."""
