@@ -4,6 +4,15 @@ import scipy.io
 import glob
 import pickle
 
+class LBPB_constants(object):
+    def __init__(self, sn2name):
+        self.sn2name = sn2name
+    
+    def ordered_by_sound(self):
+        sns = (5, 9, 6, 10, 7, 11, 8, 12)
+        
+        return (sns, tuple([self.sn2name[sn] for sn in sns]))
+
 class Bcontrol_Loader_By_Dir(object):
     """Wrapper for Bcontrol_Loader to load/save from directory.
     
@@ -86,7 +95,7 @@ class Bcontrol_Loader_By_Dir(object):
         return self._bcl.get_sn2names()
     
     def get_sn2name(self):
-        return self._bcl.get_sn2names()
+        return self._bcl.get_sn2names()    
 
 
 class Bcontrol_Loader(object):
