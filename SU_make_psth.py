@@ -420,8 +420,10 @@ def MUA_PSTH_vs_sn(spiketrain, sn2trials, sn2name, savename=None):
         plt.savefig(savename)
 
     
-
+# # # CODE GRAVEYARD
+# # # DELETE THIS
 def get_trial_numbers_vs_sn(TRIALS_INFO, CONSTS):
+    print "DEPRECATED, USE BCONTROL.BCONTROL_LOADER_BY_DIR(DATA_DIR).GET_SN2TRIALS()"
     trial_numbers_vs_sn = dict()
     for sn in np.unique(TRIALS_INFO['STIM_NUMBER']):
         keep_rows = \
@@ -433,6 +435,8 @@ def get_trial_numbers_vs_sn(TRIALS_INFO, CONSTS):
 
 
 def get_bdata_pickle(data_dir):
+    print "DEPRECATED, USE BCONTROL.BCONTROL_LOADER_BY_DIR(DATA_DIR).LOAD()"
+    
     # Get behavioral data, pickling as necessary
     # Move this into bcontrol.py
     try:
@@ -453,7 +457,7 @@ def get_bdata_pickle(data_dir):
     f.close()
     
     return bcl_data
-
+# # # END OF CODE GRAVEYARD
 
 
 def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000,
