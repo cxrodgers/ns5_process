@@ -318,12 +318,7 @@ class KK_loader(object):
         return cluster_ids
 
 
-def calc_psth(st):   
-    if len(st) == 0:
-        return (np.array([]), np.array([]))
-    h, bin_edges = np.histogram(st, bins=100)
-    bin_centers = bin_edges[:-1] + 0.5 * np.diff(bin_edges)
-    return (h, bin_centers/30000.)
+
 
 
 class PSTH(object):
@@ -387,7 +382,21 @@ class PSTH(object):
             norm_to_spont=False) / -self._t[0]
 
 
+
+
+    
+# # # CODE GRAVEYARD
+# # # DELETE THIS
+def calc_psth(st):   
+    print "DEPRECATED, USE PSTH OBJECT"
+    if len(st) == 0:
+        return (np.array([]), np.array([]))
+    h, bin_edges = np.histogram(st, bins=100)
+    bin_centers = bin_edges[:-1] + 0.5 * np.diff(bin_edges)
+    return (h, bin_centers/30000.)
+
 def MUA_PSTH_vs_sn2(spiketrain, sn2trials, sn2name, nbins=300):
+    print "DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY"
     tet_psth_vs_sn = dict()
     for sn, trial_list in sn2trials.items():
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list)
@@ -395,6 +404,7 @@ def MUA_PSTH_vs_sn2(spiketrain, sn2trials, sn2name, nbins=300):
     return tet_psth_vs_sn    
 
 def SUA_PSTH_vs_sn2(spiketrain, uid, sn2trials, sn2name, nbins=300, range=None):
+    print "DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY"
     uu_psth_vs_sn = dict()
     for sn, trial_list in sn2trials.items():
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list, pick_units=[uid])
@@ -403,6 +413,7 @@ def SUA_PSTH_vs_sn2(spiketrain, uid, sn2trials, sn2name, nbins=300, range=None):
     
 
 def MUA_PSTH_vs_sn(spiketrain, sn2trials, sn2name, savename=None):
+    print "DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY"
     """Given spiketrain from tetrode and mappings of stimuli names
     and trials, plots an MUA PSTH."""
     plt.figure()            
@@ -419,9 +430,7 @@ def MUA_PSTH_vs_sn(spiketrain, sn2trials, sn2name, savename=None):
     if savename is not None:
         plt.savefig(savename)
 
-    
-# # # CODE GRAVEYARD
-# # # DELETE THIS
+
 def get_trial_numbers_vs_sn(TRIALS_INFO, CONSTS):
     print "DEPRECATED, USE BCONTROL.BCONTROL_LOADER_BY_DIR(DATA_DIR).GET_SN2TRIALS()"
     trial_numbers_vs_sn = dict()
