@@ -21,6 +21,9 @@ class Bcontrol_Loader_By_Dir(object):
     load : Get data from directory
     get_sn2trials : returns a dict of stimulus numbers and trial numbers
     get_sn2name : returns a dict of stimulus numbers and name
+    
+    Other useful information (TRIALS_INFO, SOUNDS_INFO, etc) is
+    available in my dict `data` after loading.
     """
     def __init__(self, dirname, auto_validate=True, v2_behavior=False,
         skip_trial_set=[]):
