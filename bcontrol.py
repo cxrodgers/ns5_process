@@ -5,7 +5,14 @@ import glob
 import pickle
 
 class Bcontrol_Loader_By_Dir(object):
-    """Wrapper for Bcontrol_Loader to load/save from directory."""
+    """Wrapper for Bcontrol_Loader to load/save from directory.
+    
+    Methods
+    -------
+    load : Get data from directory
+    get_sn2trials : returns a dict of stimulus numbers and trial numbers
+    get_sn2name : returns a dict of stimulus numbers and name
+    """
     def __init__(self, dirname, auto_validate=True, v2_behavior=False,
         skip_trial_set=[]):
         """Initialize loader, specifying directory containing info.
@@ -76,6 +83,9 @@ class Bcontrol_Loader_By_Dir(object):
         return self._bcl.get_sn2trials(outcome)
     
     def get_sn2names(self):
+        return self._bcl.get_sn2names()
+    
+    def get_sn2name(self):
         return self._bcl.get_sn2names()
 
 
