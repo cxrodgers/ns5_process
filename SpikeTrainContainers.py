@@ -37,8 +37,10 @@ class MultipleUnitSpikeTrain(object):
     def get_psth(self, pick_units=None, pick_trials=None, **kargs):
         spike_times = self.pick_spikes(pick_units, pick_trials, adjusted=True)
         n_trials = self.get_number_of_trials()
-        return PSTH(adjusted_spike_times=spike_times, n_trials=n_trials,
-            F_SAMP=self.F_SAMP, kargs)
+        
+        kargs['n_trials'] = n_trials
+        kargs['F_SAMP'] = self.F_SAMP
+        return PSTH(spike_times, kargs)
     
     def _pick_spikes_mask(self, pick_units=None, pick_trials=None):
         """Returns a mask of spike_times for specified trials and units."""
