@@ -4,7 +4,7 @@ from collections import defaultdict
 class MultipleUnitSpikeTrain(object):
     """Simple container for yoked spike_times and unit_IDs"""
     def __init__(self, spike_times, unit_IDs=None, spike_trials=None, 
-        peri_onset_spike_times=None):
+        peri_onset_spike_times=None, F_SAMP=30000.):
         """Initializes a new spike train.
         
         spike_times : time of each spike in samples
@@ -19,6 +19,7 @@ class MultipleUnitSpikeTrain(object):
         self.unit_IDs = np.array(unit_IDs)
         self.spike_trials = np.array(spike_trials)
         self.peri_onset_spike_times = np.array(peri_onset_spike_times)
+        self.F_SAMP = F_SAMP
     
     def pick_spikes(self, pick_units=None, pick_trials=None, adjusted=True):
         """Returns spike times from specified units and trials.
@@ -32,7 +33,13 @@ class MultipleUnitSpikeTrain(object):
             return self.peri_onset_spike_times[mask]
         else:
             return self.spike_times[mask]
-        
+    
+    def get_psth(self, pick_units=None, pick_trials=None, **kargs):
+        spike_times = self.pick_spikes(pick_units, pick_trials, adjusted=True)
+        n_trials = self.get_number_of_trials()
+        return PSTH(adjusted_spike_times=spike_times, n_trials=n_trials,
+            F_SAMP=self.F_SAMP, kargs)
+    
     def _pick_spikes_mask(self, pick_units=None, pick_trials=None):
         """Returns a mask of spike_times for specified trials and units."""
         if pick_units is None:
@@ -101,6 +108,9 @@ class MultipleUnitSpikeTrain(object):
     def get_number_of_units(self):
         return len(self.get_unique_unit_IDs)
     
+    def get_number_of_trials(self):
+        return len(np.unique(self.spike_trials))
+    
     def add_trial_info(self, onsets, onset_trial_numbers, pre_win, post_win):
         """Links each spike in the spiketrain with a trial.
         
@@ -156,6 +166,14 @@ class MultipleUnitSpikeTrain(object):
 
         # Convert indexes into `onset_trial_numbers` into trial_numbers.
         self.spike_trials = onset_trial_numbers[spike_trials_idx]
+        
+        # Warn if not all trials were used
+        # If this happens a lot, should change get_number_of_trials
+        # to use length of onset_trial_numbers instead.
+        if len(np.unique(self.spike_trials)) != \
+            len(np.unique(onset_trial_numbers)):
+            print "warning: not all trials contain spikes. " + \
+                "this may throw off PSTH calculations"
         
         # Build an onset-relative representation
         self.peri_onset_spike_times = self.spike_times - \
