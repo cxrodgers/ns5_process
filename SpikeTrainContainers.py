@@ -20,7 +20,8 @@ class MultipleUnitSpikeTrain(object):
         self.spike_trials = np.array(spike_trials)
         self.peri_onset_spike_times = np.array(peri_onset_spike_times)
     
-    def pick_spikes(self, pick_units=None, pick_trials=None, adjusted=True):
+    def pick_spikes(self, pick_units=None, pick_trials=None, adjusted=True,
+        also_return_trial_numbers=False):
         """Returns spike times from specified units and trials.
         
         You must set self.spike_trials before calling this method.
@@ -28,10 +29,17 @@ class MultipleUnitSpikeTrain(object):
         peri_onset_spike_times) will be returned.
         """
         mask = self._pick_spikes_mask(pick_units, pick_trials)
+        
+        # Choose which array to index with `mask`
         if adjusted:
-            return self.peri_onset_spike_times[mask]
+            array_to_return = self.peri_onset_spike_times
         else:
-            return self.spike_times[mask]
+            array_to_return = self.spike_times
+        
+        if also_return_trial_numbers:
+            return (array_to_return[mask], self.spike_trials[mask])
+        else:
+            return array_to_return[mask]
         
     def _pick_spikes_mask(self, pick_units=None, pick_trials=None):
         """Returns a mask of spike_times for specified trials and units."""
