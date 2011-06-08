@@ -10,6 +10,7 @@ from collections import defaultdict
 import matplotlib.mlab as mlab
 import os.path
 import KlustaKwikIO
+import SpikeTrainContainers
 
 
 class SpikeTrainEnsemble:
@@ -80,11 +81,33 @@ class SpikeTrainEnsemble:
             # Verify that sn2name has not changed here
             pass
     
-    def get_psth(self, block=None, sn=None, range=None):
-        trial_list = self._list_sn2trials(idx)[sn]
-        keepspikes = spiketrain.pick_spikes(pick_trials=trial_list, 
-            pick_units=[])
-        return PSTH(keepspikes, len(trial_list), nbins=nbins, range=range)
+    def pick_spikes(self, block=None, tetrode=None, stim=None, **kargs):
+        # Find the index into internal variables
+        if block in self._list_blocks:
+            idx = self._list_blocks.index(block)
+        else:
+            raise ValueError("block you requested does not exist")
+        
+        # Find trial indexes using what I know about sn2trials
+        musts = self._list_musts[idx]
+        if stim is not None:
+            trial_list = self._list_sn2trials[idx][stim]
+        else:
+            trial_list = None
+        
+        # Get spikes from spiketrain
+        kargs['pick_trials'] = trial_list
+        keepspikes = musts[tetrode].pick_spikes(kargs)
+        
+        return keepspikes
+    
+    def get_psth(self, nbins=None, range=None, **kargs):
+        # Get spikes
+        keepspikes = spiketrain.pick_spikes(kargs)
+        
+        # Return PSTH constructed from these spikes
+        return SpikeTrainContainers.PSTH(keepspikes, len(trial_list), 
+            nbins=nbins, range=range)
     
     def get_spike_count(self, timeslice, block=None, sn=None, norm_to_spont=False):
         # Eventually count spikes here, or make PSTH count with higher
@@ -124,7 +147,7 @@ class SpikeTrainEnsembleCreator:
     
     def load_single_dir(self, data_dir, name):
         # Create a new SpikeTrainEnsemble to return
-        if self.ste is not None:
+        if self.ste is None:
             self.ste = SpikeTrainEnsemble()
         
         # Load spike info
