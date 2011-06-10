@@ -239,7 +239,8 @@ class PSTH(object):
         if units is 'spikes':
             return (n / float(self.n_trials)) - ns
         elif (units is 'hz') or (units is 'Hz'):
-            return ((n / float(self.n_trials)) - ns) / (epoch[1] - epoch[0] + 1 / self.F_SAMP)
+            return ((n / float(self.n_trials)) - ns) / \
+                (self._t[epoch[1]] - self._t[epoch[0]])
     
     def closest_bin(self, t):
         return np.argmin(np.abs(self._t - t))
