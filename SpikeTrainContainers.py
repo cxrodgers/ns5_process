@@ -36,10 +36,17 @@ class MultipleUnitSpikeTrain(object):
             return self.spike_times[mask]
     
     def get_psth(self, pick_units=None, pick_trials=None, **kargs):
+        # Get spike times to include in PSTH
         spike_times = self.pick_spikes(pick_units, pick_trials, adjusted=True)
-        n_trials = self.get_number_of_trials()
         
-        kargs['n_trials'] = n_trials
+        # How many trials included in this PSTH?
+        if pick_trials is None:
+            n_trials = self.get_number_of_trials()
+        else:
+            n_trials = len(pick_trials)
+        
+        # Initialize the PSTH
+        kargs['n_trials'] = len(pick_trials)
         kargs['F_SAMP'] = self.F_SAMP
         return PSTH(spike_times, **kargs)
     
