@@ -121,7 +121,7 @@ class SpikeTrainEnsemble:
         
         return np.concatenate(spike_list)
     
-    def get_psth_from_block_list(self, block_list=None, stim=None, **kargs):
+    def get_psth_from_block_list(self, block_list=None, stim=None, with_labels=False, **kargs):
         """Assume you want all tetrodes and return everything."""
         if block_list is None:
             # Use all
@@ -150,6 +150,7 @@ class SpikeTrainEnsemble:
         
         # Get psth for each block
         psth_list = list()
+        labels = list()
         for block in block_list:
             # Get spikes
             idx_block = self._list_blocks.index(block)
@@ -163,12 +164,16 @@ class SpikeTrainEnsemble:
             for tetnum in sorted(musts.keys()):
                 must = musts[tetnum]
                 psth = must.get_psth(pick_trials=trial_list, **kargs)
+                labels.append('block %s tetnum %d' % (block, tetnum))
                 psth_list.append(psth)
         
-        return psth_list
+        if with_labels:
+            return psth_list, labels
+        else:
+            return psth_list
     
     def get_spike_count_from_block_list2(self, timeslice, block=None, sn=[], 
-        norm_to_spont=False):
+        norm_to_spont=False, with_labels=False, units='spikes'):
         # Get all psths from every tetrode and every stim
         all_psth = np.array([self.get_psth_from_block_list(block, s) for s in sn])
         
@@ -177,13 +182,22 @@ class SpikeTrainEnsemble:
             for p in pl] for pl in all_psth])
         
         # Find resp for each
-        resps = np.array([[p.time_slice(regime, norm_to_spont) \
+        resps = np.array([[p.time_slice(regime, norm_to_spont, units=units) \
             for p, regime in zip(pl, regl)] \
             for pl, regl in zip(all_psth, regimes)])
         
         # Average across stimuli
-        return resps.mean(axis=0)
+        mean_resps = resps.mean(axis=0)
 
+        # Return with labels if requested
+        if with_labels:
+            labels = self.get_psth_from_block_list(block, sn[0], with_labels=True)[1]
+            return mean_resps, labels
+        else:
+            return mean_resps
+        
+      
+        
 
 
 
