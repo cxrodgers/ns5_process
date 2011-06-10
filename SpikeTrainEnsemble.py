@@ -16,9 +16,11 @@ import SpikeTrainContainers
 class SpikeTrainEnsemble:
     """Stores and serves spiketrains matching various parameters.
     
+    Generally this will be loaded using a dedicated object.
     # Load KlustaKwik data, bcontrol data (if available), task constants
     ste = SpikeTrainEnsembleCreator(data_dir_list)
     
+    Use cases:
     # PSTH on stim from all dates
     # The PSTH object can't handle multiple dates, so your only option is
     # to get spikes explicitly (or add PSTHs together)
@@ -73,51 +75,114 @@ class SpikeTrainEnsemble:
         self._list_blocks.append(block_name)
         self._list_sn2trials.append(sn2trials)
         
-        if self.sn2name is not None:
+        if self.sn2name is None:
             self.sn2name = sn2name
+            
             # Generate self.name2sn here
-        
+            self.name2sn = dict()
+            for k, v in self.sn2name.items():
+                self.name2sn[v] = k
+            
+            assert(len(self.name2sn) == len(self.sn2name)), 'key collision'
+            
         else:
             # Verify that sn2name has not changed here
             pass
+       
+    def pick_spikes_from_block_list(self, block_list=None, stim=None, **kargs):
+        """Assume you want all tetrodes and return all spike times"""
+        if block_list is None:
+            block_list = self._list_blocks
+        
+        spike_list = list()
+        for block in block_list:
+            idx_block = self._list_blocks.index(block)
+            
+            # Find stim number
+            try:
+                self.sn2name[stim]
+            except KeyError:
+                # The stim number was not provided, must be stim name
+                stim = self.name2sn[stim]
+            
+            # Find trial indexes using what I know about sn2trials
+            musts = self._list_musts[idx_block]
+            if stim is not None:
+                trial_list = self._list_sn2trials[idx_block][stim]
+            else:
+                trial_list = None     
+            
+            # Iterate through tet
+            for tetnum in sorted(musts.keys()):
+                must = musts[tetnum]
+                spikes = must.pick_spikes(pick_trials=trial_list, 
+                    adjusted=True, **kargs)
+                spike_list.append(spikes)
+        
+        return np.concatenate(spike_list)
     
-    def pick_spikes(self, block=None, tetrode=None, stim=None, **kargs):
-        # Find the index into internal variables
-        if block in self._list_blocks:
-            idx = self._list_blocks.index(block)
-        else:
-            raise ValueError("block you requested does not exist")
+    def get_psth_from_block_list(self, block_list=None, stim=None, **kargs):
+        """Assume you want all tetrodes and return everything."""
+        if block_list is None:
+            # Use all
+            block_list = self._list_blocks
         
-        # Find trial indexes using what I know about sn2trials
-        musts = self._list_musts[idx]
-        if stim is not None:
-            trial_list = self._list_sn2trials[idx][stim]
-        else:
-            trial_list = None
+        # Choose list of stimuli to use
+        if stim is None:
+            # Use all
+            stim = self.sn2name.keys()
+        elif not np.iterable(stim):
+            # Probably a single int
+            stim = [stim]
+        elif isinstance(stim, str):
+            # Probably a single string
+            stim = [stim]
         
-        # Get spikes from spiketrain
-        kargs['pick_trials'] = trial_list
-        keepspikes = musts[tetrode].pick_spikes(kargs)
+        # Convert to stim number
+        stim_list = list()
+        for s in stim:
+            try:
+                # Try to append sn for the given name
+                stim_list.append(self.name2sn[s])
+            except KeyError:
+                # Not a stim name, assume it's a number
+                stim_list.append(s)        
         
-        return keepspikes
+        # Get psth for each block
+        psth_list = list()
+        for block in block_list:
+            # Get spikes
+            idx_block = self._list_blocks.index(block)
+            
+            # Find trial indexes using what I know about sn2trials
+            musts = self._list_musts[idx_block]
+            trial_list = np.concatenate(\
+                [self._list_sn2trials[idx_block][s] for s in stim_list])
+            
+            # Iterate through tet
+            for tetnum in sorted(musts.keys()):
+                must = musts[tetnum]
+                psth = must.get_psth(pick_trials=trial_list, **kargs)
+                psth_list.append(psth)
+        
+        return psth_list
     
-    def get_psth(self, nbins=None, range=None, **kargs):
-        # Get spikes
-        keepspikes = spiketrain.pick_spikes(kargs)
+    def get_spike_count_from_block_list2(self, timeslice, block=None, sn=[], 
+        norm_to_spont=False):
+        # Get all psths from every tetrode and every stim
+        all_psth = np.array([self.get_psth_from_block_list(block, s) for s in sn])
         
-        # Return PSTH constructed from these spikes
-        return SpikeTrainContainers.PSTH(keepspikes, len(trial_list), 
-            nbins=nbins, range=range)
-    
-    def get_spike_count(self, timeslice, block=None, sn=None, norm_to_spont=False):
-        # Eventually count spikes here, or make PSTH count with higher
-        # temporal resolution.
-        self.get_psth(block, sn).spike_count(timeslice, norm_to_spont)
-
-
-
-
-
+        # Find regime for each
+        regimes = np.array([[[p.closest_bin(t) for t in timeslice] \
+            for p in pl] for pl in all_psth])
+        
+        # Find resp for each
+        resps = np.array([[p.time_slice(regime, norm_to_spont) \
+            for p, regime in zip(pl, regl)] \
+            for pl, regl in zip(all_psth, regimes)])
+        
+        # Average across stimuli
+        return resps.mean(axis=0)
 
 
 
