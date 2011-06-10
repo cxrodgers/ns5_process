@@ -1,5 +1,6 @@
 import numpy as np
 from collections import defaultdict
+import matplotlib.pyplot as plt
 
 class MultipleUnitSpikeTrain(object):
     """Simple container for yoked spike_times and unit_IDs"""
@@ -40,7 +41,7 @@ class MultipleUnitSpikeTrain(object):
         
         kargs['n_trials'] = n_trials
         kargs['F_SAMP'] = self.F_SAMP
-        return PSTH(spike_times, kargs)
+        return PSTH(spike_times, **kargs)
     
     def _pick_spikes_mask(self, pick_units=None, pick_trials=None):
         """Returns a mask of spike_times for specified trials and units."""
@@ -226,7 +227,7 @@ class PSTH(object):
         p.n_trials = self.n_trials + psth2.n_trials
         return p
     
-    def time_slice(self, epoch, norm_to_spont=True):
+    def time_slice(self, epoch, norm_to_spont=True, units='spikes'):
         """Return total count in epoch specified by tuple of bins"""
         n = self._counts[epoch[0]:epoch[1]+1].sum()
         if norm_to_spont:
@@ -235,7 +236,10 @@ class PSTH(object):
         else:
             ns = 0.
         
-        return (n / float(self.n_trials)) - ns
+        if units is 'spikes':
+            return (n / float(self.n_trials)) - ns
+        elif (units is 'hz') or (units is 'Hz'):
+            return ((n / float(self.n_trials)) - ns) / (epoch[1] - epoch[0] + 1 / self.F_SAMP)
     
     def closest_bin(self, t):
         return np.argmin(np.abs(self._t - t))
