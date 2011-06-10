@@ -5,13 +5,38 @@ import glob
 import pickle
 
 class LBPB_constants(object):
-    def __init__(self, sn2name):
+    def __init__(self, sn2name=None):
         self.sn2name = sn2name
     
     def ordered_by_sound(self):
         sns = (5, 9, 6, 10, 7, 11, 8, 12)
         
         return (sns, tuple([self.sn2name[sn] for sn in sns]))
+    
+    def LB(self):
+        return set(('le_hi_lc', 'ri_hi_lc', 'le_lo_lc', 'ri_lo_lc'))
+    
+    def PB(self):
+        return set(('le_hi_pc', 'ri_hi_pc', 'le_lo_pc', 'ri_lo_pc'))
+    
+    def go(self):
+        return set(('le_hi_lc', 'le_lo_lc', 'le_lo_pc', 'ri_lo_pc'))
+    
+    def nogo(self):
+        return set(('ri_hi_lc', 'ri_lo_lc', 'le_hi_pc', 'ri_hi_pc'))
+    
+    def lo(self):
+        return set(('le_lo_lc', 'ri_lo_lc', 'le_lo_pc', 'ri_lo_pc'))
+
+    def hi(self):
+        return set(('le_hi_lc', 'ri_hi_lc', 'le_hi_pc', 'ri_hi_pc'))
+    
+    def le(self):
+        return set(('le_lo_lc', 'le_hi_lc', 'le_lo_pc', 'le_hi_pc'))
+
+    def ri(self):
+        return set(('ri_lo_lc', 'ri_hi_lc', 'ri_lo_pc', 'ri_hi_pc'))
+
 
 class Bcontrol_Loader_By_Dir(object):
     """Wrapper for Bcontrol_Loader to load/save from directory.
