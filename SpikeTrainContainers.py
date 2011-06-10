@@ -21,6 +21,7 @@ class MultipleUnitSpikeTrain(object):
         self.spike_trials = np.array(spike_trials)
         self.peri_onset_spike_times = np.array(peri_onset_spike_times)
         self.F_SAMP = F_SAMP
+        self.range = None
     
     def pick_spikes(self, pick_units=None, pick_trials=None, adjusted=True):
         """Returns spike times from specified units and trials.
@@ -48,6 +49,7 @@ class MultipleUnitSpikeTrain(object):
         # Initialize the PSTH
         kargs['n_trials'] = len(pick_trials)
         kargs['F_SAMP'] = self.F_SAMP
+        kargs['range'] = self.range
         return PSTH(spike_times, **kargs)
     
     def _pick_spikes_mask(self, pick_units=None, pick_trials=None):
@@ -190,6 +192,8 @@ class MultipleUnitSpikeTrain(object):
             onsets[spike_trials_idx]
         
         self._build_dicts()
+        
+        self.range = (pre_win, post_win)
 
 
 class PSTH(object):
@@ -213,6 +217,13 @@ class PSTH(object):
             self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
                 bins=self.nbins, range=self.range)
             self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
+    
+    def hist_values(self, units='spikes'):
+        if units is 'spikes':
+            return (self._t, self._counts / float(self.n_trials))
+        elif (units is 'hz' or units is 'Hz'):
+            yval = self._counts / float(self.n_trials) / (self._t[1] - self._t[0])
+            return (self._t, yval) 
     
     def plot(self, ax=None):
         if len(self._t) == 0:
