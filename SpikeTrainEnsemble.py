@@ -7,6 +7,13 @@ if NS5_PROCESS_PATH not in sys.path:
 import numpy as np
 import bcontrol
 from collections import defaultdict
+import matplotlib
+matplotlib.rcParams['figure.subplot.hspace'] = .5
+matplotlib.rcParams['figure.subplot.wspace'] = .5
+matplotlib.rcParams['font.size'] = 8.0
+matplotlib.rcParams['xtick.labelsize'] = 'small'
+matplotlib.rcParams['ytick.labelsize'] = 'small'
+import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import os.path
 import KlustaKwikIO
@@ -196,8 +203,25 @@ class SpikeTrainEnsemble:
         else:
             return mean_resps
         
-      
-        
+    def plot_all_stimuli_psths(block_list=None, bins=300):
+        plt.figure()
+        for k, v in self.sn2name.items():
+            ax = plt.subplot(3, 4, k)
+            psth_yval_list = list()
+            tval_keep = None
+            for psth in ste.get_psth_from_block_list(block_list=block_list,
+                stim=[v], nbins=bins):
+                tval, yval = psth.hist_values(units='spikes')
+                psth_yval_list.append(yval)
+                if tval_keep is None:
+                    tval_keep = tval
+                else:
+                    assert np.all(tval_keep == tval), 'inconsistent t-values in PSTHs'
+            
+            plt.plot(tval, np.mean(np.array(psth_yval_list), axis=0))
+            plt.ylim((0, 1))
+            plt.title(v)        
+
 
 
 
