@@ -286,7 +286,7 @@ class PSTH(object):
         elif (units is 'hz' or units is 'Hz'):
             yval = self._counts / float(self.n_trials) / self.bin_width()
             return (self._t, yval) 
-    
+       
     def plot(self, ax=None):
         """Plot PSTH into axis `ax`"""
         if len(self._t) == 0:
