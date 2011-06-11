@@ -193,12 +193,73 @@ class MultipleUnitSpikeTrain(object):
         
         self._build_dicts()
         
-        self.range = (pre_win, post_win)
+        self.range = (-pre_win, post_win)
 
 
 class PSTH(object):
+    """An object providing simple peri-stimulus time histogram functions.
+    
+    Essentially this is a wrapper around numpy.histogram providing some
+    commonly used methods and avoiding some pitfalls.
+    
+    Given a train of spikes, each assigned to a different trial, we wish
+    to calculate some average values over those trials. You must provide
+    the spike times relative to some trigger in the trial from which
+    they came. Usually this trigger is the stimulus onset, so spikes may
+    have negative times. But it could be any event over which you wish
+    to calculate time-locked activity.
+    
+    Trials in a PSTH should be `homeogeneous` in the sense that you want
+    to average them together. If you wish to compare two types of trials,
+    create two PSTH objects and compare the results directly.
+    
+    When possible, values can be returned in these units:
+    'spikes' : Spikes per trial per bin
+    'Hz' or 'hz' : Spikes per trial per second
+    
+    Provided methods
+    ----------------
+    hist_values : A histogram of spike times relative to trigger times.
+    plot : plot the histogram into some axis
+    __add__ : combine PSTHs, not currently working
+    time_slice : response during an epoch of time in each trial
+    spont_rate : response during an epoch of time from trial start to trigger
+    
+    
+    TODO
+    ----
+    Limit the number of places in which normalization to spontaneous rate
+    and conversion to different units occurs, since this is a common bug.
+    Probably this should happen in hist_values() only.
+    
+    Allow initialization from a list of trials, each with spikes. Then the user
+    can still access the original per-trial information if needed.
+    
+    Change default behavior from norm_to_spont=True to norm_to_spont=False
+    
+    Keep track of spike counts and times as integers whenever possible to
+    avoid floating point error.
+    
+    Allow recalculation when nbins or range changes.
+    """
     def __init__(self, adjusted_spike_times=[], n_trials=0, 
         F_SAMP=30000., nbins=100, range=None):
+        """Initialize a new PSTH.
+        
+        You must have already chosen your trials to include, and triggered
+        the spike time and assigned them to some trial.
+        
+        adjust_spike_times : array of triggered spike times
+        n_trials : number of trials that went into this PSTH, used for
+            normalizing response to `per trial`
+        F_SAMP : sampling rate, used for conversion to Hz
+        nbins : Temporal resolution of the PSTH
+        range : Extent of the PSTH. If you wish to compare PSTH objects,
+            they should have the same extent, because this also affects
+            the temporal resolution. If you don't specify it, then the minimum
+            and maximum spike times will be used, but for low firing rates
+            this could introduce inaccuracies!
+        """
         # Store parameters and data
         self.F_SAMP = F_SAMP
         self.nbins = nbins
@@ -219,13 +280,15 @@ class PSTH(object):
             self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
     
     def hist_values(self, units='spikes'):
+        """Returns the histogram values as (t, counts)"""
         if units is 'spikes':
             return (self._t, self._counts / float(self.n_trials))
         elif (units is 'hz' or units is 'Hz'):
-            yval = self._counts / float(self.n_trials) / (self._t[1] - self._t[0])
+            yval = self._counts / float(self.n_trials) / self.bin_width()
             return (self._t, yval) 
     
     def plot(self, ax=None):
+        """Plot PSTH into axis `ax`"""
         if len(self._t) == 0:
             return
         if ax is None:
@@ -246,23 +309,56 @@ class PSTH(object):
         return p
     
     def time_slice(self, epoch, norm_to_spont=True, units='spikes'):
-        """Return total count in epoch specified by tuple of bins"""
-        n = self._counts[epoch[0]:epoch[1]+1].sum()
-        if norm_to_spont:
-            ns = self.spont_rate() * (epoch[1] - epoch[0] + 1) * \
-                (self._t[-1] - self._t[0]) / self.nbins
-        else:
-            ns = 0.
+        """Return total count in epoch specified by inclusive tuple of bins.
         
+        Note that because it is inclusive (unlike python indexing!), you
+        have a 'fencepost problem': an epoch of (102, 110) will include
+        9 bins and 9 * self.bin_width() seconds of time.
+        
+        If norm_to_spont, the number of spikes expected from the signal
+        where self._t < 0 is subtracted from the returned value.
+        """
+        # Count the number of bins and the time included in them
+        n_bins = epoch[1] - epoch[0] + 1
+        t_bins = n_bins * self.bin_width()
+        
+        # Count the number of spikes
+        n = self._counts[epoch[0]:epoch[1]+1].sum()
+                
+        if norm_to_spont:
+            # Subtract off the number of expected spikes, which is the
+            # spontaneous firing rate * amount of time * number of trials.
+            n = n - self.spont_rate(units='hz') * t_bins * self.n_trials
+
+        # Return in the requested units
+        val_in_spikes = n / float(self.n_trials)
         if units is 'spikes':
-            return (n / float(self.n_trials)) - ns
+            return val_in_spikes
         elif (units is 'hz') or (units is 'Hz'):
-            return ((n / float(self.n_trials)) - ns) / \
-                (self._t[epoch[1]] - self._t[epoch[0]])
+            return val_in_spikes / t_bins
     
     def closest_bin(self, t):
+        """Returns the index of the bin whose time is closest to `t`."""
         return np.argmin(np.abs(self._t - t))
     
-    def spont_rate(self):
-        return self.time_slice((0, self.closest_bin(0)), 
-            norm_to_spont=False) / -self._t[0]
+    def spont_rate(self, units='hz'):
+        """Find the spike rate in the spontaneous regime.
+        
+        This regime is defined as (0, self.closest_bin(0.)), ie, from the
+        first sample to the sample closest to 0 inclusive.
+        """
+        # We must use norm_to_spont=False here to avoid infinite loop!
+        epoch = (0, self.closest_bin(0.))
+        return self.time_slice(epoch=epoch, norm_to_spont=False, units=units)
+    
+    def bin_width(self):
+        """Returns width of a single bin in seconds.
+        
+        To convert number of spikes in a range to spike rate, divide by
+        self.bin_width() * the number of bins.
+        """
+        d = np.diff(self._t)
+        
+        # Floating point
+        assert (d.max() - d.min()) < 1e-5, "t-values are irregular"
+        return np.median(d)
