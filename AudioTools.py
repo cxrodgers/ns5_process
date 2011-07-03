@@ -1,3 +1,5 @@
+"""Module providing objects to detect audio onsets."""
+
 import numpy as np
 import scipy as sp
 import scipy.signal
