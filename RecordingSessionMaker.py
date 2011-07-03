@@ -5,7 +5,32 @@ import time
 import RecordingSession
 import numpy as np
 
+# Functions to parse the way I name my ns5 files
+def make_filename(dirname=None, username='*', ratname='*', date='*', number='*'):
+    """Creates an ns5 filename from its constituent parts."""
+    filename = '_'.join(['datafile', username, ratname, date, number]) + '.ns5'
+    if dirname is None:
+        return filename
+    else:
+        return os.path.join(dirname, filename)
 
+def get_field(filename, fieldname):
+    """Get a field from an ns5 filename.
+    
+    Options are 'username', 'ratname', 'date', 'number'.
+    """
+    d = {'username': 1, 'ratname': 2, 'date': 3, 'number': 4}
+    idx = d[fieldname]
+    
+    f = os.path.split(filename)[1]
+    f = os.path.splitext(f)[0]
+    
+    components = f.split('_')
+    return components[idx]
+
+# Function to link a file
+# Could probably go in RecordingSession but it's a little ugly because
+# uses system call.
 def link_file(filename, final_dir, verbose=False, dryrun=False, force_run=True):
     """Creates a link from source `filename` to target directory.
     
