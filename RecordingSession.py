@@ -9,6 +9,7 @@ Try to keep logic relating to any specific experiment out of this module.
 import shutil
 import glob
 import os.path
+import ns5
 
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
@@ -41,17 +42,30 @@ def read_channel_numbers(filename):
 class RecordingSession:
     """Object linked to a directory containing data for processing.
     
+    Provides methods to read and write data from that directory.
     """
-    def __init__(self, root_directory, name):        
-        self.name = name
-        self.root_directory = root_directory
-        self.full_path = os.path.join(self.root_directory, self.name)
+    def __init__(self, dirname, subname=None):
+        """Create object linked to a data directory
         
-        if not os.path.exists(self.root_directory):
-            os.mkdir(self.root_directory)
+        If directory does not exist, will create it.
+        
+        Just specify `dirname`. For backwards-compatibility, I'll join
+        the two parameters if you provide two.
+        """
+        if subname is None:
+            self.full_path = dirname
+        else:
+            print "warning: just provide dirname"
+            self.full_path = os.path.join(dirname, subname)
         
         if not os.path.exists(self.full_path):
             os.mkdir(self.full_path)
+    
+    def get_ns5_loader(self):
+        """Returns Loader object for ns5 file"""
+        l = ns5.Loader(filename=self.get_ns5_filename())
+        l.load_file()
+        return l
     
     def read_channel_groups(self):
         """Returns a list of channel groups"""
