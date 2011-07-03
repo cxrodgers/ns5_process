@@ -1,4 +1,13 @@
-"""Module containing experiment-specific code to create RecordingSessions"""
+"""Module containing experiment-specific code to create RecordingSessions.
+* creates proper RecordingSession by copying necessary files
+
+Experimental-specific
+* ns5 filenaming conventions
+* logic to find bcontrol behavior files
+
+Wraps RecordingSession
+* loads audio data, detects onsets, tells RecordingSession the timestamps
+"""
 
 import os
 import time
@@ -136,8 +145,101 @@ class RecordingSessionMaker:
     
         return rs
 
-
+# Many of the following functions work like wrapper for RecordingSession.
+# Function to load audio data from raw file and detect onsets
+def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50,
+    pre_first=0, post_last=0):
+    """Given a RecordingSession, makes TIMESTAMPS file.
     
+    I get the right channels and filenames from RecordingSession, then call
+    `calculate_timestamps`, then tell the session what I've calculated.
+    """
+    # Get data from recording session
+    filename = rs.get_ns5_filename()
+    try:
+        audio_channels = rs.read_analog_channels()
+    except IOError:
+        # Recording session doesn't know what analog channels are supposed to be
+        audio_channels = None
+    
+    # Calculate timestamps
+    t = calculate_timestamps(filename, manual_threshhold, audio_channels,
+        minimum_duration_ms, pre_first, post_last)
+    
+    # Tell RecordingSession about them
+    rs.add_timestamps(t)
+
+def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None, 
+    minimum_duration_ms=50, pre_first=0, post_last=0)
+    """Given ns5 file and channel numbers, returns audio onsets.
+    
+    I uses `ns5.Loader` to open ns5 file and `AudioTools.OnsetDetector`
+    to identify onsets. I discard onsets too close to the ends.
+    
+    Input
+    -----
+    filename : path to *.ns5 binary file
+    manual_threshhold, minimum_duration_ms : Passed to OnsetDetector    
+    audio_channels : the channel numbers to analyze for onsets. If None,
+        I'll use the first channel, or the first two channels if available.    
+    pre_first : audio data before this sample will be ignored; therefore,
+        the first onset will be at least this.
+    post_last : audio data after this sample will be ignored; therefore,
+        the last onset will be at most this.
+    
+    Returns
+    ------
+    Array of detected stimulus onsets in samples
+    """
+    # Load ns5 file
+    l = ns5.Loader(filename=filename)
+    l.load_file()
+    
+    # Grab audio data, may be mono or stereo
+    if audio_channels is None:
+        audio_data = l.get_all_analog_channels()
+    else:
+        # Specify channels manually
+        audio_data = np.array(\
+            [l.get_analog_channel_as_array(ch) for ch in audio_channels])
+    
+    # Plot the data, there may be artefacts to be truncated
+    if debug_mode:
+        import matplotlib.pyplot as plt
+        plt.plot(audio_data.transpose())
+        plt.show()
+        1/0
+
+    # Truncate artefacts
+    if truncate_data is not None:
+        audio_data = audio_data[:,:truncate_data]
+
+    # Onset detector expect mono to be 1d, not Nx1
+    if len(audio_channels) == 1:
+        # Mono
+        audio_data = audio_data.flatten()
+
+    # Instantiate an onset detector
+    od = AudioTools.OnsetDetector(input_data=audio_data,
+        F_SAMP=l.header.f_samp,
+        plot_debugging_figures=True, 
+        manual_threshhold=manual_threshhold,
+        minimum_duration_ms=minimum_duration_ms)
+    
+    # Run it and save output to disk
+    od.execute()
+    
+    do = od.detected_onsets
+    if drop_first_and_last:
+        do = do[1:-1]
+    np.savetxt(os.path.join(os.path.split(filename)[0], 'TIMESTAMPS'), do,
+        fmt='%d')
+
+    return do
+
+
+# Functions to find and add bcontrol data to RecordingSession
+# Acts like RecordingSession wrapper.
 def add_bcontrol_data_to_session(bcontrol_folder, session, verbose=False, 
     pre_time=-1000., post_time=1000.):
     """Copies the best bcontrol file into the session
@@ -154,6 +256,9 @@ def add_bcontrol_data_to_session(bcontrol_folder, session, verbose=False,
     # Add to session
     session.add_file(bdata_filename)
 
+
+
+# Utility function using experimental logic to find the right behavior file.
 def find_closest_bcontrol_file(bcontrol_folder, ns5_filename, verbose=False,
     pre_time=-1000., post_time=1000.):
     """Returns the best matched bcontrol file for a RecordingSession.
