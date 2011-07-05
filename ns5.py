@@ -1,69 +1,48 @@
 import numpy as np
 import struct
     
-
 class HeaderInfo:
-    """Holds information from the ns5 file header about the file.
-    
-    """
-    pass    
-    
+    """Holds information from the ns5 file header about the file."""
+    pass       
 
 class Loader(object):
-    def __init__(self, settings=None, filename=None):
-        """Specifies settings for the new loader (channel mapping, etc).
-        
-        
-        Parameters
-        ----------
-        settings : string
-            Currently, the only supported string is 'HO4'. If this string
-            is used, the correct channel mappings for this type of data
-            will be loaded.
-        
-        
-        If settings is None, then you can still access channels by number
-        using get_channel and get_channel_as_array
-        
-        Audio channels are available as get_analog_channel
+    """Object to load data from binary ns5 files.
+    
+    Methods
+    -------
+    load_file : actually create links to file on disk
+    load_header : load header info and store in self.header
+    get_channel_as_array : Returns 1d numpy array of the entire recording
+        from requested channel.
+    get_analog_channel_as_array : Same as get_channel_as_array, but works
+        on analog channels rather than neural channels.
+    get_analog_channel_ids : Returns an array of analog channel numbers
+        existing in the file.    
+    get_neural_channel_ids : Returns an array of neural channel numbers
+        existing in the file.
+    regenerate_memmap : Deletes and restores the underlying memmap, which
+        may free up memory.
+    
+    Issues
+    ------
+    Memory leaks may exist
+    Not sure that regenerate_memmap actually frees up any memory.
+    """
+    def __init__(self, filename=None):
+        """Creates a new object to load data from the ns5 file you specify.
+
+        filename : path to ns5 file
+        Call load_file() to actually get data from the file.
         """
         self.filename = filename
         
-        #~ if settings is None:
-            #~ print "No settings specified, using default value: HO4"
-            #~ settings = 'HO4'
         
-        
-        if settings == 'HO4':
-            self.KEEP_CHANNELS = \
-                [16, 18, 17, 20, 19, 22, 21, 24, 23, 26, 25, 28, 27, 30, 29, 32]
         
         self._mm = None
         self.file_handle = None
 
-
     def load_file(self, filename=None):
-        """Loads an ns5 file, if not already done. Stores in hdf5 file.
-        
-        
-        Parameters
-        ----------
-        filename : string
-            Location of the *.ns5 binary file to be loaded. This file
-            should contain both neural data and the audio waveforms
-            that were played.
-        
-        
-        Outputs
-        -------       
-        self.neural_data : np.memmap (TODO: MinMemMap)
-            A handle to allow access to the hdf5 neural data
-        
-        self.audio_data : np.memmap (TODO: MinMemMap)
-            A handle to allow access to the hdf5 audio data
-        
-        self.header : HeaderInfo
-
+        """Loads an ns5 file, if not already done.
         
         *.ns5 BINARY FILE FORMAT
         The following information is contained in the first part of the header
@@ -166,42 +145,9 @@ class Loader(object):
         # close file
         self.file_handle.close()
 
-
-    def _parse_channels(self):
-        """Identifies desired neural and audio channels in the data."""
-        # determine the channels to keep from the raw data file
-        self._idxs_into_memory_map = \
-            [self.header.Channel_ID.index(nc) \
-            if self.header.Channel_ID.__contains__(nc) \
-            else None for nc in self.KEEP_CHANNELS]
-        if None in self._idxs_into_memory_map:
-            bad_channel = self.KEEP_CHANNELS[map(\
-                bool, self._idxs_into_memory_map).index(False)]
-            print "You requested channel %d that does not exist \
-                in the datafile." % bad_channel
-            self._idxs_into_memory_map = filter(bool, idxs_into_memory_map)
-        
-        # determine the audio channels
-        self._audio_idxs_into_memory_map = \
-            [self.header.Channel_ID.index(nc) \
-            if self.header.Channel_ID.__contains__(nc) \
-            else None for nc in [135, 136] ]
-        if None in self._audio_idxs_into_memory_map:            
-            print "Missing audio in neural file."
-            self._audio_idxs_into_memory_map = filter(bool, 
-                self._audio_idxs_into_memory_map)
-
     
     def regenerate_memmap(self):
-        """user calls me to reclaim memory
-        
-        slices of _mm are doled out intelligently
-        i am not sure if those slices need to be deleted by the user?
-        i am guessing that they will be broken after calling regenerate
-        at worst, not deleting them may break the regeneration of _mm
-        
-        test this
-        """
+        """Delete internal memmap and create a new one, to save memory."""
         try:
             del self._mm
         except AttributeError: 
@@ -212,54 +158,13 @@ class Loader(object):
             offset=self.header.Header, 
             shape=(self.header.n_samples, self.header.Channel_Count))
     
-    
-    #~ def get_neural_channel(self, channel_id):
-        #~ if channel_id in self.KEEP_CHANNELS:
-            #~ mm_index = self.KEEP_CHANNELS.index(channel_id)
-            
-        #~ else:
-            #~ return None
-        
-    
-    def get_neural_memmap(self):
-        """Returns a memmap to just the neural channels in keep_channels"""
-        self._parse_channels()
-        
-        if '_mm' not in self.__dict__: self.regenerate_memmap()
-        
-        
-        # I see the problem, this rearrangement of columns cause the load
-        # from disk to happen
-        return self._mm[:, self._idxs_into_memory_map]
-
-    
-    
-    def get_audio_memmap(self):        
-        """Return a memmap to just the audio channels"""
-        self._parse_channels()
-        
-        if '_mm' not in self.__dict__: self.regenerate_memmap()
-        
-        return self._mm[:, self._audio_idxs_into_memory_map]        
-    
     def __del__(self):
-        # try catch doesn't work!
-        
         # this deletion doesn't free memory, even though del l._mm does!
         if '_mm' in self.__dict__: del self._mm
         #else: print "gracefully skipping"
-        
-        #~ try: 
-            #~ del self._mm
-        #~ except AttributeError: 
-            #~ pass
-        #~ #super(Loader, self).__del__() #TypeError
     
-    def get_channel(self, channel_number):
-        # Accept ns5-like channel numbers, translate to indices into
-        # _mm via keep_channels, then return
-        # Then get_neural and get_audio can call this
-        # And _parse_channels will be unnecesaary
+    def _get_channel(self, channel_number):
+        """Returns slice into internal memmap for requested channel"""
         try:
             mm_index = self.header.Channel_ID.index(channel_number)
         except ValueError:
@@ -270,39 +175,31 @@ class Loader(object):
         return self._mm[:, mm_index]
     
     def get_channel_as_array(self, channel_number):
-        """Loads data from memmap, deletes memmap, returns data"""
-        
-        data = np.array(self.get_channel(channel_number))
+        """Returns data from requested channel as a 1d numpy array."""
+        data = np.array(self._get_channel(channel_number))
         self.regenerate_memmap()
         return data
 
     def get_analog_channel_as_array(self, analog_chn):
-        """Loads data from analog channels, such as audio.
+        """Returns data from requested analog channel as a numpy array.
         
-        Simply adds 128 to the channel number to convert.
+        Simply adds 128 to the channel number to convert to ns5 number.
         This is just the way Cyberkinetics numbers its channels.
         """
-        
-        return self.get_channel_as_array(analog_chn + 128)
-    
-    def get_all_analog_channels(self):
-        """Returns all analog channels.
-        
-        That is, those with channel IDs >128 and <=144.
-        """
-        # Detect audio channels
-        audio_channels = self.get_audio_channel_numbers() - 128
-        
-        # Grab audio data, may be mono or stereo
-        return np.array([self.get_analog_channel_as_array(ch) \
-            for ch in audio_channels])        
+        return self.get_channel_as_array(analog_chn + 128)    
 
     def get_audio_channel_numbers(self):
-        """Returns index of audio channels."""
-        # Detect audio channels
-        channel_array = np.array(self.header.Channel_ID)
-        audio_channels = channel_array[np.nonzero(\
-            (channel_array > 128) & \
-            (channel_array <= 144))]
-        return audio_channels
+        """Deprecated, use get_analog_channel_ids"""
+        return self.get_analog_channel_ids()
+    
+    def get_analog_channel_ids(self):
+        """Returns array of analog channel ids existing in the file.
+        
+        These can then be loaded by calling get_analog_channel_as_array(chn).
+        """
+        return np.array(filter(lambda x: (x > 128) and (x <= 144), 
+            self.header.Channel_ID)) - 128
+
+    def get_neural_channel_numbers(self):
+        return np.array(filter(lambda x: x <= 128, self.header.Channel_ID))
 
