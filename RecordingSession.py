@@ -4,6 +4,17 @@ This allows you to create a well-formed directory for ns5_process and fill
 it with data.
 
 Try to keep logic relating to any specific experiment out of this module.
+
+RecordingSession spec:
+* A directory
+* File containing neural channels to put into database
+  16 17 18 20 22 24 26 28
+* File containing channel groupings
+  16 17 18 20
+  22 24 26 28
+* File containing analog channels to put into database (if any)
+  7 8
+* TIMESTAMPS with times in samples to extract
 """
 
 import shutil
@@ -14,6 +25,7 @@ import ns5
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
 ANALOG_CHANNELS_FILENAME = 'ANALOG_CHANNELS'
+TIMESTAMPS_FILENAME = 'TIMESTAMPS'
 
 def write_channel_numbers(filename, list_of_lists):
     """Writes a list of lists of channel numbers to a file.
@@ -69,15 +81,21 @@ class RecordingSession:
     
     def read_channel_groups(self):
         """Returns a list of channel groups"""
-        return read_channel_numbers(GROUPED_CHANNELS_FILENAME)
+        return read_channel_numbers(\
+            os.path.join(self.full_path, GROUPED_CHANNELS_FILENAME))
     
-    def read_all_channels(self):
+    def read_neural_channel_ids(self):
         """Returns a list of all channel numbers"""
-        return read_channel_numbers(ALL_CHANNELS_FILENAME)[0]
+        return read_channel_numbers(\
+            os.path.join(self.full_path, ALL_CHANNELS_FILENAME))[0]
     
-    def read_analog_channels(self):
-        """Returns a list of analog channels"""
-        return read_channel_numbers(ANALOG_CHANNELS_FILENAME)[0]
+    def read_analog_channel_ids(self):
+        """Returns a list of analog channels, or None if no file"""
+        try:
+            return read_channel_numbers(\
+                os.path.join(self.full_path, ANALOG_CHANNELS_FILENAME))[0]
+        except IOError:
+            return None
 
     def write_channel_groups(self, list_of_lists):
         """Writes metadata for channel groupings."""
@@ -85,13 +103,13 @@ class RecordingSession:
             os.path.join(self.full_path, GROUPED_CHANNELS_FILENAME),
             list_of_lists)
     
-    def write_all_channels(self, list_of_channels):
+    def write_neural_channel_ids(self, list_of_channels):
         """Writes list of channels to be processed."""
         write_channel_numbers(\
             os.path.join(self.full_path, ALL_CHANNELS_FILENAME),
             [list_of_channels])
     
-    def write_analog_channels(self, list_of_channels):
+    def write_analog_channel_ids(self, list_of_channels):
         """Writes analog channel numbers."""
         write_channel_numbers(\
             os.path.join(self.full_path, ANALOG_CHANNELS_FILENAME),
@@ -111,5 +129,12 @@ class RecordingSession:
     def add_file(self, filename):
         """Copy file into RecordingSession."""
         shutil.copy(filename, self.full_path)
+    
+    def add_timestamps(self, list_of_values):
+        """Adds timestamps by writing values to file in directory"""
+        # different format, one value per line
+        list_to_write = [[v] for v in list_of_values]        
+        write_channel_numbers(os.path.join(self.full_path, TIMESTAMPS_FILENAME),
+            list_to_write)
 
 
