@@ -18,7 +18,7 @@ class OnsetDetector(object):
     """
     def __init__(self, input_data, F_SAMP=30000., manual_threshhold=None,
         minimum_threshhold=None, minimum_duration_ms=5, 
-        plot_debugging_figures=False):
+        plot_debugging_figures=False, verbose=False):
         """An object that intelligently detects audio onsets in its input.
         
         Parameters
@@ -32,21 +32,19 @@ class OnsetDetector(object):
             Thus, make sure that you specify in units**2.
             (Regular units, not dB.)
         
+        minimum_duration_ms: Sounds less than this duration are discarded
+        
         
         Call method execute() to actually run the code.
         
         If manual_threshhold is None, a threshhold will be chosen for you.
         In the case of stereo data, the threshhold is set using the first
         channel (usually left) and then the same threshhold is used for
-        the other channel.
+        the other channel. The threshold will be stored in self.threshold
         
         Implementation note: slowest part of execution appears
         to be the smoothing filter. Look into implementing more efficiently.
         Smoothing an array of length 2**24 (17M) is barely tolerable (10sec).
-        
-        TODO: spurious onset at beginning and
-        offset at end because the smoothing filter tapers at the edge.
-        Actually the offset might not be a problem since filter is causal?
         """
         
         self.input_data = input_data
@@ -57,6 +55,7 @@ class OnsetDetector(object):
             np.rint(minimum_duration_ms / 1000. * self.F_SAMP)
         self.plot_debugging_figures = plot_debugging_figures
         self.detected_onsets = None # so far
+        self.verbose = verbose
         
         
         # We use a causal filter to be extra sure that we don't err on the side
@@ -83,7 +82,11 @@ class OnsetDetector(object):
     
     
     def execute(self):
-        """Executes onset detection."""        
+        """Executes onset detection.
+        
+        If onsets or offsets are within smoothing filter length of
+        beginning or end, a warning is generated.
+        """        
         
         # Deal with the case of stereo input
         if self.input_data.ndim == 2:
@@ -91,14 +94,19 @@ class OnsetDetector(object):
         elif self.input_data.ndim == 1:
             sound_bool = self._find_mono_threshhold_crossings(self.input_data)                
 
-        # We need to throw out onsets within the filtering window of the beginning
-        # And also the end. The smoothing tapers at the beginning and end
-        # and spuriously triggers a threshhold crossing.
+        # We need to throw out sounds that are too short.
         # Finally, will store self.detected_onsets.
-        print "Error checking"; sys.stdout.flush()
+        if self.verbose:
+            print "Error checking"; sys.stdout.flush()
         self._error_check_onsets(sound_bool)
         
-    
+        # Check for sounds too close to beginning
+        if len(self.detected_onsets >= 1):
+            if self.detected_onsets[0] < self.smoother.smoothing_filter_length:
+                print "warning: first onset is within filter width of beginning"
+            if self.detected_offsets[-1] > \
+                (len(sound_bool) - self.smoother.smoothing_filter_length):
+                print "warning: last offset is within filter width of end"
     
     def _find_mono_threshhold_crossings(self, data_vector):
         """Finds threshhold crossings in mono data_vector.
@@ -119,8 +127,9 @@ class OnsetDetector(object):
         
         # Appears to work best when smoothing power first, then putting
         # into dB.
-        # smooth the audio data      
-        print "Smoothing the data"; sys.stdout.flush()
+        # smooth the audio data     
+        if self.verbose:
+            print "Smoothing the data"; sys.stdout.flush()
         smoothed_power_dB = 20*np.log10(\
             self.smoother.execute(data_vector**2))
         
@@ -129,7 +138,8 @@ class OnsetDetector(object):
         
         # Autoset threshhold if it wasn't set already
         if self.threshhold is None:
-            print "Autosetting threshhold"; sys.stdout.flush()
+            if self.verbose:
+                print "Autosetting threshhold"; sys.stdout.flush()
 
             # Instantiate and run threshhold setter
             self.tset = self.thresh_setter(\
@@ -144,8 +154,9 @@ class OnsetDetector(object):
                 self.threshhold = self._minimum_threshhold        
         
         # find when smoothed waveform exceeds threshhold
-        print "Finding threshhold crossings at %0.3f dB" % self.threshhold
-        sys.stdout.flush()
+        if self.verbose:
+            print "Finding threshhold crossings at %0.3f dB" % self.threshhold
+            sys.stdout.flush()
         
         return smoothed_power_dB > self.threshhold
     
@@ -200,21 +211,23 @@ class OnsetDetector(object):
             # Remove sounds that violate min_duration requirement.
             too_short_sounds = ((offsets - onsets) < self._minimum_duration_samples)
             if np.any(too_short_sounds):
-                print "Removing %d sounds that violate duration requirement" % \
-                    len(mlab.find(too_short_sounds))
+                if self.verbose:
+                    print "Removing %d sounds that violate duration requirement" % \
+                        len(mlab.find(too_short_sounds))
                 
             onsets = onsets[np.logical_not(too_short_sounds)]
             offsets = offsets[np.logical_not(too_short_sounds)]
             
             # Warn when onsets occur very close together. This might occur if the 
             # sound power briefly drops below threshhold.
-            if np.any(np.diff(onsets) < self._minimum_duration_samples):
+            if np.any(np.diff(onsets) < self._minimum_duration_samples):                
                 print "WARNING: %d onsets were suspiciously close together." % \
                     len(find(np.diff(onsets) < self._minimum_duration_samples))
             
             # Print the total number of sounds identified.
-            print "Identified %d sounds with average duration %0.3fs" % \
-                (len(onsets), (offsets-onsets).mean() / self.F_SAMP)
+            if self.verbose:
+                print "Identified %d sounds with average duration %0.3fs" % \
+                    (len(onsets), (offsets-onsets).mean() / self.F_SAMP)
         
         
         # Store detected onsets
@@ -342,8 +355,8 @@ class ThreshholdAutosetter(object):
         if input_data.size > max_data_points:
             stride = np.ceil(input_data.size / max_data_points)
             self.input_data = input_data[::stride]
-            print "old size %d, new size %d" % (input_data.size, 
-                self.input_data.size)
+            #print "old size %d, new size %d" % (input_data.size, 
+            #    self.input_data.size)
         else:
             self.input_data = input_data
     
