@@ -13,6 +13,8 @@ import os
 import time
 import RecordingSession
 import numpy as np
+import ns5
+import AudioTools
 
 # Functions to parse the way I name my ns5 files
 def make_filename(dirname=None, username='*', ratname='*', date='*', number='*'):
@@ -84,7 +86,7 @@ class RecordingSessionMaker:
     file, subtracting broken channels, finding and adding in bcontrol files.
     """   
     def __init__(self, data_analysis_dir, all_channels_file,
-        channel_groups_file):
+        channel_groups_file, analog_channels_file=None):
         """Builds a new object to get data from a certain location.
         
         Given the data location and the channel numbering, I can produce
@@ -100,8 +102,9 @@ class RecordingSessionMaker:
         data_analysis_dir : root of tree to place files (will be created)
         all_channels_file : filename containing list of channel numbers
         channel_groups_file : filename containing channel groups
+        analog_channels_file : filename containing analog channels, or None
         
-        Both of the channel files should follow the format that
+        All of the channel files should follow the format that
         RecordingSession expects.
         """
         # Store input directory and create if necessary
@@ -115,6 +118,14 @@ class RecordingSessionMaker:
             RecordingSession.read_channel_numbers(all_channels_file)[0]
         self.TC_list = \
             RecordingSession.read_channel_numbers(channel_groups_file)
+        
+        # Read analog channels from disk
+        if analog_channels_file is not None:
+            self.analog_channel_ids = \
+                RecordingSession.read_channel_numbers(analog_channels_file)[0]
+        else:
+            # No analog channels specified, none will be added to session
+            self.analog_channel_ids = None
     
     def make_session(self, ns5_filename, session_name, remove_from_SC=[], 
         remove_from_TC=[]):
@@ -127,16 +138,20 @@ class RecordingSessionMaker:
 
         Returns the created RecordingSession.
         """
+        full_path = os.path.join(self.data_analysis_dir, session_name)
         # Create RecordingSession
-        rs = RecordingSession.RecordingSession(self.data_analysis_dir,
-            session_name)
+        rs = RecordingSession.RecordingSession(full_path)
         
         # Link neural data to session dir, overwriting if necessary
         link_file(ns5_filename, rs.full_path)
         
         # Create channel numbering meta file
         session_SC_list = sorted(list(set(self.SC_list) - set(remove_from_SC)))
-        rs.write_all_channels(session_SC_list)
+        rs.write_neural_channel_ids(session_SC_list)
+        
+        # Analog channels
+        if self.analog_channel_ids is not None:
+            rs.write_analog_channel_ids(self.analog_channel_ids)
         
         # Create channel grouping meta file
         session_TC_list = [sorted(list(set(this_ch) - set(remove_from_TC)))\
@@ -148,94 +163,100 @@ class RecordingSessionMaker:
 # Many of the following functions work like wrapper for RecordingSession.
 # Function to load audio data from raw file and detect onsets
 def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50,
-    pre_first=0, post_last=0):
+    pre_first=0, post_last=0, verbose=False):
     """Given a RecordingSession, makes TIMESTAMPS file.
+    
+    I'm a thin wrapper over `calculate_timestamps` that knows how to get
+    and put the data from RecordingSession objects.
     
     I get the right channels and filenames from RecordingSession, then call
     `calculate_timestamps`, then tell the session what I've calculated.
+    
+    Returns onsets and offsets that were calculated
     """
     # Get data from recording session
     filename = rs.get_ns5_filename()
-    try:
-        audio_channels = rs.read_analog_channels()
-    except IOError:
-        # Recording session doesn't know what analog channels are supposed to be
-        audio_channels = None
+    audio_channels = rs.read_analog_channel_ids()
     
     # Calculate timestamps
-    t = calculate_timestamps(filename, manual_threshhold, audio_channels,
-        minimum_duration_ms, pre_first, post_last)
-    
+    t_on, t_off = calculate_timestamps(filename, manual_threshhold, audio_channels,
+        minimum_duration_ms, pre_first, post_last, verbose=verbose)
+      
     # Tell RecordingSession about them
-    rs.add_timestamps(t)
+    rs.add_timestamps(t_on)
+        
+    return (t_on, t_off)
 
 def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None, 
-    minimum_duration_ms=50, pre_first=0, post_last=0)
+    minimum_duration_ms=50, pre_first=0, post_last=0, debug_mode=False, verbose=False):
     """Given ns5 file and channel numbers, returns audio onsets.
     
     I uses `ns5.Loader` to open ns5 file and `AudioTools.OnsetDetector`
     to identify onsets. I discard onsets too close to the ends.
     
-    Input
-    -----
+    Inputs
+    ------
     filename : path to *.ns5 binary file
     manual_threshhold, minimum_duration_ms : Passed to OnsetDetector    
     audio_channels : the channel numbers to analyze for onsets. If None,
         I'll use the first channel, or the first two channels if available.    
     pre_first : audio data before this sample will be ignored; therefore,
         the first onset will be at least this.
-    post_last : audio data after this sample will be ignored; therefore,
-        the last onset will be at most this.
+    post_last : amount of data to ignore from the end. Uses normal indexing
+        rules: if positive, then this is the last sample to analyze;
+        if negative, then that many samples from the end will be ignored;
+        if zero, then all data will be included (default).
+    debug_mode : Will plot the audio data before analyzing it.
     
     Returns
     ------
-    Array of detected stimulus onsets in samples
+    Tuple of detected onsets and detected offsets in samples
     """
     # Load ns5 file
     l = ns5.Loader(filename=filename)
     l.load_file()
     
-    # Grab audio data, may be mono or stereo
-    if audio_channels is None:
-        audio_data = l.get_all_analog_channels()
-    else:
-        # Specify channels manually
-        audio_data = np.array(\
-            [l.get_analog_channel_as_array(ch) for ch in audio_channels])
+    # Which audio channels exist in the database?
+    existing_audio_channels = l.get_analog_channel_ids()
+    if len(existing_audio_channels) == 0:
+        raise(IOError("No audio data exists in file %s" % filename))
     
-    # Plot the data, there may be artefacts to be truncated
+    # If no audio channels were specified, use the first one or two
+    if audio_channels is None:
+        audio_channels = existing_audio_channels[0:2]
+    
+    if len(audio_channels) > 2: print "warning: >2 channel data is not tested"
+
+    # Now create the numpy array containing mono or stereo data
+    audio_data = np.array(\
+        [l.get_analog_channel_as_array(ch) for ch in audio_channels])
+    
+    # Slice out beginning and end of data
+    if post_last == 0: 
+        # Do not truncate end
+        post_last = audio_data.shape[1]
+    audio_data = audio_data[:, pre_first:post_last]
+
+    # Plot the sliced data
     if debug_mode:
         import matplotlib.pyplot as plt
         plt.plot(audio_data.transpose())
         plt.show()
-        1/0
 
-    # Truncate artefacts
-    if truncate_data is not None:
-        audio_data = audio_data[:,:truncate_data]
-
-    # Onset detector expect mono to be 1d, not Nx1
+    # OnsetDetector expect mono to be 1d, not Nx1
     if len(audio_channels) == 1:
-        # Mono
         audio_data = audio_data.flatten()
 
     # Instantiate an onset detector
     od = AudioTools.OnsetDetector(input_data=audio_data,
         F_SAMP=l.header.f_samp,
-        plot_debugging_figures=True, 
         manual_threshhold=manual_threshhold,
-        minimum_duration_ms=minimum_duration_ms)
+        minimum_duration_ms=minimum_duration_ms,
+        verbose=verbose)
     
-    # Run it and save output to disk
+    # Run it and get the answer. Account for pre_first offset. Return.
     od.execute()
-    
-    do = od.detected_onsets
-    if drop_first_and_last:
-        do = do[1:-1]
-    np.savetxt(os.path.join(os.path.split(filename)[0], 'TIMESTAMPS'), do,
-        fmt='%d')
-
-    return do
+    return (od.detected_onsets + pre_first, od.detected_offsets + pre_first)
 
 
 # Functions to find and add bcontrol data to RecordingSession
