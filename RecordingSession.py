@@ -21,6 +21,7 @@ import shutil
 import glob
 import os.path
 import ns5
+import numpy as np
 
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
@@ -136,5 +137,17 @@ class RecordingSession:
         list_to_write = [[v] for v in list_of_values]        
         write_channel_numbers(os.path.join(self.full_path, TIMESTAMPS_FILENAME),
             list_to_write)
-
+    
+    def read_timestamps(self):
+        t = read_channel_numbers(\
+            os.path.join(self.full_path, TIMESTAMPS_FILENAME))
+        return np.array([tt[0] for tt in t])
+    
+    def put_neural_data_into_db(self):
+        """Loads neural data from ns5 file and puts into OE database.
+        
+        Slices around times provided in TIMESTAMPS.
+        """
+        t = self.read_timestamps()
+        
 

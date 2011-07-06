@@ -1,3 +1,7 @@
+def slice_trials(timestamps, soft_limits, hard_limits, overlap=0):
+    """If
+    """
+
 class TrialSlicer:
     """Intelligently determines trial starts and stops.
     
@@ -10,10 +14,7 @@ class TrialSlicer:
     according to provided parameters.
     """
     
-<<<<<<< HEAD
-    def __init__(self, timestamps, soft_limits, hard_limits, overlap=0):
-        
-=======
-    def __init__(self, timestamps, soft_limits, hard_limits):
-        # no change
->>>>>>> 33e860a102b93cbcd2831328f46fb2dcfe8431ff
+    def __init__(self, timestamps, soft_limits):
+        self.timestamps = timestamps
+        self.soft_limits = soft_limits
+    
