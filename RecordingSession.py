@@ -22,6 +22,8 @@ import glob
 import os.path
 import ns5
 import numpy as np
+import TrialSlicer
+import OpenElectrophy as OE
 
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
@@ -57,22 +59,22 @@ class RecordingSession:
     
     Provides methods to read and write data from that directory.
     """
-    def __init__(self, dirname, subname=None):
+    def __init__(self, dirname):
         """Create object linked to a data directory
         
         If directory does not exist, will create it.
-        
-        Just specify `dirname`. For backwards-compatibility, I'll join
-        the two parameters if you provide two.
         """
-        if subname is None:
-            self.full_path = dirname
-        else:
-            print "warning: just provide dirname"
-            self.full_path = os.path.join(dirname, subname)
+        self.full_path = dirname
+        self.session_name = os.path.basename(os.path.dirname(self.full_path))
         
         if not os.path.exists(self.full_path):
             os.mkdir(self.full_path)
+    
+    def get_db_filename(self):
+        return os.path.join(self.full_path, self.session_name + '.db')
+    
+    def open_db(self):
+        OE.open_db('sqlite:///' + self.get_db_filename())
     
     def get_ns5_loader(self):
         """Returns Loader object for ns5 file"""
@@ -143,11 +145,37 @@ class RecordingSession:
             os.path.join(self.full_path, TIMESTAMPS_FILENAME))
         return np.array([tt[0] for tt in t])
     
-    def put_neural_data_into_db(self):
+    def put_neural_data_into_db(self, soft_limits_sec=(-2., 2.25), 
+        hard_limits_sec=(-.25, .5)):
         """Loads neural data from ns5 file and puts into OE database.
         
         Slices around times provided in TIMESTAMPS.
         """
-        t = self.read_timestamps()
+        OE.open_db(url='sqlite:///' + self.get_db_filename())
+        session = OE.Session()
         
+        t = self.read_timestamps()
+        l = self.get_ns5_loader()
+        hard_limits = np.array(\
+            np.asarray(hard_limits_sec) * l.header.f_samp, dtype=np.int)
+        soft_limits = np.array(\
+            np.asarray(soft_limits_sec) * l.header.f_samp, dtype=np.int)
+        
+        t_starts, t_stops = TrialSlicer.slice_trials(\
+            timestamps=t,
+            soft_limits=soft_limits, 
+            hard_limits=hard_limits, 
+            meth='end_of_previous', 
+            data_range=(0, l.header.n_samples))
+        
+        blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())
+        
+        block = blr.read_block(full_range=8192., t_starts=t_starts, 
+            t_stops=t_stops, chlist=self.read_neural_channel_ids())
+        
+        
+        block2 = OE.io.io.hierachicalNeoToOe(block)
+        block2.save(session=session)
+        
+        return block
 
