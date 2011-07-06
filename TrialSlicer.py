@@ -1,7 +1,7 @@
 import numpy as np
 
 def slice_trials(timestamps, soft_limits=(-100,100), hard_limits=(-1,1), 
-    data_range=None, overlap=0, meth=0):
+    data_range=None, overlap=0, meth='end_of_previous'):
     """Intelligently determines trial starts and stops.
     
     Given a set of timestamps representing stimulus onsets, it will
