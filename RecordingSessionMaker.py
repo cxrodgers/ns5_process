@@ -15,6 +15,14 @@ import RecordingSession
 import numpy as np
 import ns5
 import AudioTools
+import OpenElectrophy as OE
+import matplotlib
+matplotlib.rcParams['figure.subplot.hspace'] = .5
+matplotlib.rcParams['figure.subplot.wspace'] = .5
+matplotlib.rcParams['font.size'] = 8.0
+matplotlib.rcParams['xtick.labelsize'] = 'small'
+matplotlib.rcParams['ytick.labelsize'] = 'small'
+import matplotlib.pyplot as plt
 
 # Functions to parse the way I name my ns5 files
 def make_filename(dirname=None, username='*', ratname='*', date='*', number='*'):
@@ -161,6 +169,96 @@ class RecordingSessionMaker:
         return rs
 
 # Many of the following functions work like wrapper for RecordingSession.
+# Plot average LFP over neural channels
+def plot_avg_lfp(rs, event_name='Timestamp', meth='avg', savefig=None,
+    t_start=None, t_stop=None):
+    """Plot average of analogsignals triggered on some event.
+    
+    Each channel gets its own subplot.
+    """
+    event_list = query_events(rs, event_name)
+    
+    # test ordering error
+    # event_list = list(np.take(event_list, np.arange(len(event_list))[::-1]))
+
+    # Make big figure with enough subplots
+    f = plt.figure(figsize=(12,12))
+    ymin, ymax = 0., 0.
+    n_subplots = float(len(rs.read_neural_channel_ids()))
+    spx = int(np.ceil(np.sqrt(n_subplots)))
+    spy = int(np.ceil(n_subplots / spx))
+    
+    # Call RecordingSession.avg_over_list_of_events for each channel
+    for n, chn in enumerate(rs.read_neural_channel_ids()):
+        ax = f.add_subplot(spx, spy, n+1)
+        t, sig = rs.avg_over_list_of_events(event_list, chn=chn, meth=meth,
+            t_start=t_start, t_stop=t_stop)
+        ax.plot(t*1000., sig.transpose())
+        if sig.min() < ymin: ymin = sig.min()
+        if sig.max() > ymax: ymax = sig.max()        
+        plt.title('ch %d' % chn)
+    
+    # Harmonize x and y limits across subplots
+    for ax in f.get_axes():        
+        ax.set_xlim((t_start*1000., t_stop*1000.))
+        ax.set_ylim((ymin, ymax))
+    
+    if savefig is None:
+        plt.show()
+    elif savefig is True:
+        filename = os.path.join(rs.full_path, rs.session_name + '_avglfp.png')
+        plt.savefig(filename)
+        plt.close()
+    else:
+        plt.savefig(savefig)
+        plt.close()
+
+# Plot average audio signal
+def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
+    t_start=None, t_stop=None):
+    """Plot average of analogsignals triggered on some event.
+    
+    Each channel gets its own subplot.
+    """
+    event_list = query_events(rs, event_name)
+    
+    # test ordering error
+    # event_list = list(np.take(event_list, np.arange(len(event_list))[::-1]))
+
+    # Call RecordingSession.avg_over_list_of_events for each channel
+    for n, chn in enumerate([chn + 128 for chn in rs.read_analog_channel_ids()]):
+        plt.figure()
+        t, sig = rs.avg_over_list_of_events(event_list, chn=chn, meth=meth,
+            t_start=t_start, t_stop=t_stop)
+        plt.plot(t*1000, sig.transpose())
+        plt.title('ch %d' % chn)
+    
+    if savefig is None:
+        plt.show()
+    elif savefig is True:
+        filename = os.path.join(rs.full_path, rs.session_name + '_audio.png')
+        plt.savefig(filename)
+        plt.close()
+    else:
+        plt.savefig(savefig)
+        plt.close()
+
+def query_events(rs, event_name='Timestamp'):
+    # Open db
+    rs.open_db()
+    session = rs.get_OE_session()
+    block = rs.get_raw_data_block()
+    
+    # Get list of events in this block and with this name
+    # Order by id_segment
+    event_list = session.query(OE.Event).\
+        join((OE.Segment, OE.Event.segment)).\
+        filter(OE.Segment.id_block == block.id).\
+        filter(OE.Event.label == event_name).\
+        order_by(OE.Segment.id).all()
+    
+    return event_list
+
 # Function to load audio data from raw file and detect onsets
 def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50,
     pre_first=0, post_last=0, verbose=False):

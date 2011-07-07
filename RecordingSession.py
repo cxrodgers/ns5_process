@@ -24,11 +24,12 @@ import ns5
 import numpy as np
 import TrialSlicer
 import OpenElectrophy as OE
-
+import matplotlib.pyplot as plt
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
 ANALOG_CHANNELS_FILENAME = 'ANALOG_CHANNELS'
 TIMESTAMPS_FILENAME = 'TIMESTAMPS'
+FULL_RANGE_UV = 8192. # maximum input range of signal
 
 def write_channel_numbers(filename, list_of_lists):
     """Writes a list of lists of channel numbers to a file.
@@ -75,6 +76,9 @@ class RecordingSession:
     
     def open_db(self):
         OE.open_db('sqlite:///' + self.get_db_filename())
+    
+    def get_OE_session(self):
+        return OE.Session()
     
     def get_ns5_loader(self):
         """Returns Loader object for ns5 file"""
@@ -129,6 +133,18 @@ class RecordingSession:
         
         return filename_list[0]
     
+    def get_raw_data_block(self):
+        # Open database, get session
+        self.open_db()
+        session = self.get_OE_session()
+        
+        # Check to see whether data has already been added
+        q = session.query(OE.Block).filter(OE.Block.name=='Raw Data')
+        if q.count() > 0:
+            return q.one()   
+        else:
+            return None
+    
     def add_file(self, filename):
         """Copy file into RecordingSession."""
         shutil.copy(filename, self.full_path)
@@ -149,11 +165,21 @@ class RecordingSession:
         hard_limits_sec=(-.25, .5)):
         """Loads neural data from ns5 file and puts into OE database.
         
-        Slices around times provided in TIMESTAMPS.
-        """
-        OE.open_db(url='sqlite:///' + self.get_db_filename())
-        session = OE.Session()
+        Slices around times provided in TIMESTAMPS. Also puts events in
+        with label 'Timestamp' at each TIMESTAMP.
         
+        Returns OE block.
+        """
+        # Open database, get session
+        self.open_db()
+        session = self.get_OE_session()
+        
+        # See if operation already occurred
+        block = self.get_raw_data_block()
+        if block is not None:
+            return block      
+        
+        # Read time stamps and set limits in samples
         t = self.read_timestamps()
         l = self.get_ns5_loader()
         hard_limits = np.array(\
@@ -161,6 +187,7 @@ class RecordingSession:
         soft_limits = np.array(\
             np.asarray(soft_limits_sec) * l.header.f_samp, dtype=np.int)
         
+        # Slice Trials around timestamps
         t_starts, t_stops = TrialSlicer.slice_trials(\
             timestamps=t,
             soft_limits=soft_limits, 
@@ -168,14 +195,143 @@ class RecordingSession:
             meth='end_of_previous', 
             data_range=(0, l.header.n_samples))
         
-        blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())
+        # Load data from file and store all neural channels in block
+        blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())        
+        block = blr.read_block(full_range=FULL_RANGE_UV, t_starts=t_starts, 
+            t_stops=t_stops, chlist=(self.read_neural_channel_ids() + 
+            [ch+128 for ch in self.read_analog_channel_ids()]))
         
-        block = blr.read_block(full_range=8192., t_starts=t_starts, 
-            t_stops=t_stops, chlist=self.read_neural_channel_ids())
-        
-        
+        # Convert to OE object
         block2 = OE.io.io.hierachicalNeoToOe(block)
+        block2.name = 'Raw Data'
+
+        # Add events at TIMESTAMPS
+        if len(t) == len(block2._segments):
+            for tt, seg in zip(t, block2._segments):
+                e = OE.Event(name='Timestamp', label='Timestamp')
+                e.time = (tt/l.header.f_samp)
+                #e.save()
+                seg._events.append(e)
+        else:
+            print "warning: timestamps were dropped so I can't add events"
+
+        # Save to database
         block2.save(session=session)
         
-        return block
+        return block2
+    
 
+    
+    def avg_over_list_of_events(self, event_list, chn, meth='avg', t_start=None, t_stop=None):
+        """Given a list of Event and a channel number, returns average signal.
+        
+        event_list : list of OE Event, ordered by id_segment
+        chn : channel number
+        session : the OE session from which you acquired the list of events
+        
+        Currently it's required that the list of Event be sorted by
+        id_segment. For some reason if I sort it here, it causes an error.
+        It's also required that only no two Event come from the same Segment.
+        
+        All AnalogSignal from channel `chn` containing an Event in event_list
+        will be averaged together, triggered on the time of the Event.
+        
+        This function grabs the signals, error-checks, and then
+        the actual work is done by a lower level function that averages
+        AnalogSignal (but does not error check).
+        """
+        # Extract segment id from each event and test for ordering
+        seg_id_list = [e.segment.id for e in event_list]
+        assert seg_id_list == sorted(seg_id_list), "events must be sorted by segment"
+        # Why doesn't this work?
+        #idxs = np.argsort(seg_id_list)                
+        #event_list = list(np.take(event_list, idxs))
+        #seg_id_list = list(np.take(seg_id_list, idxs))
+        
+        # Get Segment containing this Event and check that there is only
+        # one Event per Segment, so that we can use the ordering to ensure
+        # one-to-one relationship between Event and AnalogSignal        
+        if len(np.unique(seg_id_list)) != len(seg_id_list):
+            raise(ValueError("More than one of the specified event per segment"))        
+        
+        # Get list of signals with this channel and in the list of Segment
+        # again ordered by id_segment, so signal_list[n] came from
+        # seg_id_list[n] which contains event[n]
+        signal_list = self.get_OE_session().query(OE.AnalogSignal).\
+            filter(OE.AnalogSignal.channel == chn).\
+            filter(OE.AnalogSignal.id_segment.in_(seg_id_list)).\
+            order_by(OE.AnalogSignal.id_segment).all()
+        
+        # Check alignment
+        assert np.all(
+            np.array([sig.id_segment for sig in signal_list]) ==
+            np.array(seg_id_list)), "Mismatched segments and events, somehow"
+        
+        # Call signal averaging function
+        return self.avg_over_signals_with_triggers(
+            signal_list, [e.time for e in event_list], meth=meth, 
+            t_start=t_start, t_stop=t_stop)
+    
+    def avg_over_signals_with_triggers(self, signal_list, trigger_times, 
+        t_start=None, t_stop=None, meth='avg'):
+        """Averages list of AnalogSignal triggered on times.
+        
+        signal_list : list of AnalogSignal to be averaged
+        trigger_times : trigger times, one per AnalogSignal
+        t_start, t_stop : the returned average will go from t_start to
+            t_stop, relative to trigger time. If None, then the maximum
+            amount of time will be returned, which is set by the overlap
+            of the time series contained in each signal.
+        
+        You must ensure that the trigger times are lined up correctly
+        with AnalogSignal before calling this function, and that all
+        AnalogSignal contain sufficient data for the t_start and t_stop
+        you specify.
+        
+        Currently this function contains some paranoid error checking
+        of the OE AnalogSignal.time_slice functionality.
+        
+        Returns tuple (return_t, avgsig) where return_t is an array
+        of times (relative to trigger) and avgsig is the averaged value
+        at those times.
+        """
+        #f = plt.figure()
+        #ax = f.add_subplot(111)
+        # If no times are provided, figure out maximum overlap
+        if t_start is None:
+            # Furthest back we can go
+            t_start = np.max([sig.t_start - trigger \
+                for sig, trigger in zip(signal_list, trigger_times)])
+        if t_stop is None:
+            # Furthest forward we can go
+            t_stop = np.min([sig.t()[-1] - trigger \
+                for sig, trigger in zip(signal_list, trigger_times)])        
+        
+        # Get all the slices in a list, get the returned times
+        slices = [ ]
+        return_t = None
+        
+        # Iterate through signals
+        for sig, trigger in zip(signal_list, trigger_times):
+            #assert(sig.segment._events[0].time == trigger)
+            # Get time slice around trigger time and append to list
+            #ax.plot(sig.t() - trigger, sig.signal)
+            slc = sig.time_slice(trigger + t_start, trigger + t_stop)
+            slices.append(slc.signal)
+            
+            # Error check return_t for consistency (paranoid)
+            if return_t is None:
+                return_t = slc.t() - trigger
+            else:
+                # The return_t must not differ by more than one sampling period
+                assert len(return_t) == len(slc.t())
+                assert np.all(\
+                    (slc.t() - trigger - return_t) < (1./slc.sampling_rate))
+        
+        # Average and return
+        avgsig = np.mean(slices, axis=0)
+        #ax.plot(return_t, avgsig, 'k', lw=4)
+        if meth == 'avg':
+            return (return_t, avgsig)
+        elif meth =='all':
+            return (return_t, np.array(slices))
