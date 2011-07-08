@@ -233,15 +233,15 @@ def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
         plt.plot(t*1000, sig.transpose())
         plt.title('ch %d' % chn)
     
-    if savefig is None:
-        plt.show()
-    elif savefig is True:
-        filename = os.path.join(rs.full_path, rs.session_name + '_audio.png')
-        plt.savefig(filename)
-        plt.close()
-    else:
-        plt.savefig(savefig)
-        plt.close()
+        if savefig is None:
+            plt.show()
+        elif savefig is True:
+            filename = os.path.join(rs.full_path, rs.session_name + ('_audio%d.png' % chn))
+            plt.savefig(filename)
+            plt.close()
+        else:
+            plt.savefig(savefig)
+            plt.close()
 
 def query_events(rs, event_name='Timestamp'):
     # Open db
