@@ -65,8 +65,8 @@ class RecordingSession:
         
         If directory does not exist, will create it.
         """
-        self.full_path = dirname
-        self.session_name = os.path.basename(os.path.dirname(self.full_path))
+        self.full_path = os.path.normpath(dirname)
+        self.session_name = os.path.basename(self.full_path)
         
         if not os.path.exists(self.full_path):
             os.mkdir(self.full_path)
