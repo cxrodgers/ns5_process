@@ -171,10 +171,14 @@ class RecordingSessionMaker:
 # Many of the following functions work like wrapper for RecordingSession.
 # Plot average LFP over neural channels
 def plot_avg_lfp(rs, event_name='Timestamp', meth='avg', savefig=None,
-    t_start=None, t_stop=None):
+    t_start=None, t_stop=None, harmonize_axes=True):
     """Plot average of analogsignals triggered on some event.
     
     Each channel gets its own subplot.
+    
+    meth : if 'avg', plot avg trace, if 'all', plot all traces
+    harmonize_axes : keep x and y axes same for all subplots. Minimal
+        overlap is chosen for x. Maximal range is chosen for y.
     """
     event_list = query_events(rs, event_name)
     
@@ -183,7 +187,7 @@ def plot_avg_lfp(rs, event_name='Timestamp', meth='avg', savefig=None,
 
     # Make big figure with enough subplots
     f = plt.figure(figsize=(12,12))
-    ymin, ymax = 0., 0.
+    ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
     n_subplots = float(len(rs.read_neural_channel_ids()))
     spx = int(np.ceil(np.sqrt(n_subplots)))
     spy = int(np.ceil(n_subplots / spx))
@@ -194,14 +198,20 @@ def plot_avg_lfp(rs, event_name='Timestamp', meth='avg', savefig=None,
         t, sig = rs.avg_over_list_of_events(event_list, chn=chn, meth=meth,
             t_start=t_start, t_stop=t_stop)
         ax.plot(t*1000., sig.transpose())
+        
+        # Get nice tight harmonized boundaries across all subplots
         if sig.min() < ymin: ymin = sig.min()
         if sig.max() > ymax: ymax = sig.max()        
+        if t.min() > tmin: tmin = t.min()
+        if t.max() < tmax: tmax = t.max()
+        
         plt.title('ch %d' % chn)
     
     # Harmonize x and y limits across subplots
-    for ax in f.get_axes():        
-        ax.set_xlim((t_start*1000., t_stop*1000.))
-        ax.set_ylim((ymin, ymax))
+    if harmonize_axes:
+        for ax in f.get_axes():        
+            ax.set_xlim((tmin*1000., tmax*1000.))
+            ax.set_ylim((ymin, ymax))
     
     if savefig is None:
         plt.show()
