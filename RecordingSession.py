@@ -133,6 +133,15 @@ class RecordingSession:
         
         return filename_list[0]
     
+    def get_timestamps_filename(self):
+        """Returns name of file contatining timestamps, or None"""
+        filename_list = glob.glob(os.path.join(self.full_path, TIMESTAMPS_FILENAME))
+        if len(filename_list) == 0:
+            return None
+        if len(filename_list) > 1:
+            print "multiple timestamps files, this should be impossible"
+        return filename_list[0]
+    
     def get_raw_data_block(self):
         # Open database, get session
         self.open_db()
@@ -153,12 +162,11 @@ class RecordingSession:
         """Adds timestamps by writing values to file in directory"""
         # different format, one value per line
         list_to_write = [[v] for v in list_of_values]        
-        write_channel_numbers(os.path.join(self.full_path, TIMESTAMPS_FILENAME),
+        write_channel_numbers(self.get_timestamps_filename(),
             list_to_write)
     
     def read_timestamps(self):
-        t = read_channel_numbers(\
-            os.path.join(self.full_path, TIMESTAMPS_FILENAME))
+        t = read_channel_numbers(self.get_timestamps_filename())
         return np.array([tt[0] for tt in t])
     
     def put_neural_data_into_db(self, soft_limits_sec=(-2., 2.25), 

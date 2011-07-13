@@ -267,11 +267,18 @@ def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50
     I'm a thin wrapper over `calculate_timestamps` that knows how to get
     and put the data from RecordingSession objects.
     
+    If the timestamps file already exists, then I return them but don't
+    re-calculate.
+    
     I get the right channels and filenames from RecordingSession, then call
     `calculate_timestamps`, then tell the session what I've calculated.
     
-    Returns onsets and offsets that were calculated
+    Returns onsets and offsets that were calculated, or empty lists if
     """
+    # Check whether we need to run
+    if rs.get_timestamps_filename() is not None:
+        return (rs.read_timestamps(), [])
+    
     # Get data from recording session
     filename = rs.get_ns5_filename()
     audio_channels = rs.read_analog_channel_ids()
