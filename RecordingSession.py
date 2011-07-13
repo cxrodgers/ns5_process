@@ -36,6 +36,10 @@ def write_channel_numbers(filename, list_of_lists):
     
     Each list in list_of_lists in written to a line of the file.
     Each line contains channel numbers with a single space following each.
+    
+    Actually I started using this for all kinds of writes, it works
+    like np.save and np.load except there is no requirement that each
+    entry be the same length.
     """
     fi = file(filename, 'w')
     for chlist in list_of_lists:
@@ -44,16 +48,15 @@ def write_channel_numbers(filename, list_of_lists):
         fi.write('\n')
     fi.close()
 
-def read_channel_numbers(filename):
+def read_channel_numbers(filename, dtype=np.int):
     """ Load TETRODE_CHANNELS control file
-    TODO: make sure this works for case of 1-trodes
     This is funny-looking because not all tetrodes have same number
     of channels!
     """
     f = file(filename)
     x = f.readlines()
     f.close()
-    return [[int(c) for c in r] for r in [str.split(rr) for rr in x]]
+    return [[dtype(c) for c in r] for r in [str.split(rr) for rr in x]]
 
 class RecordingSession:
     """Object linked to a directory containing data for processing.
