@@ -276,9 +276,13 @@ class RecordingSession:
         AnalogSignal (but does not error check).
         """
         # Extract segment id from each event and test for ordering
-        seg_id_list = [e.segment.id for e in event_list]
+        # I get weird detached instance errors here some times, so replace:
+        #seg_id_list = [e.segment.id for e in event_list]
+        seg_id_list = [e.id_segment for e in event_list]
         assert seg_id_list == sorted(seg_id_list), "events must be sorted by segment"
+        
         # Why doesn't this work?
+        # This is what would fix the segment ordering restriction
         #idxs = np.argsort(seg_id_list)                
         #event_list = list(np.take(event_list, idxs))
         #seg_id_list = list(np.take(seg_id_list, idxs))
