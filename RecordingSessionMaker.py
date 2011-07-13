@@ -154,7 +154,9 @@ class RecordingSessionMaker:
         link_file(ns5_filename, rs.full_path)
         
         # Create channel numbering meta file
-        session_SC_list = sorted(list(set(self.SC_list) - set(remove_from_SC)))
+        #session_SC_list = sorted(list(set(self.SC_list) - set(remove_from_SC)))
+        session_SC_list = [val for val in self.SC_list 
+            if val not in remove_from_SC]
         rs.write_neural_channel_ids(session_SC_list)
         
         # Analog channels
@@ -162,7 +164,9 @@ class RecordingSessionMaker:
             rs.write_analog_channel_ids(self.analog_channel_ids)
         
         # Create channel grouping meta file
-        session_TC_list = [sorted(list(set(this_ch) - set(remove_from_TC)))\
+        #session_TC_list = [sorted(list(set(this_ch) - set(remove_from_TC)))\
+        #    for this_ch in self.TC_list]
+        session_TC_list = [[val for val in this_ch if val not in remove_from_TC]
             for this_ch in self.TC_list]
         rs.write_channel_groups(session_TC_list)
     
