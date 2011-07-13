@@ -286,7 +286,8 @@ def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50
     Returns onsets and offsets that were calculated, or empty lists if
     """
     # Check whether we need to run
-    if rs.get_timestamps_filename() is not None:
+    if os.path.exists(os.path.join(rs.full_path, 
+        RecordingSession.TIMESTAMPS_FILENAME)):
         return (rs.read_timestamps(), [])
     
     # Get data from recording session

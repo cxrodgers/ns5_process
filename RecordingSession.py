@@ -15,6 +15,7 @@ RecordingSession spec:
 * File containing analog channels to put into database (if any)
   7 8
 * TIMESTAMPS with times in samples to extract
+* Time limits filename with soft limits on first line, then hard
 """
 
 import shutil
@@ -29,6 +30,7 @@ ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
 ANALOG_CHANNELS_FILENAME = 'ANALOG_CHANNELS'
 TIMESTAMPS_FILENAME = 'TIMESTAMPS'
+TIME_LIMITS_FILENAME = 'TIME_LIMITS'
 FULL_RANGE_UV = 8192. # maximum input range of signal
 
 def write_channel_numbers(filename, list_of_lists):
@@ -62,6 +64,12 @@ class RecordingSession:
     """Object linked to a directory containing data for processing.
     
     Provides methods to read and write data from that directory.
+    
+    Some methods look for stereotype filenames which are defined by
+    globals above. Others find a target by globbing. The latter provides
+    getter methods and return None if the file doesn't exist. Perhaps
+    the former should provide getter methods that always work, even 
+    if file doesn't exist. Or is that too confusing?
     """
     def __init__(self, dirname):
         """Create object linked to a data directory
@@ -106,6 +114,21 @@ class RecordingSession:
                 os.path.join(self.full_path, ANALOG_CHANNELS_FILENAME))[0]
         except IOError:
             return None
+    
+    def read_time_limits(self):
+        """Returns tuple of soft time limits and then hard, or None if missing"""
+        try:
+            data = read_channel_numbers(os.path.join(self.full_path,
+                TIME_LIMITS_FILENAME), dtype=np.float)
+        except IOError:
+            return None
+        
+        return data[0], data[1]
+    
+    def write_time_limits(self, soft_time_limits, hard_time_limits):
+        """Writes time limits in seconds to directory"""
+        write_channel_numbers(os.path.join(self.full_path, 
+            TIME_LIMITS_FILENAME), [soft_time_limits, hard_time_limits])
 
     def write_channel_groups(self, list_of_lists):
         """Writes metadata for channel groupings."""
@@ -135,16 +158,7 @@ class RecordingSession:
             print "warning: multiple ns5 files exist in %s" % self.full_path
         
         return filename_list[0]
-    
-    def get_timestamps_filename(self):
-        """Returns name of file contatining timestamps, or None"""
-        filename_list = glob.glob(os.path.join(self.full_path, TIMESTAMPS_FILENAME))
-        if len(filename_list) == 0:
-            return None
-        if len(filename_list) > 1:
-            print "multiple timestamps files, this should be impossible"
-        return filename_list[0]
-    
+
     def get_raw_data_block(self):
         # Open database, get session
         self.open_db()
@@ -165,19 +179,23 @@ class RecordingSession:
         """Adds timestamps by writing values to file in directory"""
         # different format, one value per line
         list_to_write = [[v] for v in list_of_values]        
-        write_channel_numbers(self.get_timestamps_filename(),
+        write_channel_numbers(\
+            os.path.join(self.full_path, TIMESTAMPS_FILENAME),
             list_to_write)
     
     def read_timestamps(self):
-        t = read_channel_numbers(self.get_timestamps_filename())
+        t = read_channel_numbers(os.path.join(self.full_path, 
+            TIMESTAMPS_FILENAME))
         return np.array([tt[0] for tt in t])
     
-    def put_neural_data_into_db(self, soft_limits_sec=(-2., 2.25), 
-        hard_limits_sec=(-.25, .5)):
+    def put_neural_data_into_db(self, soft_limits_sec=None, 
+        hard_limits_sec=None):
         """Loads neural data from ns5 file and puts into OE database.
         
         Slices around times provided in TIMESTAMPS. Also puts events in
         with label 'Timestamp' at each TIMESTAMP.
+       
+        Time limits will be loaded from disk unless provided.
         
         Returns OE block.
         """
@@ -193,6 +211,12 @@ class RecordingSession:
         # Read time stamps and set limits in samples
         t = self.read_timestamps()
         l = self.get_ns5_loader()
+        
+        # Get time limits for slicing
+        if hard_limits_sec is None:
+            hard_limits_sec = self.read_time_limits()[1]
+        if soft_limits_sec is None:
+            soft_limits_sec = self.read_time_limits()[0]
         hard_limits = np.array(\
             np.asarray(hard_limits_sec) * l.header.f_samp, dtype=np.int)
         soft_limits = np.array(\
