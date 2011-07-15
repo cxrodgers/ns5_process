@@ -42,7 +42,7 @@ import glob
 
 def get_tetrode_block_id():
     id_blocks, = OE.sql('select block.id from block where \
-        block.name = "CAR Tetrode Data"')
+        block.name = "Spike-filtered Data"')
     return id_blocks[0]
 
 class KlustaKwikIO(object):
