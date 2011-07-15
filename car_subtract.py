@@ -82,7 +82,7 @@ def run(db_name, CAR=True, smooth_spikes=True):
         FILTER_B2, FILTER_A2 = define_spike_filter_2(fixed_sampling_rate)
     
     # Find TETRODE_CHANNELS file in data directory of db
-    data_dir = path.split(raw_block.fileOrigin)[0]
+    data_dir = path.split(db_name)[0]
     TETRODE_CHANNELS = get_tetrode_channels(path.join(data_dir,
         'TETRODE_CHANNELS'))
     N_TET = len(TETRODE_CHANNELS)
