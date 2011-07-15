@@ -26,12 +26,16 @@ import numpy as np
 import TrialSlicer
 import OpenElectrophy as OE
 import matplotlib.pyplot as plt
+import scipy.signal
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
 ANALOG_CHANNELS_FILENAME = 'ANALOG_CHANNELS'
 TIMESTAMPS_FILENAME = 'TIMESTAMPS'
 TIME_LIMITS_FILENAME = 'TIME_LIMITS'
 FULL_RANGE_UV = 8192. # maximum input range of signal
+
+RAW_BLOCK_NAME = 'Raw Data'
+SPIKE_BLOCK_NAME = 'Spike-filtered Data'
 
 def write_channel_numbers(filename, list_of_lists):
     """Writes a list of lists of channel numbers to a file.
@@ -60,6 +64,80 @@ def read_channel_numbers(filename, dtype=np.int):
     f.close()
     return [[dtype(c) for c in r] for r in [str.split(rr) for rr in x]]
 
+class FiltererForSpikes:
+    """Object that handles filtering raw data for spikes.
+    
+    This is intended to be created and used by RecordingSession.
+    Initialized with all of its parameters, and then call
+    do_filter to use it on raw data.
+    """
+    def __init__(self, fixed_sampling_rate, filter_ord1=3, low_cut=300., 
+        smooth_spikes=False, 
+        filter_ord2=3, high_cut=3000., filter_type=scipy.signal.butter):
+        """Initializes spike filterer for later data processing.
+        
+        fixed_sampling_rate : sampling rate of your data
+        filter_ord1 : Order of high-pass filter
+        low_cut : Low-frequency cutoff of high-pass filter, in Hz
+        smooth_spikes : boolean, specifies whether to additionally low-pass
+            spikes to smooth them. If False, then filter_ord2 and high_cut
+            are ignored.
+        filter_ord2 : Order of optional low-pass filter
+        high_cut : High-frequency cutoff of optional low-pass filter
+        filter_type : something that returns filter parameters,
+            like scipy.signal.butter
+        
+        It's intended that these options are set once at initialization
+        and then not changed, since presumably you would want to 
+        filter all of your data in the same way.
+        """    
+        self.fixed_sampling_rate = fixed_sampling_rate
+        self.filter_ord1 = filter_ord1
+        self.low_cut = low_cut
+        self.smooth_spikes = smooth_spikes
+        self.filter_type = filter_type
+        
+        # Design filter
+        self._define_spike_filter_1()
+        
+        # Optionally design second filter
+        if self.smooth_spikes:
+            self.filter_ord2 = filter_ord2
+            self.high_cut = high_cut
+            self._define_spike_filter_2()
+    
+    def _define_spike_filter_1(self):
+        """Define a high-pass filter"""
+        normed_low_cut = self.low_cut / (self.fixed_sampling_rate / 2.)
+        self._filter1 = self.filter_type(self.filter_ord1, 
+            normed_low_cut, btype='high')
+
+    def _define_spike_filter_2(self):
+        """Define an optional low-pass filter for smoothing spikes"""
+        normed_high_cut = self.high_cut / (self.fixed_sampling_rate / 2.)
+        self._filter2 = self.filter_type(self.filter_ord2,
+            normed_high_cut, btype='low')
+
+    def filter(self, input_signal):
+        """Filters input signal for spike detection.
+        
+        input_signal : numpy array, should have sampling rate of
+            self.sampling_rate
+        
+        Returns output_signal, of same length as input_signal, which has
+        been filtered.
+        """        
+        # High pass filter
+        output_signal = scipy.signal.filtfilt(self._filter1[0],
+            self._filter1[1], input_signal)
+        
+        # If a second lowpass filter, apply
+        if self.smooth_spikes:            
+            output_signal = scipy.signal.filtfilt(self._filter2[0],
+                self._filter2[1], output_signal)
+        
+        return output_signal    
+
 class RecordingSession:
     """Object linked to a directory containing data for processing.
     
@@ -81,15 +159,28 @@ class RecordingSession:
         
         if not os.path.exists(self.full_path):
             os.mkdir(self.full_path)
+        
+        self.session = None
     
     def get_db_filename(self):
         return os.path.join(self.full_path, self.session_name + '.db')
     
     def open_db(self):
+        print "deprecated, go through get_OE_session"
         OE.open_db('sqlite:///' + self.get_db_filename())
+        self.session = OE.Session()
     
     def get_OE_session(self):
-        return OE.Session()
+        """Returns SQL session, opening database only if needed.
+        
+        Let's try to keep database opens to a minimum.
+        """
+        if self.session is not None:
+            return self.session
+        else:
+            OE.open_db('sqlite:///' + self.get_db_filename())
+            self.session = OE.Session()
+            return self.session
     
     def get_ns5_loader(self):
         """Returns Loader object for ns5 file"""
@@ -160,12 +251,26 @@ class RecordingSession:
         return filename_list[0]
 
     def get_raw_data_block(self):
+        """Returns Block with raw data name, or None"""
         # Open database, get session
-        self.open_db()
+        #self.open_db()
         session = self.get_OE_session()
         
         # Check to see whether data has already been added
-        q = session.query(OE.Block).filter(OE.Block.name=='Raw Data')
+        q = session.query(OE.Block).filter(OE.Block.name == RAW_BLOCK_NAME)
+        if q.count() > 0:
+            return q.one()   
+        else:
+            return None
+    
+    def get_spike_block(self):
+        """Returns Block with spike block name, or None"""
+        # Open database, get session
+        #self.open_db()
+        session = self.get_OE_session()
+        
+        # Check to see whether data has already been added
+        q = session.query(OE.Block).filter(OE.Block.name == SPIKE_BLOCK_NAME)
         if q.count() > 0:
             return q.one()   
         else:
@@ -200,7 +305,7 @@ class RecordingSession:
         Returns OE block.
         """
         # Open database, get session
-        self.open_db()
+        #self.open_db()
         session = self.get_OE_session()
         
         # See if operation already occurred
@@ -238,7 +343,7 @@ class RecordingSession:
         
         # Convert to OE object
         block2 = OE.io.io.hierachicalNeoToOe(block)
-        block2.name = 'Raw Data'
+        block2.name = RAW_BLOCK_NAME
 
         # Add events at TIMESTAMPS
         if len(t) == len(block2._segments):
@@ -255,6 +360,129 @@ class RecordingSession:
         
         return block2
     
+    def generate_spike_block(self, CAR=True, smooth_spikes=False):
+        """Filters the data for spike extraction.
+        
+        CAR: If True, subtract the common-average of every channel.
+        smooth_spikes: If True, add an additional low-pass filtering step to
+            the spike filter.
+        
+        If spike block already exists, will return without doing anything.
+        """
+        # Open connection to the database
+        #self.open_db()
+        session = self.get_OE_session()
+        
+        # Check that I haven't already run
+        if self.get_spike_block() is not None:
+            print "spike filtering already done!"
+            return
+        
+        # Find the raw data block
+        raw_block = self.get_raw_data_block()
+        
+        # Create a new block for referenced data, and save to db.
+        spike_block = OE.Block(\
+            name=SPIKE_BLOCK_NAME,
+            info='Referenced and filtered neural data suitable for spike detection',
+            fileOrigin=self.get_db_filename())
+        spike_block.save(session=session)
+        
+        # Create a spike_filterer to use
+        self.filterer = FiltererForSpikes(
+            fixed_sampling_rate=self.get_ns5_loader().header.f_samp,
+            smooth_spikes=smooth_spikes)        
+
+        # Make RecordingPoint for each channel, linked to tetrode number with `group`
+        # Also keep track of link between channel and RP with ch2rpid dict
+        # TODO: check that this works with int channel, not float
+        ch2rpid = dict()
+        for tn, ch_list in enumerate(self.read_channel_groups()):
+            for ch in ch_list:
+                rp = OE.RecordingPoint(name=('RP%d' % ch), 
+                    id_block=spike_block.id, trodness=len(ch_list),
+                    channel=ch, group=tn)
+                rp_id = rp.save(session=session)
+                ch2rpid[ch] = rp_id
+
+        # Copy old segments over to new block
+        for old_seg in raw_block._segments:
+            # Create a new segment in the new block with the same name
+            new_seg = OE.Segment(name=old_seg.name, info=old_seg.info,
+                id_block=spike_block.id)
+            new_seg.save(session=session)
+
+            # Populate with filtered signals
+            new_seg = self._create_spike_seg(old_seg, new_seg, CAR, session, ch2rpid)
+
+
+    def _create_spike_seg(self, old_seg, new_seg, CAR, session, ch2rpid):
+        """Create segment with filtered data in new spike block.
+        
+        old_seg : OE.Segment with AnalogSignal to copy
+        new_seg : OE.Segment to populate with spike-filtered copies of
+            AnalogSignal from old_seg
+        CAR : if True, then use common-average reference
+        
+        If CAR, then the commmon-average will be subtracted from each
+        signal. It will then be filtered, using self.filterer. The result
+        is stored in the new segment, with all of the signal metadata
+        copied over.
+        """
+        # Get the channel groupings
+        channel_groups = self.read_channel_groups()
+        flat_channel_groups = [item for sublist in channel_groups 
+            for item in sublist]
+        
+        # Get signals (including only ones we want to proces)
+        siglist = filter(lambda x: x.channel in flat_channel_groups,
+            old_seg._analogsignals)
+        
+        # Error check length and sampling rate
+        assert len(np.unique([len(sig.signal) for sig in siglist])) == 1
+        all_sampling_rates = np.array([sig.sampling_rate for sig in siglist])
+        assert np.abs(all_sampling_rates.max() - all_sampling_rates.min()) < 1.
+        assert np.abs(all_sampling_rates.max() - 
+            self.get_ns5_loader().header.f_samp) < 1.
+        fixed_sampling_rate = all_sampling_rates.mean()
+        fixed_signal_length = len(siglist[0].signal)
+        
+        # Compute average of each
+        if CAR: ref_sig = np.mean([sig.signal for sig in siglist], axis=0)
+        else: ref_sig = np.zeros((fixed_signal_length,))
+        
+        # Put the reference signal into the new segment
+        car_sig = OE.AnalogSignal(name='Reference Signal',
+            signal=ref_sig,
+            info='CAR calculated from good channels for this segment',
+            sampling_rate=fixed_sampling_rate,
+            t_start=siglist[0].t_start,
+            id_segment=new_seg.id)
+        car_sig.save(session=session)
+
+        # Put all the referenced signals in id_car_seg
+        for sig in siglist:
+            # Subtract the CAR and filter, then error check
+            referenced_signal = sig.signal - car_sig.signal
+            filtered_signal = self.filterer.filter(referenced_signal)
+            if np.isnan(filtered_signal).any():
+                print "ERROR: Filtered signal contains NaN!"
+            if np.isinf(filtered_signal).any():
+                print "ERROR: Filtered signal contains Inf!"
+            
+            # Store in db
+            new_sig = OE.AnalogSignal(\
+                name=sig.name,
+                signal=filtered_signal,
+                id_segment=new_seg.id,
+                channel=sig.channel,
+                t_start=sig.t_start,
+                sampling_rate=sig.sampling_rate,
+                id_recordingpoint=ch2rpid[sig.channel])
+            new_sig.save()
+        
+        # Save
+        new_seg.save(session=session)
 
     
     def avg_over_list_of_events(self, event_list, chn, meth='avg', t_start=None, t_stop=None):
@@ -374,3 +602,7 @@ class RecordingSession:
             return (return_t, avgsig)
         elif meth =='all':
             return (return_t, np.array(slices))
+
+
+
+
