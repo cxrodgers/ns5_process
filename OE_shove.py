@@ -118,7 +118,7 @@ def stuff(filename, db_name, TIMESTAMPS, SHOVE_CHANNELS,
         # Create AnalogSignal for each channel
         for chn, ch in enumerate(SHOVE_CHANNELS):
             # Load
-            x = np.array(l.get_channel(ch)[trial_start-pre_slice_len_samples:\
+            x = np.array(l._get_channel(ch)[trial_start-pre_slice_len_samples:\
                 trial_start+post_slice_len_samples])
             
             # Convert to uV
@@ -146,7 +146,7 @@ def stuff(filename, db_name, TIMESTAMPS, SHOVE_CHANNELS,
         # Handle AUDIO CHANNELS only slightly differently
         for ch in AUDIO_CHANNELS:
             # Load
-            x = np.array(l.get_channel(ch)[trial_start-pre_slice_len_samples:\
+            x = np.array(l._get_channel(ch)[trial_start-pre_slice_len_samples:\
                 trial_start+post_slice_len_samples])
 
             # Special processing for audio channels
