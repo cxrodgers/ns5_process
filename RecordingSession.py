@@ -293,6 +293,39 @@ class RecordingSession:
             TIMESTAMPS_FILENAME))
         return np.array([tt[0] for tt in t])
     
+    def calculate_trial_boundaries(self, soft_limits_sec=None,
+        hard_limits_sec=None):
+        """Reads timestamps and returns trial boundaries.
+        
+        For implementation, see TrialSlicer. This is just a thin wrapper
+        around that.
+        
+        Returns: (t_starts, t_stops)
+        """
+        l = self.get_ns5_loader()
+        t = self.read_timestamps()
+        
+        # Get time limits for slicing
+        if hard_limits_sec is None:
+            hard_limits_sec = self.read_time_limits()[1]
+        if soft_limits_sec is None:
+            soft_limits_sec = self.read_time_limits()[0]
+        hard_limits = np.array(\
+            np.asarray(hard_limits_sec) * l.header.f_samp, dtype=np.int)
+        soft_limits = np.array(\
+            np.asarray(soft_limits_sec) * l.header.f_samp, dtype=np.int)
+        
+        # Slice Trials around timestamps
+        t_starts, t_stops = TrialSlicer.slice_trials(\
+            timestamps=t,
+            soft_limits=soft_limits, 
+            hard_limits=hard_limits, 
+            meth='end_of_previous', 
+            data_range=(0, l.header.n_samples))
+        
+        return t_starts, t_stops
+    
+    
     def put_neural_data_into_db(self, soft_limits_sec=None, 
         hard_limits_sec=None):
         """Loads neural data from ns5 file and puts into OE database.
@@ -314,26 +347,7 @@ class RecordingSession:
             return block      
         
         # Read time stamps and set limits in samples
-        t = self.read_timestamps()
-        l = self.get_ns5_loader()
-        
-        # Get time limits for slicing
-        if hard_limits_sec is None:
-            hard_limits_sec = self.read_time_limits()[1]
-        if soft_limits_sec is None:
-            soft_limits_sec = self.read_time_limits()[0]
-        hard_limits = np.array(\
-            np.asarray(hard_limits_sec) * l.header.f_samp, dtype=np.int)
-        soft_limits = np.array(\
-            np.asarray(soft_limits_sec) * l.header.f_samp, dtype=np.int)
-        
-        # Slice Trials around timestamps
-        t_starts, t_stops = TrialSlicer.slice_trials(\
-            timestamps=t,
-            soft_limits=soft_limits, 
-            hard_limits=hard_limits, 
-            meth='end_of_previous', 
-            data_range=(0, l.header.n_samples))
+        t_starts, t_stops = self.calculate_trial_boundaries()
         
         # Load data from file and store all neural channels in block
         blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())        
@@ -655,3 +669,7 @@ class RecordingSession:
     
         return spikesorter
 
+    def spiketime_dump(self):
+        # Build a writer
+        w = OE.io.KlustaKwikIO(filename=output_filename)    
+        w.write_block(self.get_spike_block())        
