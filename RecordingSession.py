@@ -26,7 +26,10 @@ import numpy as np
 import TrialSlicer
 import OpenElectrophy as OE
 import matplotlib.pyplot as plt
+import KlustaKwikIO
 import scipy.signal
+
+# Globals
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
 GROUPED_CHANNELS_FILENAME = 'NEURAL_CHANNEL_GROUPINGS'
 ANALOG_CHANNELS_FILENAME = 'ANALOG_CHANNELS'
@@ -670,6 +673,7 @@ class RecordingSession:
         return spikesorter
 
     def spiketime_dump(self):
-        # Build a writer
-        w = OE.io.KlustaKwikIO(filename=output_filename)    
+        # Dump in klustakwik format
+        w = KlustaKwikIO.KlustaKwikIO(filename=os.path.join(
+            self.full_path, self.session_name))    
         w.write_block(self.get_spike_block())        
