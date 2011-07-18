@@ -603,6 +603,55 @@ class RecordingSession:
         elif meth =='all':
             return (return_t, np.array(slices))
 
+    def run_spikesorter(self, save_to_db=True, save_cluster_figs=False):
+        """Sorts all groups in the database.
+        
+        If save_to_db is True, the sorted info will be written to the database.
+        """
+        session = self.get_OE_session()
+        
+        # Find groups
+        group_list = list(np.unique([rp.group for rp in 
+            session.query(OE.RecordingPoint).all()]))
+        if None in group_list: group_list.remove(None)
+        
+        # spike sort
+        for group in group_list:
+            spikesorter = self.run_spikesorter_on_group(group, save_to_db)
+            if save_cluster_figs:
+                pass
+    
+    def run_spikesorter_on_group(self, group, save_to_db=True):
+        """Run spike sorting on one group and return spikesorter object.
+        
+        Useful for playing around with the returned data.
+        
+        group : integer, number of group to sort
+        save_to_db : if True, writes sorted info to database
+        """
+        session = self.get_OE_session()
+        
+        # Get RecordingPoint on this group
+        rp_list = session.query(OE.RecordingPoint).filter((
+            OE.RecordingPoint.group == int(group)) and 
+            (OE.RecordingPoint.id_block == rs.get_spike_block().id)).all()
+        
+        # Create spikesorter for this group
+        spikesorter = OE.SpikeSorter(mode='from_filtered_signal', 
+            session=session, recordingPointList=rp_list)
 
-
+        spikesorter.computeDetectionEnhanced(\
+            OE.detection.EnhancedMedianThreshold, 
+            sign='-', median_thresh=3.5, left_sweep=.001, 
+            right_sweep=.002, consistent_across_segments=True,
+            consistent_across_channels=False, correct_times=True)     
+        
+        spikesorter.computeExtraction(OE.extraction.WaveformExtractor)        
+        spikesorter.computeFeatures(OE.feature.PCA, output_dim=8)
+        spikesorter.computeClustering(OE.clustering.KMean, n=4)
+        
+        if save_to_db:
+            spikesorter.save_to_db()        
+    
+        return spikesorter
 
