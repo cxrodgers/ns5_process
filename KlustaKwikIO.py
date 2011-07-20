@@ -38,6 +38,7 @@ import os.path
 
 
 class KlustaKwikIO(object):
+    """TODO: fix for case where spikes are not sorted and no neurons exist."""
     def __init__(self, filename=None):
         self.filename = filename
         self._fetfiles = dict()
@@ -123,7 +124,13 @@ class KlustaKwikIO(object):
         self._close_all_files()
 
 class KK_loader(object):
-    """Loads spike info from KlustaKwik-compatible files."""
+    """Loads spike info from KlustaKwik-compatible files.
+    
+    TODO: fix for case when data is unsorted (no Neuron in block), currently
+        something to do with 99
+    TODO: handle trash somehow
+    TODO: store neuron names
+    """
     def __init__(self, data_dir):
         """Initializes a new KK_loader, linked to the data directory.
         
