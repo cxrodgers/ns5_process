@@ -6,12 +6,16 @@ and then interacting with those databases.
 Main Files (primary purpose: creating and interacting with OE)
 KlustaKwikIO : dumps spike times to KK format, should be put into OE/neo
 RecordingSession : reads and writes from folder with all the data
-SpikeTrainContainers : holds spike trains, should use Picker for this
-SpikeTrainEnsemble : holds spike trains
 car_subtract : preps data for spike sorting, should go into RecordingSession
 ns5 : handles reading from ns5 file
 plot_avg_lfp : add to RecordingSession
 spiketime_dump : add to RecordingSession
+
+
+Main file (make OE not required):
+SpikeTrainContainers : holds spike trains, should use Picker for this
+SpikeTrainEnsemble : holds spike trains
+
 
 
 Expt-specific ugliness (should go into a different repo just for me)
