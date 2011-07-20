@@ -2,25 +2,23 @@ import numpy as np
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
+NO_TRIAL = -99 # flag for spikes not belonging to any trial
 class MultipleUnitSpikeTrain(object):
-    """Simple container for yoked spike_times and unit_IDs"""
-    def __init__(self, spike_times, unit_IDs=[], spike_trials=[], 
-        peri_onset_spike_times=[], F_SAMP=30000.):
+    """Simple container for yoked spike_times and unit_IDs.
+    
+    Currently deals with spikes that don't belong to any trial using
+    a global flag. I think it would be better to use masked arrays.
+    """    
+    def __init__(self, spike_times, unit_IDs=[], F_SAMP=30000.):
         """Initializes a new spike train.
         
         spike_times : time of each spike in samples
-        unit_IDs : unit to which each spike belongs
-        spike_trials : trial during which each spike occurred
-        peri_onset_spike_times : timing of each spike relative to the
-            onset of each trial.
+        unit_IDs : unit to which each spike belongs, should have the same
+            shape as spike_times
         F_SAMP : sampling rate, used only for returning PSTHs
-        
-        If provided, each argument should have the same shape as spike_times.
         """
         self.spike_times = np.array(spike_times, dtype=np.int)        
         self.unit_IDs = np.array(unit_IDs, dtype=np.int)
-        self.spike_trials = np.array(spike_trials, dtype=np.int)
-        self.peri_onset_spike_times = np.array(peri_onset_spike_times, dtype=np.int)
         self.F_SAMP = F_SAMP
         self.range = None
     
@@ -33,7 +31,9 @@ class MultipleUnitSpikeTrain(object):
         """
         mask = self._pick_spikes_mask(pick_units, pick_trials)
         if adjusted:
-            return self.peri_onset_spike_times[mask]
+            assert NO_TRIAL not in self.spike_trial_onsets[mask]
+            assert NO_TRIAL not in self.spike_trials[mask]
+            return self.spike_times[mask] - self.spike_trial_onsets[mask]
         else:
             return self.spike_times[mask]
     
@@ -76,11 +76,12 @@ class MultipleUnitSpikeTrain(object):
         # Grab spikes from trials
         if pick_trials is None:
             # All trials, skip mask generation
-            mask2 = np.ones(self.spike_times.shape, dtype=bool)
+            #mask2 = np.ones(self.spike_times.shape, dtype=bool)
+            mask2 = self.spike_trials != NO_TRIAL
         else:
             # Throw away non-existent trials
             pick_trials = [t for t in pick_trials 
-                if t in np.unique(self.spike_trials)]
+                if t in self.get_unique_trial_IDs()]
 
             if len(pick_trials) == 0:
                 # No trials, skip mask generation
@@ -102,7 +103,7 @@ class MultipleUnitSpikeTrain(object):
         # There was a bug here where spikes were requested from non-existent
         # trials. Moved the bugfix up to pick_spikes_mask
         self._tr2spkmask = dict([(tr, self.spike_trials == tr) \
-            for tr in np.unique(self.spike_trials)])
+            for tr in self.get_unique_trial_IDs()])
         
         # Previous bugfix
         #~ self._tr2spkmask = defaultdict(\
@@ -116,8 +117,11 @@ class MultipleUnitSpikeTrain(object):
     def get_number_of_units(self):
         return len(self.get_unique_unit_IDs)
     
+    def get_unique_trial_IDs(self):
+        return np.unique(self.spike_trials[self.spike_trials != NO_TRIAL])
+    
     def get_number_of_trials(self):
-        return len(np.unique(self.spike_trials))
+        return len(self.get_unique_trial_IDs())
     
     def add_trial_info(self, onsets, onset_trial_numbers, pre_win, post_win):
         """Links each spike in the spiketrain with a trial.
@@ -136,10 +140,14 @@ class MultipleUnitSpikeTrain(object):
         
         After this method is called, self.spike_trials will be the same length
         as self.spike_times and self.unit_IDs, and will contain the trial ID
-        of each spike. Also, self.peri_onset_spike_times will be set relative
-        to each spike's trial.
+        of each spike. Also, self.spike_trial_onsets will contain the trial
+        onset of each spike.
+        
+        Wherever a spike belongs to no trial, spike_trials and
+        spike_trial_onsets are equal to global NO_TRIAL.
         """
         assert (len(onsets) == len(onset_trial_numbers))
+        assert NO_TRIAL not in onset_trial_numbers
         
         # For each spike, find the matching stimulus onset, and store this
         # index into `onsets` and `onset_trial_numbers` in `spike_trials_idx`.
@@ -147,6 +155,8 @@ class MultipleUnitSpikeTrain(object):
         # the spike times.
         no_matches = 0
         extra_matches = 0
+        self.spike_trials = np.zeros_like(self.spike_times)
+        self.spike_trial_onsets = np.zeros_like(self.spike_times)
         spike_trials_idx = np.zeros_like(self.spike_times)
         for n, stt in enumerate(self.spike_times):
             matching_idx = np.where((stt - onsets < post_win) & \
@@ -162,33 +172,23 @@ class MultipleUnitSpikeTrain(object):
             except IndexError:
                 assert len(matching_idx) == 0
                 no_matches += 1
-                
-                # This code used to work but it doesn't anymore
-                # I'm not sure how to handle this case of spikes not belonging
-                # to a trial. Hopefully it shouldn't happen ...
-                spike_trials_idx[n] = np.nan
+                spike_trials_idx[n] = NO_TRIAL
 
         if ((no_matches > 0) or (extra_matches > 0)):
             print ("WARNING: %d spikes matched no trials and " % no_matches) + \
                 ("%d matched more than one" % extra_matches)
 
-        # Convert indexes into `onset_trial_numbers` into trial_numbers.
-        self.spike_trials = onset_trial_numbers[spike_trials_idx]
+        # Convert indexes into `onset_trial_numbers` into trial_numbers.        
+        self.spike_trials[spike_trials_idx != NO_TRIAL] = \
+            onset_trial_numbers[spike_trials_idx[spike_trials_idx != NO_TRIAL]]
+        self.spike_trials[spike_trials_idx == NO_TRIAL] = NO_TRIAL
+
+        # get onset of each trial by spike
+        self.spike_trial_onsets[spike_trials_idx != NO_TRIAL] = \
+            onsets[spike_trials_idx[spike_trials_idx != NO_TRIAL]]
+        self.spike_trial_onsets[spike_trials_idx == NO_TRIAL] = NO_TRIAL
         
-        # Warn if not all trials were used
-        # If this happens a lot, should change get_number_of_trials
-        # to use length of onset_trial_numbers instead.
-        if len(np.unique(self.spike_trials)) != \
-            len(np.unique(onset_trial_numbers)):
-            print "warning: not all trials contain spikes. " + \
-                "this may throw off PSTH calculations"
-        
-        # Build an onset-relative representation
-        self.peri_onset_spike_times = self.spike_times - \
-            onsets[spike_trials_idx]
-        
-        self._build_dicts()
-        
+        self._build_dicts()        
         self.range = (-pre_win, post_win)
 
 
