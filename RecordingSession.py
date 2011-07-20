@@ -364,10 +364,11 @@ class RecordingSession:
         block2.name = RAW_BLOCK_NAME
 
         # Add events at TIMESTAMPS
+        t = self.read_timestamps()
         if len(t) == len(block2._segments):
             for tt, seg in zip(t, block2._segments):
                 e = OE.Event(name='Timestamp', label='Timestamp')
-                e.time = (tt/l.header.f_samp)
+                e.time = (tt/self.get_sampling_rate())
                 #e.save()
                 seg._events.append(e)
         else:
