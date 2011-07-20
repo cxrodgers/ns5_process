@@ -1,3 +1,7 @@
+import os
+import shutil
+import glob
+
 class FileCollater:
     def __init__(self, data_dir_list, filenamestring, output_dir,
         output_file_name=None):
@@ -13,10 +17,11 @@ class FileCollater:
             self._generate_output_file_name()
     
     def copy_files(self):       
-        for n, data_dir in enumerate(data_dir_list):
-            tgt_name_list = glob.glob(os.path.join(data_dir, filenamestring))
+        for n, data_dir in enumerate(self.data_dir_list):
+            tgt_name_list = glob.glob(os.path.join(data_dir, 
+                self.filenamestring))
             for tgt_name in tgt_name_list:
-                dst_name = os.path.join(output_dir, 
+                dst_name = os.path.join(self.output_dir, 
                     self.output_file_name[n] + os.path.split(tgt_name)[1])
                 shutil.copyfile(tgt_name, dst_name)
     
