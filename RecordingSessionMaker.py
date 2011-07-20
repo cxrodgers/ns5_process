@@ -227,6 +227,50 @@ def plot_avg_lfp(rs, event_name='Timestamp', meth='avg', savefig=None,
         plt.savefig(savefig)
         plt.close()
 
+def plot_all_spike_psths(rs, savefig=None):
+    """Dump PSTHs of all spikes from each tetrode to disk.
+    
+    Does not use clustering information even if it exists.
+    
+    Currently doesn't work for any use case other than hard limits around
+    each time stamp.
+    
+    This function handles arrangement into figure, but actual plotting
+    is a method of PSTH.
+    """
+    f = plt.figure()
+    #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
+    
+    # Grab psths combined
+    psths = rs.get_psths(combine_units=True)
+    
+    # subplot info
+    n_subplots = len(psths)
+    spx = int(np.ceil(np.sqrt(n_subplots)))
+    spy = int(np.ceil(n_subplots / spx))
+    
+    # get tetrode numbers, which are keys to psths
+    tetnums = sorted(psths.keys())
+    
+    # plot each
+    for n, tetnum in enumerate(tetnums):
+        ax = f.add_subplot(spx, spy, n+1)
+        psths[tetnum].plot(ax=ax)
+        plt.title('all spikes from tet %d' % tetnum)
+    
+    # save
+    if savefig is None:
+        plt.show()
+    elif savefig is True:
+        filename = os.path.join(rs.full_path, rs.session_name + 
+            '_unsorted_psth.png')
+        f.savefig(filename)
+        plt.close()        
+    else:
+        f.savefig(savefig)
+        plt.close()
+    
+
 # Plot average audio signal
 def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
     t_start=None, t_stop=None):

@@ -292,6 +292,7 @@ class RecordingSession:
             list_to_write)
     
     def read_timestamps(self):
+        """Returns numpy array of timestamps"""
         t = read_channel_numbers(os.path.join(self.full_path, 
             TIMESTAMPS_FILENAME))
         return np.array([tt[0] for tt in t])
@@ -677,3 +678,82 @@ class RecordingSession:
         w = KlustaKwikIO.KlustaKwikIO(filename=os.path.join(
             self.full_path, self.session_name))    
         w.write_block(self.get_spike_block())        
+    
+    def get_sampling_rate(self):
+        """Reads and returns sampling rate from ns5 file"""
+        return self.get_ns5_loader().header.f_samp
+    
+    def get_spiketrains_raw(self):
+        """Reads neural data from directory and returns as spiketrains"""
+        kkl = KlustaKwikIO.KK_loader(self.full_path)
+        kkl.execute()
+        return kkl.spiketrains        
+    
+    def get_spiketrains_centered(self, window='only hard'):
+        """Returns spiketrains centered around timestamps
+        
+        if window is 'original':
+            Spiketrain will assign spikes to original trials
+        if window is 'only_hard':
+            Spiketrain will assign spikes with hard limits of timestamps,
+            and therefore trials will be of the same duration.
+        
+        Because this operates on the KlustaKwik files and the timestamps
+        file, it can't be used to trigger on other events. Probably should
+        be rewritten like avg_over_list_of_events to operate on event list,
+        and take its data from the db rather than the flat files.
+
+        That will make it easier to use original segment boundaries too.
+        
+        On the other hand this is currently an OE-free method.
+        """
+        spiketrain_dict = self.get_spiketrains_raw()
+        
+        # Add trial times. Currently requires positive window sizes,
+        # meaning can't handle windows that don't include onset.
+        if window == 'only hard':
+            timestamps = self.read_timestamps()
+            hard_limits_samples = [int(np.rint(x * self.get_sampling_rate())) 
+                for x in self.read_time_limits()[1]]
+            for spiketrain in spiketrain_dict.values():
+                spiketrain.add_trial_info(onsets=timestamps, 
+                    onset_trial_numbers=np.array(range(len(timestamps))),
+                    pre_win=-hard_limits_samples[0],
+                    post_win=hard_limits_samples[1])        
+        elif window == 'original':            
+            t_starts, t_stops = self.calculate_trial_boundaries()
+            
+            # this is going to require rewriting the add_trial_info method
+            1/0
+        else:
+            print "warning: unrecognized window"
+        
+        return spiketrain_dict
+    
+    def get_psths(self, combine_units=False):
+        """Read KlustaKwik format, calculates psths
+        
+        If unsorted, returns MUA PSTHs.
+        If sorted, returns single unit PSTHs.
+        If also_plot_all_spikes and sorted, will also return sum of all units.
+        """
+        sts = self.get_spiketrains_centered(window='only hard')
+        psths = {}
+        for groupnum, st in sts.items():
+            if combine_units:
+                psths[groupnum] = st.get_psth()
+            else:
+                psths[groupnum] = {}
+                uids = st.get_unique_unit_IDs()
+                if np.all(uids == np.array(None)) or len(uids) == 0:
+                    print "no units, help"
+                    1/0
+                elif len(uids) == 1:
+                    print "this is where code for MUA goes"
+                    1/0
+                else:                
+                    for uid in uids:
+                        psths[groupnum][uid] = st.get_psth(pick_units=[uid])
+        
+        return psths
+        
