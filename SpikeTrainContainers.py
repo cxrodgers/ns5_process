@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 
 class MultipleUnitSpikeTrain(object):
     """Simple container for yoked spike_times and unit_IDs"""
-    def __init__(self, spike_times, unit_IDs=None, spike_trials=None, 
-        peri_onset_spike_times=None, F_SAMP=30000.):
+    def __init__(self, spike_times, unit_IDs=[], spike_trials=[], 
+        peri_onset_spike_times=[], F_SAMP=30000.):
         """Initializes a new spike train.
         
         spike_times : time of each spike in samples
@@ -13,13 +13,14 @@ class MultipleUnitSpikeTrain(object):
         spike_trials : trial during which each spike occurred
         peri_onset_spike_times : timing of each spike relative to the
             onset of each trial.
+        F_SAMP : sampling rate, used only for returning PSTHs
         
         If provided, each argument should have the same shape as spike_times.
         """
-        self.spike_times = np.array(spike_times)        
-        self.unit_IDs = np.array(unit_IDs)
-        self.spike_trials = np.array(spike_trials)
-        self.peri_onset_spike_times = np.array(peri_onset_spike_times)
+        self.spike_times = np.array(spike_times, dtype=np.int)        
+        self.unit_IDs = np.array(unit_IDs, dtype=np.int)
+        self.spike_trials = np.array(spike_trials, dtype=np.int)
+        self.peri_onset_spike_times = np.array(peri_onset_spike_times, dtype=np.int)
         self.F_SAMP = F_SAMP
         self.range = None
     
@@ -47,38 +48,49 @@ class MultipleUnitSpikeTrain(object):
             n_trials = len(pick_trials)
         
         # Initialize the PSTH
-        kargs['n_trials'] = len(pick_trials)
+        kargs['n_trials'] = n_trials
         kargs['F_SAMP'] = self.F_SAMP
         kargs['range'] = self.range
         return PSTH(spike_times, **kargs)
     
     def _pick_spikes_mask(self, pick_units=None, pick_trials=None):
         """Returns a mask of spike_times for specified trials and units."""
+        
+        # Grab spikes from units
         if pick_units is None:
-            #pick_units = self.get_unique_unit_IDs()
-            # All true
+            # All true, skip complex mask generation
             mask1 = np.ones(self.spike_times.shape, dtype=bool)
-        elif len(pick_units) == 0:
-            # All false
-            mask1 = np.zeros(self.spike_times.shape, dtype=bool)
         else:
-            mask1 = reduce(np.logical_or, [self._id2spkmask[u] \
-                for u in pick_units])
-    
-        if pick_trials is None:
-            #pick_trials = self.spike_trials
-            mask2 = np.ones(self.spike_times.shape, dtype=bool)
-        elif len(pick_trials) == 0:
-            mask2 = np.zeros(self.spike_times.shape, dtype=bool)
-        else:
-            # TODO: check this bugfix
-            # Errors occur when a trial is requested is not in 
-            # self._tr2spkmask.keys(), presumably because it was not detected
-            # for whatever reason.
+            # Throw away non-existent units
+            pick_units = [u for u in pick_units 
+                if u in self.get_unique_unit_IDs()]
             
-            mask2 = reduce(np.logical_or, [self._tr2spkmask[t] \
-                for t in pick_trials])
+            if len(pick_units) == 0:
+                # All false, skip complex mask generation
+                mask1 = np.zeros(self.spike_times.shape, dtype=bool)
+            else:
+                # Get spikes belonging to units
+                mask1 = reduce(np.logical_or, [self._id2spkmask[u] \
+                    for u in pick_units])
+    
+        # Grab spikes from trials
+        if pick_trials is None:
+            # All trials, skip mask generation
+            mask2 = np.ones(self.spike_times.shape, dtype=bool)
+        else:
+            # Throw away non-existent trials
+            pick_trials = [t for t in pick_trials 
+                if t in np.unique(self.spike_trials)]
 
+            if len(pick_trials) == 0:
+                # No trials, skip mask generation
+                mask2 = np.zeros(self.spike_times.shape, dtype=bool)
+            else:
+                # Get spikes belonging to trials
+                mask2 = reduce(np.logical_or, [self._tr2spkmask[t] \
+                    for t in pick_trials])
+
+        # Return AND of spikes from correct trials and correct units
         mask = mask1 & mask2
         return mask
     
@@ -87,32 +99,16 @@ class MultipleUnitSpikeTrain(object):
         self._id2spkmask = dict([(id, self.unit_IDs == id) \
             for id in self.get_unique_unit_IDs()])
         
+        # There was a bug here where spikes were requested from non-existent
+        # trials. Moved the bugfix up to pick_spikes_mask
+        self._tr2spkmask = dict([(tr, self.spike_trials == tr) \
+            for tr in np.unique(self.spike_trials)])
         
-        # Annoying bug where trials that don't exist in self.spike_trials
-        # are called in pick_trials, and cause key error.
-        # Why is this happening anyway??
-        # TODO: check this bugfix
-        
-        # Old
-        #self._tr2spkmask = dict([(tr, self.spike_trials == tr) \
-        #    for tr in np.unique(self.spike_trials)])
-        
-        # New
-        self._tr2spkmask = defaultdict(\
-            lambda: np.zeros(self.spike_trials.shape, dtype=np.bool))
-        for tr in np.unique(self.spike_trials):
-            self._tr2spkmask[tr] = (self.spike_trials == tr)
-        
-
-        #~ # Some silly hacks for missing trials, fix me!
-        #~ if 2 not in self._tr2spkmask.keys():
-            #~ self._tr2spkmask[2] = (self.spike_trials == 2)
-        #~ if 3 not in self._tr2spkmask.keys():
-            #~ self._tr2spkmask[3] = (self.spike_trials == 3)
-        #~ for tr in np.arange(408, 501):
-            #~ if tr not in self._tr2spkmask.keys():
-                #~ self._tr2spkmask[tr] = (self.spike_trials == tr)        
-            
+        # Previous bugfix
+        #~ self._tr2spkmask = defaultdict(\
+            #~ lambda: np.zeros(self.spike_trials.shape, dtype=np.bool))
+        #~ for tr in np.unique(self.spike_trials):
+            #~ self._tr2spkmask[tr] = (self.spike_trials == tr)
     
     def get_unique_unit_IDs(self):
         return np.unique(self.unit_IDs)
