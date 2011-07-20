@@ -283,19 +283,26 @@ class PSTH(object):
             yval = self._counts / float(self.n_trials) / self.bin_width()
             return (self._t, yval) 
        
-    def plot(self, ax=None):
+    def plot(self, ax=None, units='spikes'):
         """Plot PSTH into axis `ax`"""
         if len(self._t) == 0:
             return
+        
+        t, yval = self.hist_values(units)
         if ax is None:
             plt.figure()
-            plt.plot(self._t, self._counts / float(self.n_trials))
+            plt.plot(self._t, yval)            
         else:
-            ax.plot(self._t, self._counts / float(self.n_trials))
-        #plt.xlim(self._t.min(), self._t.max())
+            ax.plot(self._t, yval)
+        plt.xlim(self._t.min(), self._t.max())
         #plt.xticks(np.linspace(self._t.min(), self._t.max(), 5))
-        plt.xticks([])
-        plt.yticks(np.arange(np.ceil(self._counts.max() / float(self.n_trials))+1))
+        #plt.xticks([])
+        plt.ylim(0, np.ceil(yval.max()))
+        if units == 'spikes':
+            plt.ylabel('spike per trial')
+        elif units == 'Hz' or units == 'hz':
+            plt.ylabel('spikes per second')
+
     
     def __add__(self, psth2):
         p = PSTH()
