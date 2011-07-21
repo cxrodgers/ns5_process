@@ -303,7 +303,7 @@ def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
 
 def query_events(rs, event_name='Timestamp'):
     # Open db
-    rs.open_db()
+    #rs.open_db()
     session = rs.get_OE_session()
     block = rs.get_raw_data_block()
     
