@@ -162,6 +162,8 @@ class RecordingSession:
         
         if not os.path.exists(self.full_path):
             os.mkdir(self.full_path)
+        elif self.get_ns5_filename() is None:
+            print "warning: no ns5 file in %s" % self.full_path
         
         self.session = None
     
