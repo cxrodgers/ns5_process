@@ -185,6 +185,8 @@ def plot_avg_lfp(rs, event_name='Timestamp', meth='avg', savefig=None,
         overlap is chosen for x. Maximal range is chosen for y.
     """
     event_list = query_events(rs, event_name)
+    if len(event_list) == 0:
+        return
     
     # test ordering error
     # event_list = list(np.take(event_list, np.arange(len(event_list))[::-1]))
@@ -279,6 +281,8 @@ def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
     Each channel gets its own subplot.
     """
     event_list = query_events(rs, event_name)
+    if len(event_list) == 0:
+        return
     
     # test ordering error
     # event_list = list(np.take(event_list, np.arange(len(event_list))[::-1]))
