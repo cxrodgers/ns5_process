@@ -505,3 +505,25 @@ def find_closest_bcontrol_file(bcontrol_folder, ns5_filename, verbose=False,
 
     # Return path to best file choice
     return found_file
+
+
+# other utility wrapper functions
+def guess_session_type(rs):
+    """Guesses whether session is behaving or passive.
+    
+    If 0 or 1 timestamps, returns 'unknown'.
+    If median time between timestamps is > 1s, returns 'behaving'
+    If median time is < 1s, returns 'WN100ms'.
+    """
+    try:
+        tss = rs.read_timestamps()
+    except IOError:
+        print "warning: no timestamps exist, cannot guess session type"
+        return "unknown"
+    
+    if len(tss) < 2:
+        return "unknown"
+    elif np.median(np.diff(tss)) > 30000:
+        return 'behaving'
+    else:
+        return 'WN100ms'
