@@ -381,12 +381,16 @@ class RecordingSession:
         
         return block2
     
-    def generate_spike_block(self, CAR=True, smooth_spikes=False):
+    def generate_spike_block(self, CAR=True, smooth_spikes=False, 
+        filterer=None):
         """Filters the data for spike extraction.
         
         CAR: If True, subtract the common-average of every channel.
         smooth_spikes: If True, add an additional low-pass filtering step to
             the spike filter.
+        filterer : provide your own spike filterer which acts like class
+            FiltererForSpikes. If you specify, then smooth_spikes is ignored,
+            because filterer will take care of that.
         
         If spike block already exists, will return without doing anything.
         """
@@ -410,9 +414,11 @@ class RecordingSession:
         spike_block.save(session=session)
         
         # Create a spike_filterer to use
-        self.filterer = FiltererForSpikes(
-            fixed_sampling_rate=self.get_ns5_loader().header.f_samp,
-            smooth_spikes=smooth_spikes)        
+        self.filterer = filterer
+        if self.filterer is None:
+            self.filterer = FiltererForSpikes(
+                fixed_sampling_rate=self.get_ns5_loader().header.f_samp,
+                smooth_spikes=smooth_spikes)        
 
         # Make RecordingPoint for each channel, linked to tetrode number with `group`
         # Also keep track of link between channel and RP with ch2rpid dict
