@@ -135,7 +135,7 @@ class RecordingSessionMaker:
             # No analog channels specified, none will be added to session
             self.analog_channel_ids = None
     
-    def make_session(self, ns5_filename, session_name, remove_from_SC=[], 
+    def make_session(self, ns5_filename, session_name=None, remove_from_SC=[], 
         remove_from_TC=[]):
         """Create a RecordingSession for some data.
         
@@ -146,12 +146,20 @@ class RecordingSessionMaker:
 
         Returns the created RecordingSession.
         """
+        # Make default session name
+        if session_name is None:
+            session_name = os.path.splitext(
+                os.path.split(os.path.normpath(ns5_filename))[1])[0]
+
+        # Create RecordingSession in path defined by parameters
         full_path = os.path.join(self.data_analysis_dir, session_name)
-        # Create RecordingSession
         rs = RecordingSession.RecordingSession(full_path)
         
         # Link neural data to session dir, overwriting if necessary
-        link_file(ns5_filename, rs.full_path)
+        if os.path.isfile(ns5_filename):
+            link_file(ns5_filename, rs.full_path)
+        else:
+            raise(IOError("%s is not a file" % ns5_filename))
         
         # Create channel numbering meta file
         #session_SC_list = sorted(list(set(self.SC_list) - set(remove_from_SC)))
