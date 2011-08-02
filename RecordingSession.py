@@ -644,10 +644,12 @@ class RecordingSession:
         
         return signal_list
     
-    def spectrum(self, signal_list, NFFT=2**10, meth='all'):
+    def spectrum(self, signal_list, NFFT=2**10, meth='avg_db',
+        normalization=0.0, truncatepow2=False):
         """Returns the spectrum of a list of signals.
         
-        The mean of each signal is subtracted before computing.
+        The mean of each signal is subtracted before computing. The first
+        component (DC) is dropped.
         
         signal_list : list of AnalogSignal to compute spectrum of
         meth :
@@ -655,14 +657,28 @@ class RecordingSession:
                 not implemented
             'avg_db' : compute spectrum, convert to dB, average spectra
             'all' : return all spectra in dB without averaging
+        normalization :
+            multiply power in each bin by freq**normalization
+            So a 1/f spectrum (in amplitude) is normalized by 2.0
+        truncatepow2 : if True, truncate to length greatest power of two
+            not implemented
+        
+        Returns:
+        (Pxx, freqs)
+        If meth is 'all', Pxx has shape (N_signals, NFFT/2)
+        If meth is 'avg_db', Pxx has shape (NFFT/2,)
         """
-
         Pxx_list = []
         Fs = self.get_sampling_rate()
         for sig in signal_list:
             Pxx, freqs = mlab.psd(sig.signal - sig.signal.mean(), 
                 Fs=Fs, NFFT=NFFT)
-            Pxx_list.append(Pxx)
+            # Drop DC
+            Pxx = Pxx[1:]
+            freqs = freqs[1:]
+            
+            # Normalize and add to list
+            Pxx_list.append(Pxx.flatten() * freqs**normalization)
         
         if meth == 'all':
             return (10*np.log10(np.array(Pxx_list)), freqs)

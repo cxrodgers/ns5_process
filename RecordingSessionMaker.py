@@ -315,7 +315,8 @@ def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
 
 # Plot average PSD
 def plot_psd_by_channel(rs, event_name='Timestamp', meth='avg_db',
-    harmonize_axes=True, savefig=None, f_range=(None, None), NFFT=2**12):
+    harmonize_axes=True, savefig=None, f_range=(None, None), NFFT=2**12,
+    normalization=0.0):
     """Plot PSD of each channel"""
     # get events
     event_list = query_events(rs, event_name)
@@ -336,7 +337,7 @@ def plot_psd_by_channel(rs, event_name='Timestamp', meth='avg_db',
         # calculate and plot PSD for this channel
         siglist = rs.get_signal_list_from_event_list(event_list, chn)
         spectra, freqs = rs.spectrum(signal_list=siglist, meth='avg_db', 
-            NFFT=NFFT)
+            NFFT=NFFT, normalization=normalization)
         ax.semilogx(freqs, spectra, '.-')
         ax.grid()
         
@@ -347,6 +348,7 @@ def plot_psd_by_channel(rs, event_name='Timestamp', meth='avg_db',
         if freqs.max() > tmax: tmax = freqs.max()
         
         plt.title('ch %d' % chn)
+    plt.suptitle(rs.session_name + ' each psd')
 
     # Harmonize x and y limits across subplots
     if harmonize_axes:
