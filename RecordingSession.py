@@ -629,6 +629,18 @@ class RecordingSession:
             return (return_t, avgsig)
         elif meth =='all':
             return (return_t, np.array(slices))
+    
+    def spectrum(self, signal_list, meth='avg_db'):
+        """Returns the spectrum of a list of signals.
+        
+        signal_list : list of AnalogSignal to compute spectrum of
+        meth :
+            'avg_first' : average signals, compute spectrum, convert to dB
+            'avg_db' : compute spectrum, convert to dB, average spectra
+            'all' : return all spectra in dB without averaging
+        """
+        
+        
 
     def run_spikesorter(self, save_to_db=True, save_cluster_figs=False):
         """Sorts all groups in the database.
