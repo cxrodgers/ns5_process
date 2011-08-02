@@ -313,6 +313,65 @@ def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
             plt.savefig(savefig)
             plt.close()
 
+# Plot average PSD
+def plot_psd_by_channel(rs, event_name='Timestamp', meth='avg_db',
+    harmonize_axes=True, savefig=None, f_range=(None, None), NFFT=2**12):
+    """Plot PSD of each channel"""
+    # get events
+    event_list = query_events(rs, event_name)
+    if len(event_list) == 0:
+        return
+    
+    # Make big figure with enough subplots
+    f = plt.figure(figsize=(12,12))
+    ymin, ymax, tmin, tmax = np.inf, -np.inf, np.inf, -np.inf
+    n_subplots = float(len(rs.read_neural_channel_ids()))
+    spx = int(np.ceil(np.sqrt(n_subplots)))
+    spy = int(np.ceil(n_subplots / spx))
+
+    # plot each channel
+    for n, chn in enumerate(rs.read_neural_channel_ids()):
+        ax = f.add_subplot(spx, spy, n+1)
+        
+        # calculate and plot PSD for this channel
+        siglist = rs.get_signal_list_from_event_list(event_list, chn)
+        spectra, freqs = rs.spectrum(signal_list=siglist, meth='avg_db', 
+            NFFT=NFFT)
+        ax.semilogx(freqs, spectra, '.-')
+        ax.grid()
+        
+        # Get nice tight harmonized boundaries across all subplots
+        if spectra.min() < ymin: ymin = spectra.min()
+        if spectra.max() > ymax: ymax = spectra.max()        
+        if freqs.min() < tmin: tmin = freqs.min()
+        if freqs.max() > tmax: tmax = freqs.max()
+        
+        plt.title('ch %d' % chn)
+
+    # Harmonize x and y limits across subplots
+    if harmonize_axes:
+        for ax in f.get_axes():        
+            ax.set_xlim((tmin, tmax))
+            ax.set_ylim((ymin, ymax))
+    
+    if f_range != (None, None):
+        for ax in f.get_axes():
+            ax.set_xlim(f_range)
+            # ylim will be too broad
+    
+    # save figure, or display
+    if savefig is None:
+        plt.show()
+    elif savefig is True:
+        filename = os.path.join(rs.full_path, rs.session_name + '_each_psd.png')
+        plt.savefig(filename)
+        plt.close()
+    else:
+        plt.savefig(savefig)
+        plt.close()
+    
+    
+
 def query_events(rs, event_name='Timestamp'):
     # Open db
     #rs.open_db()

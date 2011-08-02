@@ -26,6 +26,7 @@ import numpy as np
 import TrialSlicer
 import OpenElectrophy as OE
 import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
 import KlustaKwikIO
 import scipy.signal
 
@@ -643,25 +644,30 @@ class RecordingSession:
         
         return signal_list
     
-    def spectrum(self, signal_list, meth='all'):
+    def spectrum(self, signal_list, NFFT=2**10, meth='all'):
         """Returns the spectrum of a list of signals.
+        
+        The mean of each signal is subtracted before computing.
         
         signal_list : list of AnalogSignal to compute spectrum of
         meth :
             'avg_first' : average signals, compute spectrum, convert to dB
+                not implemented
             'avg_db' : compute spectrum, convert to dB, average spectra
             'all' : return all spectra in dB without averaging
         """
 
-        
+        Pxx_list = []
         Fs = self.get_sampling_rate()
         for sig in signal_list:
             Pxx, freqs = mlab.psd(sig.signal - sig.signal.mean(), 
-                Fs=Fs, NFFT=2**10)
+                Fs=Fs, NFFT=NFFT)
             Pxx_list.append(Pxx)
         
         if meth == 'all':
-            return (np.array(Pxx_list), freqs)
+            return (10*np.log10(np.array(Pxx_list)), freqs)
+        elif meth == 'avg_db':
+            return (np.mean(10*np.log10(np.array(Pxx_list)), axis=0), freqs)
 
     def run_spikesorter(self, save_to_db=True, save_cluster_figs=False):
         """Sorts all groups in the database.
