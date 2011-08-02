@@ -35,6 +35,7 @@ import glob
 import matplotlib.mlab as mlab
 from SpikeTrainContainers import MultipleUnitSpikeTrain
 import os.path
+import shutil
 
 
 class KlustaKwikIO(object):
@@ -45,11 +46,21 @@ class KlustaKwikIO(object):
         self._clufiles = dict()
     
     def _new_group(self, id_group, nbClusters):
-        self._fetfiles[id_group] = file(self.filename + \
-            ('.fet.%d' % id_group), 'w')
-        self._clufiles[id_group] = file(self.filename + \
-            ('.clu.%d' % id_group), 'w')
+        # generate filenames
+        fetfilename = self.filename + ('.fet.%d' % id_group)
+        clufilename = self.filename + ('.clu.%d' % id_group)
         
+        # back up before overwriting
+        if os.path.exists(fetfilename):
+            shutil.copyfile(fetfilename, fetfilename + '~')
+        if os.path.exists(clufilename):
+            shutil.copyfile(clufilename, clufilename + '~')
+        
+        # create file handles
+        self._fetfiles[id_group] = file(fetfilename, 'w')
+        self._clufiles[id_group] = file(clufilename, 'w')
+        
+        # write out first line
         self._fetfiles[id_group].write("0\n") # Number of features
         self._clufiles[id_group].write("%d\n" % nbClusters)
     
