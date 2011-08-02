@@ -530,36 +530,7 @@ class RecordingSession:
         the actual work is done by a lower level function that averages
         AnalogSignal (but does not error check).
         """
-        # Extract segment id from each event and test for ordering
-        # I get weird detached instance errors here some times, so replace:
-        #seg_id_list = [e.segment.id for e in event_list]
-        seg_id_list = [e.id_segment for e in event_list]
-        assert seg_id_list == sorted(seg_id_list), "events must be sorted by segment"
-        
-        # Why doesn't this work?
-        # This is what would fix the segment ordering restriction
-        #idxs = np.argsort(seg_id_list)                
-        #event_list = list(np.take(event_list, idxs))
-        #seg_id_list = list(np.take(seg_id_list, idxs))
-        
-        # Get Segment containing this Event and check that there is only
-        # one Event per Segment, so that we can use the ordering to ensure
-        # one-to-one relationship between Event and AnalogSignal        
-        if len(np.unique(seg_id_list)) != len(seg_id_list):
-            raise(ValueError("More than one of the specified event per segment"))        
-        
-        # Get list of signals with this channel and in the list of Segment
-        # again ordered by id_segment, so signal_list[n] came from
-        # seg_id_list[n] which contains event[n]
-        signal_list = self.get_OE_session().query(OE.AnalogSignal).\
-            filter(OE.AnalogSignal.channel == chn).\
-            filter(OE.AnalogSignal.id_segment.in_(seg_id_list)).\
-            order_by(OE.AnalogSignal.id_segment).all()
-        
-        # Check alignment
-        assert np.all(
-            np.array([sig.id_segment for sig in signal_list]) ==
-            np.array(seg_id_list)), "Mismatched segments and events, somehow"
+        signal_list = self.get_signal_list_from_event_list(event_list, chn)
         
         # Call signal averaging function
         return self.avg_over_signals_with_triggers(
@@ -630,7 +601,49 @@ class RecordingSession:
         elif meth =='all':
             return (return_t, np.array(slices))
     
-    def spectrum(self, signal_list, meth='avg_db'):
+    def get_signal_list_from_event_list(self, event_list, chn):
+        """Returns list of signals from specified channel and event.
+        
+        The event_list should be ordered by segment id, and there should
+        be a signal of channel `chn` in each segment.
+        
+        Returns list of AnalogSignal in the same order as event list
+        from the correct channel.
+        """        
+        # Extract segment id from each event and test for ordering
+        # I get weird detached instance errors here some times, so replace:
+        #seg_id_list = [e.segment.id for e in event_list]
+        seg_id_list = [e.id_segment for e in event_list]
+        assert seg_id_list == sorted(seg_id_list), "events must be sorted by segment"
+        
+        # Why doesn't this work?
+        # This is what would fix the segment ordering restriction
+        #idxs = np.argsort(seg_id_list)                
+        #event_list = list(np.take(event_list, idxs))
+        #seg_id_list = list(np.take(seg_id_list, idxs))
+        
+        # Get Segment containing this Event and check that there is only
+        # one Event per Segment, so that we can use the ordering to ensure
+        # one-to-one relationship between Event and AnalogSignal        
+        if len(np.unique(seg_id_list)) != len(seg_id_list):
+            raise(ValueError("More than one of the specified event per segment"))        
+        
+        # Get list of signals with this channel and in the list of Segment
+        # again ordered by id_segment, so signal_list[n] came from
+        # seg_id_list[n] which contains event[n]
+        signal_list = self.get_OE_session().query(OE.AnalogSignal).\
+            filter(OE.AnalogSignal.channel == chn).\
+            filter(OE.AnalogSignal.id_segment.in_(seg_id_list)).\
+            order_by(OE.AnalogSignal.id_segment).all()
+        
+        # Check alignment
+        assert np.all(
+            np.array([sig.id_segment for sig in signal_list]) ==
+            np.array(seg_id_list)), "Mismatched segments and events, somehow"     
+        
+        return signal_list
+    
+    def spectrum(self, signal_list, meth='all'):
         """Returns the spectrum of a list of signals.
         
         signal_list : list of AnalogSignal to compute spectrum of
@@ -639,8 +652,16 @@ class RecordingSession:
             'avg_db' : compute spectrum, convert to dB, average spectra
             'all' : return all spectra in dB without averaging
         """
+
         
+        Fs = self.get_sampling_rate()
+        for sig in signal_list:
+            Pxx, freqs = mlab.psd(sig.signal - sig.signal.mean(), 
+                Fs=Fs, NFFT=2**10)
+            Pxx_list.append(Pxx)
         
+        if meth == 'all':
+            return (np.array(Pxx_list), freqs)
 
     def run_spikesorter(self, save_to_db=True, save_cluster_figs=False):
         """Sorts all groups in the database.
