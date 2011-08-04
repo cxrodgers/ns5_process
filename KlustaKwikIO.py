@@ -128,9 +128,15 @@ class KlustaKwikIO(object):
                     
                     # Write spike time in samples
                     fetfile.write("%d\n" % stt)
-                    
+
                     # Write neuron id
-                    clufile.write("%s\n" % st.name)
+                    try:
+                        clufile.write("%s\n" % st.neuron.name)
+                    except AttributeError:
+                        print ("warning: neuron with id %d has no name" 
+                            % st.neuron.id)
+                        clufile.write("%s\n" % st.name)
+                    
         
         self._close_all_files()
 
@@ -193,7 +199,7 @@ class KK_loader(object):
         d = dict()
         for v in filename_list:
             # Test whether matches format, ie ends with digits
-            m = glob.re.search(('%s\.(\d+)' % match_string), v)             
+            m = glob.re.search(('%s\.(\d+)$' % match_string), v)             
             if m is not None:
                 # Key the tetrode number to the filename
                 tetn = int(m.group(1)) # Group 0 is something else
