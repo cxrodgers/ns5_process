@@ -365,3 +365,57 @@ class PSTH(object):
         # Floating point
         assert (d.max() - d.min()) < 1e-5, "t-values are irregular"
         return np.median(d)
+
+import Picker
+class SpikePicker:
+    def __init__(self, spiketrains):
+        N_RECORDS = sum([len(st.spike_times) for st in spiketrains.values()])
+        x = np.recarray(shape=(N_RECORDS,),
+            dtype=[('unit', np.int32), ('trial', np.int32), 
+                ('tetrode', np.int32), ('spike_time', np.int),
+                ('adj_spike_time', np.int)])
+        
+        x['spike_time'] = np.concatenate([
+            st.spike_times for st in spiketrains.values()])
+        x['trial'] = -1 # for now
+        x['unit'] = np.concatenate([
+            st.unit_IDs for st in spiketrains.values()])
+        x['tetrode'] = np.concatenate([tetn * np.ones_like(st.spike_times) \
+            for tetn, st in spiketrains.items()])
+        
+        self._p = Picker.Picker(data=x)
+        
+        self.units = np.unique(self._p._data['unit'])
+        self.tetrodes = np.unique(self._p._data['tetrode'])
+    
+    def __len__(self):
+        return len(self._p._data)
+    
+    def assign_trial_numbers(self, t_nums, t_starts, t_stops, t_centers):
+        self.t_starts = t_starts
+        self.t_stops = t_stops
+        self.t_centers = t_centers
+        self.t_nums = t_nums
+        
+        self._p._data['trial'] = -1
+        
+        for t_num, t_start, t_stop, t_center in zip(t_nums, t_starts, t_stops, t_centers):
+            msk = (
+                (self._p._data['spike_time'] >= t_start) &
+                (self._p._data['spike_time'] <  t_stop))
+            assert np.all(self._p._data['trial'][msk] == -1)
+            self._p._data['trial'][msk] = t_num
+            self._p._data['adj_spike_time'][msk] = \
+                self._p._data['spike_time'][msk] - t_center
+        
+        # check that all spikes were assigned?
+    
+    def pick_spikes(self, adjusted=True, **kwargs):
+        # Need to also return the number of trials that went into each
+        # time bin
+        # Would be nice to return a PSTH object instead of raw times
+
+        if adjusted:
+            return self._p.filter(**kwargs)._data['adj_spike_time']
+        else:
+            return self._p.filter(**kwargs)._data['spike_time']

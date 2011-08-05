@@ -23,6 +23,10 @@ matplotlib.rcParams['font.size'] = 8.0
 matplotlib.rcParams['xtick.labelsize'] = 'small'
 matplotlib.rcParams['ytick.labelsize'] = 'small'
 import matplotlib.pyplot as plt
+import DataSession
+import collections
+import re
+import bcontrol
 
 # Functions to parse the way I name my ns5 files
 def make_filename(dirname=None, username='*', ratname='*', date='*', number='*'):
@@ -279,7 +283,69 @@ def plot_all_spike_psths(rs, savefig=None):
     else:
         f.savefig(savefig)
         plt.close()
+
+def convert_trial_numbers_to_segments(rs, trial_numbers, block='spike'):
+    """Returns a list of Segment with info field matching trial numbers"""
+    l2 = [str(tn) for tn in trial_numbers]
+    if block == 'spike':
+        id_block = rs.get_spike_block().id
+    elif block == 'raw':
+        id_block = rs.get_raw_data_block().id
+    else:
+        raise(ValueError("block must be 'spike' or 'raw'"))
     
+    
+    session = self.get_OE_session()
+    seglist = session.query(OE.Segment).filter(
+        OE.Segment.id_block == id_block).filter(
+        OE.Segment.info.in_(l2)).all()
+    
+    return seglist
+    
+
+def plot_all_spike_psths_by_stim(rs, savefig=None):
+    """Dump PSTHs of all spikes from each tetrode to disk, by stimulus.
+    
+    Does not use clustering information even if it exists.
+    
+    Currently doesn't work for any use case other than hard limits around
+    each time stamp.
+    
+    This function handles arrangement into figure, but actual plotting
+    is a method of PSTH.
+    """
+    # Load trial info
+    bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
+    bcld.load()
+    sn2trials = bcld.get_sn2trials()
+    sn2names = bcld.get_sn2names()
+
+    # Load spike picker
+    sp = rs.get_spike_picker()
+    
+    for unit in sp.units:
+        f = plt.figure(figsize=(16,12))
+        #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
+        for sn, name in sn2names.items(): 
+            ax = f.add_subplot(3, 4, sn)
+            spike_times = sp.pick_spikes(unit=[unit], trial=sn2trials[sn])
+            plt.hist(spike_times, bins=50)
+            #psth.plot()
+            plt.title(name)
+            plt.suptitle('%s - unit %d' % (rs.session_name, unit))
+    
+        # save
+        if savefig is None:
+            plt.show()
+        elif savefig is True:
+            filename = os.path.join(rs.full_path, rs.session_name + 
+                '_psth_by_stim_unit_%d.png' % unit)
+            f.savefig(filename)
+            plt.close()        
+        else:
+            f.savefig(savefig)
+            plt.close()
+
 
 # Plot average audio signal
 def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
@@ -514,7 +580,58 @@ def add_bcontrol_data_to_session(bcontrol_folder, session, verbose=False,
     # Add to session
     session.add_file(bdata_filename)
 
+def add_behavioral_trial_numbers(rs):
+    """Syncs trial numbers and adds behavioral to Segment info field."""
+    # fake a data structure that the syncer needs
+    Kls = collections.namedtuple('kls', 'audio_onsets')
+    
+    # Load bcontrol data from matfile (will also validate)
+    bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path, skip_trial_set=[])
+    bcld.load()
+    
+    # Get onset times. For behavioral, it is in seconds and we skip the
+    # first trial which often occurs before recording started. We correct
+    # for this in the loop below when we add one to the index into
+    # TRIALS_INFO.
+    # Neural timestamps are in samples.
+    behavioral_timestamps = Kls(audio_onsets=bcld.data['onsets'][1:])
+    neural_timestamps = Kls(audio_onsets=rs.read_timestamps())
+    
+    # Sync. Will write CORR files to disk.
+    # Also produces bs.map_n_to_b_masked and vice versa for trial mapping
+    bs = DataSession.BehavingSyncer()
+    bs.sync(behavioral_timestamps, neural_timestamps, force_run=True)
+    
+    # Put trial numbers into OE db
+    session = rs.get_OE_session()
+    seglist = session.query(OE.Segment).all()
+    for seg in seglist:
+        # Each segment in the db is named "Segment %d", corresponding to the
+        # ordinal TIMESTAMP, which means neural trial time.
+        n_trial = int(re.search('Segment (\d+)', seg.name).group(1))
+        
+        # Convert to behavioral trial number
+        # We use the 'trial_number' field of TRIALS_INFO
+        # IE the original Matlab numbering of the trial
+        # Here we correct for the dropped first trial.
+        try:
+            b_trial = bcld.data['TRIALS_INFO']['TRIAL_NUMBER'][\
+                bs.map_n_to_b_masked[n_trial] + 1]
+        except IndexError:
+            # masked trial
+            if n_trial == 0:
+                #print "WARNING: Assuming this is the dropped first trial"
+                b_trial = bcld.data['TRIALS_INFO']['TRIAL_NUMBER'][0]
+            else:
+                print "WARNING: can't find trial"
+                b_trial = -99
+        
+        # Store behavioral trial number in the info field
+        seg.info = '%d' % b_trial
+        seg.save()
 
+    
+    
 
 # Utility function using experimental logic to find the right behavior file.
 def find_closest_bcontrol_file(bcontrol_folder, ns5_filename, verbose=False,

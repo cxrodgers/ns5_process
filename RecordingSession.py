@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import KlustaKwikIO
 import scipy.signal
+import SpikeTrainContainers
 
 # Globals
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
@@ -820,4 +821,72 @@ class RecordingSession:
                         psths[groupnum][uid] = st.get_psth(pick_units=[uid])
         
         return psths
+    
+    def convert_neuron_name_to_neuron_id(self, neuron_name_list):
+        """Given a list of neuron names, returns id of each neuron"""
+        nid_list = []
+        q = self.get_OE_session().query(OE.Neuron)
+        for nname in neuron_name_list:
+            id = q.filter(OE.Neuron.name == nname).one().id
+            nid_list.append(id)
         
+        return nid_list
+    
+    #~ def get_psth(self, pick_neuron_names=None, pick_segment_ids=None):        
+        #~ # Get neuron.id for each neuron
+        #~ nid_list = self.convert_neuron_name_to_neuron_id(pick_neuron_names)
+        
+        #~ session = self.get_OE_session()
+        #~ q = session.query(OE.SpikeTrain).filter(
+            #~ OE.SpikeTrain.id_neuron.in_(nid_list)).filter(
+            #~ OE.SpikeTrain.id_segment.in_(pick_segment_ids))
+    
+    def get_spike_picker(self):
+        sts = self.get_spiketrains_raw()
+        sp = SpikeTrainContainers.SpikePicker(sts)
+        t_starts, t_stops = self.calculate_trial_boundaries()
+        
+        # get behavioral trial numbers
+        t_nums = []
+        fs = self.get_sampling_rate()
+        for n, seg in enumerate(self.get_spike_block()._segments):
+            # check that segments are ordered correctly
+            assert(int(np.rint(seg._analogsignals[0].t_start * fs)) == \
+                t_starts[n])
+            t_nums.append(int(seg.info))
+        
+        t_centers = self.read_timestamps()
+        
+        # assign trial number to each spike
+        sp.assign_trial_numbers(t_nums, t_starts, t_stops, t_centers)
+        
+        return sp
+
+
+    def get_neuron_name_list(self):
+        """Return a list of neuron names"""
+        session = self.get_OE_session()
+        neuron_list = session.query(OE.Neuron).all()
+        neuron_name_list = [neuron.name for neuron in neuron_list]
+        if None in neuron_name_list:
+            raise(ValueError("Some neurons named None!"))
+        if len(neuron_name_list) != len(np.unique(np.array(neuron_name_list))):
+            raise(ValueError("Some neurons have duplicate names"))
+        
+        return neuron_name_list
+    
+    def get_neuron_number_list(self):
+        """Returns a list of neuron numbers as integers.
+        
+        Assumes neurons name match "Neuron %d *"
+        If not, raises error for malformed name.
+        Not necessarily the same as the neuron id!
+        """
+        nn_list = []
+        for nname in self.get_neuron_name_list():
+            m = glob.re.match('Neuron (\d+) ', nname)
+            if m is None:
+                raise(ValueError("Malformed neuron name: %s" % nname))
+            else:
+                nn_list.append(int(m.group(1)))
+        return nn_list
