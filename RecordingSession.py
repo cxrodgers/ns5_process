@@ -606,42 +606,25 @@ class RecordingSession:
     def get_signal_list_from_event_list(self, event_list, chn):
         """Returns list of signals from specified channel and event.
         
-        The event_list should be ordered by segment id, and there should
-        be a signal of channel `chn` in each segment.
-        
         Returns list of AnalogSignal in the same order as event list
         from the correct channel.
         """        
-        # Extract segment id from each event and test for ordering
-        # I get weird detached instance errors here some times, so replace:
-        #seg_id_list = [e.segment.id for e in event_list]
-        seg_id_list = [e.id_segment for e in event_list]
-        assert seg_id_list == sorted(seg_id_list), "events must be sorted by segment"
-        
-        # Why doesn't this work?
-        # This is what would fix the segment ordering restriction
-        #idxs = np.argsort(seg_id_list)                
-        #event_list = list(np.take(event_list, idxs))
-        #seg_id_list = list(np.take(seg_id_list, idxs))
-        
-        # Get Segment containing this Event and check that there is only
-        # one Event per Segment, so that we can use the ordering to ensure
-        # one-to-one relationship between Event and AnalogSignal        
-        if len(np.unique(seg_id_list)) != len(seg_id_list):
-            raise(ValueError("More than one of the specified event per segment"))        
-        
-        # Get list of signals with this channel and in the list of Segment
-        # again ordered by id_segment, so signal_list[n] came from
-        # seg_id_list[n] which contains event[n]
+        # Get signals from this channel
         signal_list = self.get_OE_session().query(OE.AnalogSignal).\
-            filter(OE.AnalogSignal.channel == chn).\
-            filter(OE.AnalogSignal.id_segment.in_(seg_id_list)).\
-            order_by(OE.AnalogSignal.id_segment).all()
+            filter(OE.AnalogSignal.channel == chn).all()
         
+        # Order them in the same way that the events were ordered
+        sig_idseg_list = [sig.id_segment for sig in signal_list]        
+        ev_idseg_list = [e.id_segment for e in event_list]
+        if len(np.unique(ev_idseg_list)) != len(ev_idseg_list):
+            raise(ValueError("More than one of the specified event per segment"))        
+        signal_list = [signal_list[sig_idseg_list.index(id_seg)] \
+            for id_seg in ev_idseg_list]
+
         # Check alignment
         assert np.all(
             np.array([sig.id_segment for sig in signal_list]) ==
-            np.array(seg_id_list)), "Mismatched segments and events, somehow"     
+            np.array(ev_idseg_list)), "Mismatched segments and events, somehow"     
         
         return signal_list
     
@@ -822,24 +805,6 @@ class RecordingSession:
         
         return psths
     
-    def convert_neuron_name_to_neuron_id(self, neuron_name_list):
-        """Given a list of neuron names, returns id of each neuron"""
-        nid_list = []
-        q = self.get_OE_session().query(OE.Neuron)
-        for nname in neuron_name_list:
-            id = q.filter(OE.Neuron.name == nname).one().id
-            nid_list.append(id)
-        
-        return nid_list
-    
-    #~ def get_psth(self, pick_neuron_names=None, pick_segment_ids=None):        
-        #~ # Get neuron.id for each neuron
-        #~ nid_list = self.convert_neuron_name_to_neuron_id(pick_neuron_names)
-        
-        #~ session = self.get_OE_session()
-        #~ q = session.query(OE.SpikeTrain).filter(
-            #~ OE.SpikeTrain.id_neuron.in_(nid_list)).filter(
-            #~ OE.SpikeTrain.id_segment.in_(pick_segment_ids))
     
     def get_spike_picker(self):
         sts = self.get_spiketrains_raw()
@@ -862,31 +827,41 @@ class RecordingSession:
         
         return sp
 
+    # Not sure the next 3 will ever be used for anything
+    #~ def convert_neuron_name_to_neuron_id(self, neuron_name_list):
+        #~ """Given a list of neuron names, returns id of each neuron"""
+        #~ nid_list = []
+        #~ q = self.get_OE_session().query(OE.Neuron)
+        #~ for nname in neuron_name_list:
+            #~ id = q.filter(OE.Neuron.name == nname).one().id
+            #~ nid_list.append(id)
+        
+        #~ return nid_list
 
-    def get_neuron_name_list(self):
-        """Return a list of neuron names"""
-        session = self.get_OE_session()
-        neuron_list = session.query(OE.Neuron).all()
-        neuron_name_list = [neuron.name for neuron in neuron_list]
-        if None in neuron_name_list:
-            raise(ValueError("Some neurons named None!"))
-        if len(neuron_name_list) != len(np.unique(np.array(neuron_name_list))):
-            raise(ValueError("Some neurons have duplicate names"))
+    #~ def get_neuron_name_list(self):
+        #~ """Return a list of neuron names"""
+        #~ session = self.get_OE_session()
+        #~ neuron_list = session.query(OE.Neuron).all()
+        #~ neuron_name_list = [neuron.name for neuron in neuron_list]
+        #~ if None in neuron_name_list:
+            #~ raise(ValueError("Some neurons named None!"))
+        #~ if len(neuron_name_list) != len(np.unique(np.array(neuron_name_list))):
+            #~ raise(ValueError("Some neurons have duplicate names"))
         
-        return neuron_name_list
+        #~ return neuron_name_list
     
-    def get_neuron_number_list(self):
-        """Returns a list of neuron numbers as integers.
+    #~ def get_neuron_number_list(self):
+        #~ """Returns a list of neuron numbers as integers.
         
-        Assumes neurons name match "Neuron %d *"
-        If not, raises error for malformed name.
-        Not necessarily the same as the neuron id!
-        """
-        nn_list = []
-        for nname in self.get_neuron_name_list():
-            m = glob.re.match('Neuron (\d+) ', nname)
-            if m is None:
-                raise(ValueError("Malformed neuron name: %s" % nname))
-            else:
-                nn_list.append(int(m.group(1)))
-        return nn_list
+        #~ Assumes neurons name match "Neuron %d *"
+        #~ If not, raises error for malformed name.
+        #~ Not necessarily the same as the neuron id!
+        #~ """
+        #~ nn_list = []
+        #~ for nname in self.get_neuron_name_list():
+            #~ m = glob.re.match('Neuron (\d+) ', nname)
+            #~ if m is None:
+                #~ raise(ValueError("Malformed neuron name: %s" % nname))
+            #~ else:
+                #~ nn_list.append(int(m.group(1)))
+        #~ return nn_list
