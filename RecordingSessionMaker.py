@@ -329,7 +329,8 @@ def plot_all_spike_psths_by_stim(rs, savefig=None):
         for sn, name in sn2names.items(): 
             ax = f.add_subplot(3, 4, sn)
             spike_times = sp.pick_spikes(unit=[unit], trial=sn2trials[sn])
-            plt.hist(spike_times, bins=50)
+            if len(spike_times) > 0:
+                plt.hist(spike_times, bins=50)
             #psth.plot()
             plt.title(name)
             plt.suptitle('%s - unit %d' % (rs.session_name, unit))
@@ -346,6 +347,52 @@ def plot_all_spike_psths_by_stim(rs, savefig=None):
             f.savefig(savefig)
             plt.close()
 
+def plot_MUA_by_stim(rs, savefig=None):
+    """Dump PSTHs of all spikes from each tetrode to disk, by stimulus.
+    
+    Does not use clustering information even if it exists.
+    
+    Currently doesn't work for any use case other than hard limits around
+    each time stamp.
+    
+    This function handles arrangement into figure, but actual plotting
+    is a method of PSTH.
+    """
+    # Load trial info
+    bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
+    bcld.load()
+    sn2trials = bcld.get_sn2trials()
+    sn2names = bcld.get_sn2names()
+
+    # Load spike picker
+    #spt = rs.get_spike_picker()._p.dict_by('tetrode')
+    sp = rs.get_spike_picker()
+    
+    
+    for tetnum in sorted(sp.tetrodes):
+        
+        f = plt.figure(figsize=(16,12))
+        #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
+        for sn, name in sn2names.items(): 
+            ax = f.add_subplot(3, 4, sn)
+            spike_times = sp.pick_spikes(tetrode=[tetnum], trial=sn2trials[sn])
+            if len(spike_times) > 0:
+                plt.hist(spike_times, bins=50)
+            #psth.plot()
+            plt.title(name)
+            plt.suptitle('%s - tetrode %d' % (rs.session_name, tetnum))
+    
+        # save
+        if savefig is None:
+            plt.show()
+        elif savefig is True:
+            filename = os.path.join(rs.full_path, rs.session_name + 
+                '_psth_by_stim_unit_%d.png' % unit)
+            f.savefig(filename)
+            plt.close()        
+        else:
+            f.savefig(savefig)
+            plt.close()
 
 # Plot average audio signal
 def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
