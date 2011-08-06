@@ -131,7 +131,8 @@ class KlustaKwikIO(object):
 
                     # Write neuron id
                     try:
-                        clufile.write("%s\n" % st.neuron.name)
+                        clufile.write("%d\n" % st.neuron.id)
+                        #clufile.write("%s\n" % st.neuron.name)
                     except AttributeError:
                         print ("warning: neuron with id %d has no name" 
                             % st.neuron.id)
@@ -248,7 +249,13 @@ class KK_loader(object):
             if m is not None:
                 cluster_ids[n] = int(m.group(1))
             else:
-                cluster_ids[n] = 99
+                try:
+                    # Maybe it's a digit
+                    cluster_ids[n] = int(name)
+                except ValueError:
+                    # What is it
+                    print "warning: cannot parse %s" % name
+                    cluster_ids[n] = 99
 
         # Simple error checking
         assert(len(np.unique(cluster_ids)) == nbClusters)
