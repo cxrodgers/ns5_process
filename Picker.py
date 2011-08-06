@@ -105,10 +105,12 @@ class Picker:
         
         for colname, ok_value_list in kwargs.items():
             # OR together all records with _data['colname'] in ok_value_list
-            one_col_mask = np.zeros_like(mask)            
-            for ok_value in ok_value_list:
-                one_col_mask = one_col_mask | (self._data[colname] == ok_value)
-            
+            one_col_mask = np.zeros_like(mask)
+            try:
+                for ok_value in ok_value_list:
+                    one_col_mask = one_col_mask | (self._data[colname] == ok_value)
+            except TypeError:
+                raise TypeError("ok value list must be iterable")
             # AND together the full mask with the results from this column
             mask = mask & one_col_mask
         
