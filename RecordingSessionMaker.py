@@ -387,7 +387,7 @@ def plot_MUA_by_stim(rs, savefig=None):
             plt.show()
         elif savefig is True:
             filename = os.path.join(rs.full_path, rs.session_name + 
-                '_psth_by_stim_unit_%d.png' % unit)
+                '_psth_by_stim_tet_%d.png' % tetnum)
             f.savefig(filename)
             plt.close()        
         else:
