@@ -239,7 +239,8 @@ class PSTH(object):
     Allow recalculation when nbins or range changes.
     """
     def __init__(self, adjusted_spike_times=[], n_trials=0, 
-        F_SAMP=30000., nbins=100, range=None):
+        F_SAMP=30000., nbins=100, range=None, t_starts=None, t_stops=None, 
+        t_centers=None):
         """Initialize a new PSTH.
         
         You must have already chosen your trials to include, and triggered
@@ -263,6 +264,17 @@ class PSTH(object):
         self.adjusted_spike_times = adjusted_spike_times
         self.range = range
         
+        # If applicable, store range of each trials
+        self.t_starts = t_starts
+        self.t_stops = t_stops
+        self.t_centers = t_centers
+        
+        if (self.range is None) and (self.t_starts is not None):
+            # Autoset range using trial times
+            self.range = [
+                np.min(t_starts - t_centers),
+                np.max(t_stops - t_centers)]
+        
         # Bin and store _counts and _t
         self._calc_psth()
     
@@ -274,21 +286,42 @@ class PSTH(object):
             self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
                 bins=self.nbins, range=self.range)
             self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
+        
+        if self.t_starts is not None:
+            # Count how many trials are included in each bin
+            self._trials = np.zeros_like(self._counts)
+            for t_start, t_center, t_stop in zip(self.t_starts, 
+                self.t_centers, self.t_stops):
+                start_bin = self.closest_bin((t_start - t_center) / self.F_SAMP) - 1
+                stop_bin = self.closest_bin((t_stop - t_center) / self.F_SAMP) + 1
+                if start_bin < 0: start_bin = 0
+                if stop_bin > len(self._trials): stop_bin = len(self._trials)
+                self._trials[start_bin:stop_bin] += 1
     
-    def hist_values(self, units='spikes'):
+    
+    def hist_values(self, units='spikes', style='rigid'):
         """Returns the histogram values as (t, counts)"""
+        # Is the number of trials per bin fixed or variable?
+        if style == 'rigid':
+            trial_count = float(self.n_trials)
+        elif style == 'elastic':
+            trial_count = self._trials.astype(np.float)
+        else:
+            raise(ValueError("style must be rigid or elastic"))
+        
+        # Return in correct units
         if units is 'spikes':
-            return (self._t, self._counts / float(self.n_trials))
+            return (self._t, self._counts / trial_count)
         elif (units is 'hz' or units is 'Hz'):
-            yval = self._counts / float(self.n_trials) / self.bin_width()
+            yval = self._counts / trial_count / self.bin_width()
             return (self._t, yval) 
        
-    def plot(self, ax=None, units='spikes'):
+    def plot(self, ax=None, units='spikes', style='rigid'):
         """Plot PSTH into axis `ax`"""
         if len(self._t) == 0:
             return
         
-        t, yval = self.hist_values(units)
+        t, yval = self.hist_values(units, style)
         if ax is None:
             plt.figure()
             plt.plot(self._t, yval)            
@@ -419,3 +452,12 @@ class SpikePicker:
             return self._p.filter(**kwargs)._data['adj_spike_time']
         else:
             return self._p.filter(**kwargs)._data['spike_time']
+    
+    def get_psth(self, adjusted=True, **kwargs):
+        spike_times = self.pick_spikes(adjusted, **kwargs)
+        psth = PSTH(adjusted_spike_times=spike_times,             
+            F_SAMP=30000., nbins=100,
+            t_starts=self.t_starts, t_stops=self.t_stops, 
+            t_centers=self.t_centers)
+        return psth
+        
