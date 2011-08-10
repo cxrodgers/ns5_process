@@ -240,7 +240,7 @@ class PSTH(object):
     """
     def __init__(self, adjusted_spike_times=[], n_trials=None, 
         F_SAMP=30000., nbins=100, range=None, t_starts=None, t_stops=None, 
-        t_centers=None):
+        t_centers=None, binwidth=None):
         """Initialize a new PSTH.
         
         You must have already chosen your trials to include, and triggered
@@ -258,6 +258,9 @@ class PSTH(object):
             the temporal resolution. If you don't specify it, then the minimum
             and maximum spike times will be used, but for low firing rates
             this could introduce inaccuracies!
+        
+        If binwidth is specified (in seconds), then nbins is ignored and
+        calculated from binwidth instead.
         """
         # Store parameters and data
         self.F_SAMP = F_SAMP
@@ -266,6 +269,7 @@ class PSTH(object):
         self.adjusted_spike_times = np.asarray(adjusted_spike_times, 
             dtype=np.int)
         self.range = range
+        self.binwidth = binwidth
         
         if t_starts is not None:
             # Exact trial times were specified
@@ -294,6 +298,17 @@ class PSTH(object):
             self._t = np.array([])
             self._counts = np.array([])
         else:
+            if self.binwidth is not None and self.range is not None:    
+                # Convert range to multiples of binwidth, and calculate nbins
+                self.range[0] = \
+                    int(np.rint(np.floor(self.range[0] / self.F_SAMP / self.binwidth) * \
+                    self.F_SAMP * self.binwidth))
+                self.range[1] = \
+                    int(np.rint(np.ceil(self.range[1] / self.F_SAMP / self.binwidth) * \
+                    self.F_SAMP * self.binwidth))
+                self.nbins = int(np.rint((self.range[1] - self.range[0]) / \
+                    (self.binwidth * self.F_SAMP)))
+
             self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
                 bins=self.nbins, range=self.range)
             self._bin_edges = bin_edges
@@ -465,10 +480,10 @@ class SpikePicker:
         else:
             return self._p.filter(**kwargs)._data['spike_time']
     
-    def get_psth(self, adjusted=True, **kwargs):
+    def get_psth(self, adjusted=True, binwidth=.005, **kwargs):
         spike_times = self.pick_spikes(adjusted, **kwargs)
         psth = PSTH(adjusted_spike_times=spike_times,             
-            F_SAMP=self.f_samp, nbins=100,
+            F_SAMP=self.f_samp, binwidth=binwidth,
             t_starts=self.t_starts, t_stops=self.t_stops, 
             t_centers=self.t_centers)
         return psth

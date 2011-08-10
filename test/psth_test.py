@@ -56,6 +56,7 @@ class testRigid(unittest.TestCase):
         self.assertTrue(np.all(counts == np.array([0, 0, 0, 1.0])))
 
 
+
 class testElastic(unittest.TestCase):
     def testHistValues(self):
         # Simple example
@@ -117,7 +118,48 @@ class testElastic(unittest.TestCase):
         # Each trial is only partly contained by one of the bins
         self.assertTrue(np.all(psth._trials == np.array([5, 3])))            
         self.assertTrue(np.all(counts == np.array([0., 5/3.])))
+    
+
+
+class testBinWidth(unittest.TestCase):
+    def testElastic(self):
+        psth = PSTH(F_SAMP=1000.,
+            adjusted_spike_times=[1, 2, 4],
+            t_starts=[8, 19], t_stops=[12, 23], t_centers=[10, 20],
+            binwidth=.001)        
         
+        self.assertTrue(np.all(psth.range == [-2, 3]))
+        t, counts = psth.hist_values(style='elastic')
+        
+        self.assertTrue(np.all(psth._bin_edges == np.arange(-2, 4)))
+        self.assertTrue(np.all(psth._trials == np.array([1, 2, 2, 2, 1])))
+        self.assertTrue(np.all(counts == np.array([0, 0, 0, 0.5, 1.0])))    
+
+    def testElasticWiderBins(self):
+        # Now bins are specified to be 2ms wide.
+        # Trial 1: -2 to 1 (closed)
+        # Trial 2: -1 to 2 (closed)
+        # Spikes: +1, +2
+        # Thus the bins are [-2,0), [0, 2), [2, 4]
+        # The middle bin includes one spike and two trials, so
+        # 0.5 spike/trial/bin.
+        # The last bin includes one spike and only half a trial, because 
+        # one trial extends through half of it, so
+        # 4 spike/trial/bin
+        
+        psth = PSTH(F_SAMP=1000.,
+            adjusted_spike_times=[1, 2],
+            t_starts=[8, 19], t_stops=[12, 23], t_centers=[10, 20],
+            binwidth=.002)        
+        
+        self.assertTrue(np.all(psth.range == [-2, 4]))
+        t, counts = psth.hist_values(style='elastic')
+
+        self.assertTrue(np.all(psth._bin_edges == np.array([-2, 0, 2, 4])))
+        self.assertTrue(np.all(psth._trials == np.array([3, 4, 1])))            
+        self.assertTrue(np.all(counts == np.array([0, 0.5, 4.])))
+
+
 
 if __name__ == '__main__':
     unittest.main()
