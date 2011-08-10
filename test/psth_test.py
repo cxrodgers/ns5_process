@@ -145,7 +145,7 @@ class testBinWidth(unittest.TestCase):
         # 0.5 spike/trial/bin.
         # The last bin includes one spike and only half a trial, because 
         # one trial extends through half of it, so
-        # 4 spike/trial/bin
+        # 2 spike/trial/bin
         
         psth = PSTH(F_SAMP=1000.,
             adjusted_spike_times=[1, 2],
@@ -154,10 +154,10 @@ class testBinWidth(unittest.TestCase):
         
         self.assertTrue(np.all(psth.range == [-2, 4]))
         t, counts = psth.hist_values(style='elastic')
-
+        self.assertTrue(np.all(psth.range == [-2, 4]))
         self.assertTrue(np.all(psth._bin_edges == np.array([-2, 0, 2, 4])))
         self.assertTrue(np.all(psth._trials == np.array([3, 4, 1])))            
-        self.assertTrue(np.all(counts == np.array([0, 0.5, 4.])))
+        self.assertTrue(np.all(counts == np.array([0, 0.5, 2.])))
 
 
 
