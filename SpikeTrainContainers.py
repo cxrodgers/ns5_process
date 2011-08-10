@@ -258,7 +258,8 @@ class PSTH(object):
             this could introduce inaccuracies!
         
         If binwidth is specified (in seconds), then nbins is ignored and
-        calculated from binwidth instead.
+        calculated from binwidth instead. In this case self.range must be set,
+        which only happens automatically if t_starts etc are specified.
         """
         # Store parameters and data
         self.F_SAMP = F_SAMP
