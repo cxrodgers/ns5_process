@@ -366,6 +366,8 @@ def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
     
     # subplot info
     n_subplots = len(good_SU_list)
+    if n_subplots == 0:
+        return
     spx = int(np.ceil(np.sqrt(n_subplots)))
     spy = int(np.ceil(n_subplots / spx))
     
