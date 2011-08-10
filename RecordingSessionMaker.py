@@ -328,7 +328,7 @@ def plot_all_spike_psths_by_stim(rs, savefig=None):
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
             ax = f.add_subplot(3, 4, sn)
-            psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], binwidth=.005)
+            psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], binwidth=.010)
             psth.plot(ax, style='elastic')
             plt.title(name)
             plt.suptitle('%s - unit %d' % (rs.session_name, unit))
@@ -373,7 +373,7 @@ def plot_MUA_by_stim(rs, savefig=None):
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
             ax = f.add_subplot(3, 4, sn)
-            psth = sp.get_psth(tetrode=[tetnum], trial=sn2trials[sn], binwidth=.005)
+            psth = sp.get_psth(tetrode=[tetnum], trial=sn2trials[sn], binwidth=.010)
             psth.plot(ax, style='elastic')
             plt.title(name)
             plt.suptitle('%s - tetrode %d' % (rs.session_name, tetnum))
@@ -445,6 +445,8 @@ def plot_psd_by_channel(rs, event_name='Timestamp', meth='avg_db',
         
         # calculate and plot PSD for this channel
         siglist = rs.get_signal_list_from_event_list(event_list, chn)
+        if len(siglist) == 0:
+            continue
         spectra, freqs = rs.spectrum(signal_list=siglist, meth='avg_db', 
             NFFT=NFFT, normalization=normalization)
         ax.semilogx(freqs, spectra, '.-')
