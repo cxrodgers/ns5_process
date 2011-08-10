@@ -327,6 +327,8 @@ class PSTH(object):
         # Is the number of trials per bin fixed or variable?
         if style == 'rigid':
             trial_count = float(self.n_trials)
+            if self.t_starts is not None:
+                print "warning: you should probably call with style='elastic'"
         elif style == 'elastic':
             trial_count = self._trials.astype(np.float) / np.diff(self._bin_edges)
         else:
@@ -498,14 +500,18 @@ class SpikePicker:
         
         # Figure out how many trials were requested
         if 'trial' not in kwargs.keys():
-            # No trial filtering
+            # No trial filtering, use all trial numbers
             t_num = self.trialPicker['t_num']            
         else:
+            # Use only trials that were specified
             t_num = kwargs['trial']
         
+        # Now filter trial times by requested trial numbers
         p3 = self.trialPicker.filter(t_num=t_num)
-        t_starts, t_stops, t_centers = p3['t_start'], p3['t_stop'], p3['t_center']
+        t_starts, t_stops, t_centers = \
+            p3['t_start'], p3['t_stop'], p3['t_center']
         
+        # Create a new psth using the filtered spike and trial times
         psth = PSTH(adjusted_spike_times=spike_times,             
             F_SAMP=self.f_samp, binwidth=binwidth,
             t_starts=t_starts, t_stops=t_stops, 
