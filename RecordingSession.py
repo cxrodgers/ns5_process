@@ -808,12 +808,13 @@ class RecordingSession:
     
     def get_spike_picker(self):
         sts = self.get_spiketrains_raw()
-        sp = SpikeTrainContainers.SpikePicker(sts)
+        fs = self.get_sampling_rate()
+        sp = SpikeTrainContainers.SpikePicker(sts, f_samp=fs)
         t_starts, t_stops = self.calculate_trial_boundaries()
         
         # get behavioral trial numbers
         t_nums = []
-        fs = self.get_sampling_rate()
+        
         for n, seg in enumerate(self.get_spike_block()._segments):
             # check that segments are ordered correctly
             assert(int(np.rint(seg._analogsignals[0].t_start * fs)) == \

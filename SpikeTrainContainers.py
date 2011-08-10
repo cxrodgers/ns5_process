@@ -238,13 +238,15 @@ class PSTH(object):
     
     Allow recalculation when nbins or range changes.
     """
-    def __init__(self, adjusted_spike_times=[], n_trials=0, 
+    def __init__(self, adjusted_spike_times=[], n_trials=None, 
         F_SAMP=30000., nbins=100, range=None, t_starts=None, t_stops=None, 
         t_centers=None):
         """Initialize a new PSTH.
         
         You must have already chosen your trials to include, and triggered
         the spike time and assigned them to some trial.
+        
+        All parameters should be given in samples.
         
         adjust_spike_times : array of triggered spike times
         n_trials : number of trials that went into this PSTH, used for
@@ -261,20 +263,29 @@ class PSTH(object):
         self.F_SAMP = F_SAMP
         self.nbins = nbins
         self.n_trials = n_trials
-        self.adjusted_spike_times = adjusted_spike_times
+        self.adjusted_spike_times = np.asarray(adjusted_spike_times, 
+            dtype=np.int)
         self.range = range
         
-        # If applicable, store range of each trials
-        self.t_starts = t_starts
-        self.t_stops = t_stops
-        self.t_centers = t_centers
+        if t_starts is not None:
+            # Exact trial times were specified
+            self.t_starts = np.asarray(t_starts)
+            self.t_stops = np.asarray(t_stops)
+            self.t_centers = np.asarray(t_centers)
         
-        if (self.range is None) and (self.t_starts is not None):
-            # Autoset range using trial times
-            self.range = [
-                np.min(t_starts - t_centers),
-                np.max(t_stops - t_centers)]
-        
+            if self.range is None:
+                # Autoset range using trial times
+                self.range = [
+                    np.min(self.t_starts - self.t_centers),
+                    np.max(self.t_stops - self.t_centers)]
+            
+            if self.n_trials is None:
+                self.n_trials = len(self.t_starts)
+        else:
+            self.t_starts = None
+            self.t_stops = None
+            self.t_centers = None
+            
         # Bin and store _counts and _t
         self._calc_psth()
     
@@ -285,6 +296,7 @@ class PSTH(object):
         else:
             self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
                 bins=self.nbins, range=self.range)
+            self._bin_edges = bin_edges
             self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
         
         if self.t_starts is not None:
@@ -292,11 +304,10 @@ class PSTH(object):
             self._trials = np.zeros_like(self._counts)
             for t_start, t_center, t_stop in zip(self.t_starts, 
                 self.t_centers, self.t_stops):
-                start_bin = self.closest_bin((t_start - t_center) / self.F_SAMP) - 1
-                stop_bin = self.closest_bin((t_stop - t_center) / self.F_SAMP) + 1
-                if start_bin < 0: start_bin = 0
-                if stop_bin > len(self._trials): stop_bin = len(self._trials)
-                self._trials[start_bin:stop_bin] += 1
+                hist, be = np.histogram(np.arange(
+                    t_start - t_center, t_stop - t_center), bins=self._bin_edges)
+                self._trials += hist
+
     
     
     def hist_values(self, units='spikes', style='rigid'):
@@ -305,7 +316,7 @@ class PSTH(object):
         if style == 'rigid':
             trial_count = float(self.n_trials)
         elif style == 'elastic':
-            trial_count = self._trials.astype(np.float)
+            trial_count = self._trials.astype(np.float) / np.diff(self._bin_edges)
         else:
             raise(ValueError("style must be rigid or elastic"))
         
@@ -401,7 +412,7 @@ class PSTH(object):
 
 import Picker
 class SpikePicker:
-    def __init__(self, spiketrains):
+    def __init__(self, spiketrains, f_samp):
         N_RECORDS = sum([len(st.spike_times) for st in spiketrains.values()])
         x = np.recarray(shape=(N_RECORDS,),
             dtype=[('unit', np.int32), ('trial', np.int32), 
@@ -420,6 +431,7 @@ class SpikePicker:
         
         self.units = np.unique(self._p._data['unit'])
         self.tetrodes = np.unique(self._p._data['tetrode'])
+        self.f_samp = f_samp
     
     def __len__(self):
         return len(self._p._data)
@@ -456,7 +468,7 @@ class SpikePicker:
     def get_psth(self, adjusted=True, **kwargs):
         spike_times = self.pick_spikes(adjusted, **kwargs)
         psth = PSTH(adjusted_spike_times=spike_times,             
-            F_SAMP=30000., nbins=100,
+            F_SAMP=self.f_samp, nbins=100,
             t_starts=self.t_starts, t_stops=self.t_stops, 
             t_centers=self.t_centers)
         return psth
