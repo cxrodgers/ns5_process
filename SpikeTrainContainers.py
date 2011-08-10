@@ -231,8 +231,6 @@ class PSTH(object):
     Allow initialization from a list of trials, each with spikes. Then the user
     can still access the original per-trial information if needed.
     
-    Change default behavior from norm_to_spont=True to norm_to_spont=False
-    
     Keep track of spike counts and times as integers whenever possible to
     avoid floating point error.
     
@@ -297,23 +295,24 @@ class PSTH(object):
         if len(self.adjusted_spike_times) == 0:
             self._t = np.array([])
             self._counts = np.array([])
-        else:
-            if self.binwidth is not None and self.range is not None:    
-                # Convert range to multiples of binwidth, and calculate nbins
-                self.range[0] = \
-                    int(np.rint(np.floor(self.range[0] / self.F_SAMP / self.binwidth) * \
-                    self.F_SAMP * self.binwidth))
-                self.range[1] = \
-                    int(np.rint(np.ceil(self.range[1] / self.F_SAMP / self.binwidth) * \
-                    self.F_SAMP * self.binwidth))
-                self.nbins = int(np.rint((self.range[1] - self.range[0]) / \
-                    (self.binwidth * self.F_SAMP)))
-
-            self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
-                bins=self.nbins, range=self.range)
-            self._bin_edges = bin_edges
-            self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
+            return
         
+        if self.binwidth is not None and self.range is not None:    
+            # Convert range to multiples of binwidth, and calculate nbins
+            self.range[0] = \
+                int(np.rint(np.floor(self.range[0] / self.F_SAMP / self.binwidth) * \
+                self.F_SAMP * self.binwidth))
+            self.range[1] = \
+                int(np.rint(np.ceil(self.range[1] / self.F_SAMP / self.binwidth) * \
+                self.F_SAMP * self.binwidth))
+            self.nbins = int(np.rint((self.range[1] - self.range[0]) / \
+                (self.binwidth * self.F_SAMP)))
+
+        self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
+            bins=self.nbins, range=self.range)
+        self._bin_edges = bin_edges
+        self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
+    
         if self.t_starts is not None:
             # Count how many trials are included in each bin
             self._trials = np.zeros_like(self._counts)
@@ -322,8 +321,6 @@ class PSTH(object):
                 hist, be = np.histogram(np.arange(
                     t_start - t_center, t_stop - t_center), bins=self._bin_edges)
                 self._trials += hist
-
-    
     
     def hist_values(self, units='spikes', style='rigid'):
         """Returns the histogram values as (t, counts)"""
@@ -370,7 +367,7 @@ class PSTH(object):
         p.n_trials = self.n_trials + psth2.n_trials
         return p
     
-    def time_slice(self, epoch, norm_to_spont=True, units='spikes'):
+    def time_slice(self, epoch, norm_to_spont=False, units='spikes'):
         """Return total count in epoch specified by inclusive tuple of bins.
         
         Note that because it is inclusive (unlike python indexing!), you

@@ -328,10 +328,7 @@ def plot_all_spike_psths_by_stim(rs, savefig=None):
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
             ax = f.add_subplot(3, 4, sn)
-            psth = sp.get_psth(unit=[unit], trial=sn2trials[sn])
-            #spike_times = sp.pick_spikes(unit=[unit], trial=sn2trials[sn])
-            #if len(spike_times) > 0:
-            #    plt.hist(spike_times, bins=50)
+            psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], binwidth=.005)
             psth.plot(ax, style='elastic')
             plt.title(name)
             plt.suptitle('%s - unit %d' % (rs.session_name, unit))
@@ -376,10 +373,7 @@ def plot_MUA_by_stim(rs, savefig=None):
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
             ax = f.add_subplot(3, 4, sn)
-            psth = sp.get_psth(tetrode=[tetnum], trial=sn2trials[sn])
-            #spike_times = sp.pick_spikes(tetrode=[tetnum], trial=sn2trials[sn])
-            #if len(spike_times) > 0:
-            #    plt.hist(spike_times, bins=50)
+            psth = sp.get_psth(tetrode=[tetnum], trial=sn2trials[sn], binwidth=.005)
             psth.plot(ax, style='elastic')
             plt.title(name)
             plt.suptitle('%s - tetrode %d' % (rs.session_name, tetnum))
