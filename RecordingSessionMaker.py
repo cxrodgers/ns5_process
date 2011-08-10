@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import DataSession
 import collections
 import re
+import SpikeTrainContainers
 import bcontrol
 
 # Functions to parse the way I name my ns5 files
@@ -302,6 +303,97 @@ def convert_trial_numbers_to_segments(rs, trial_numbers, block='spike'):
     
     return seglist
     
+
+def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
+    """Plot spike rate over session of MUA and SUA in spike picker.
+    
+    Bug: since this plots multiple figures, you can't specify a fixed
+    filename in savefig or it will be overwritten. Leave as None or True.
+    """
+    sp = rs.get_spike_picker()
+    
+    # subplot info
+    tetnums = sorted(sp.tetrodes)
+    n_subplots = len(tetnums)
+    spx = int(np.ceil(np.sqrt(n_subplots)))
+    spy = int(np.ceil(n_subplots / spx))
+    
+    # get block boundaries if possible
+    session = rs.get_OE_session()
+    te_list = []
+    for tn in np.arange(80, 1200, 80).astype(np.int):
+        q = session.query(OE.Segment).filter(OE.Segment.info == str(tn))
+        try:
+            te = q.first()._events[0].time
+        except:
+            te = None
+        if te is not None:
+            te_list.append(te)
+    
+    # plot each MUA
+    f = plt.figure(figsize=(12,12))
+    for n, tetnum in enumerate(tetnums):
+        ax = f.add_subplot(spx, spy, n+1)
+        spike_times = sp.pick_spikes(tetrode=[tetnum], adjusted=False)
+        psth = SpikeTrainContainers.PSTH(adjusted_spike_times=spike_times, 
+            binwidth=2., n_trials=1, F_SAMP=30000., 
+            range=[spike_times.min(), spike_times.max()])
+        psth.plot(ax, units='Hz')
+        plt.title('all spikes from tet %d' % tetnum)
+        for te in te_list:
+            plt.plot([te], [0], '*', ms=18)
+    
+    # save
+    if savefig is None:
+        plt.show()
+    elif savefig is True:
+        filename = os.path.join(rs.full_path, rs.session_name + 
+            '_MUA_FR_over_session.png')
+        f.savefig(filename)
+        plt.close()        
+    else:
+        f.savefig(savefig)
+        plt.close()    
+    
+    # get units to plot
+    if skipNoScore:
+        session = rs.get_OE_session()
+        nl = session.query(OE.Neuron).filter(OE.Neuron.sortingScore != None).all()
+        good_SU_list = [n.id for n in nl]
+    else:
+        # Plot all
+        good_SU_list = sp.units    
+    
+    # subplot info
+    n_subplots = len(good_SU_list)
+    spx = int(np.ceil(np.sqrt(n_subplots)))
+    spy = int(np.ceil(n_subplots / spx))
+    
+    # plot each SU
+    f = plt.figure(figsize=(16, 12))
+    for n, unit in enumerate(good_SU_list):
+        ax = f.add_subplot(spx, spy, n+1)
+        spike_times = sp.pick_spikes(unit=[unit], adjusted=False)
+        psth = SpikeTrainContainers.PSTH(adjusted_spike_times=spike_times, 
+            binwidth=2., n_trials=1, F_SAMP=30000., 
+            range=[spike_times.min(), spike_times.max()])
+        psth.plot(ax, units='Hz')
+        plt.title('all spikes from unit %d' % unit)
+        for te in te_list:
+            plt.plot([te], [0], '*', ms=18)
+    
+    # save
+    if savefig is None:
+        plt.show()
+    elif savefig is True:
+        filename = os.path.join(rs.full_path, rs.session_name + 
+            '_SUA_FR_over_session.png')
+        f.savefig(filename)
+        plt.close()        
+    else:
+        f.savefig(savefig)
+        plt.close()    
+
 
 def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True):
     """Dump PSTHs of all SUs to disk, arranged by stimulus.
