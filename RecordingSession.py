@@ -819,7 +819,15 @@ class RecordingSession:
             # check that segments are ordered correctly
             assert(int(np.rint(seg._analogsignals[0].t_start * fs)) == \
                 t_starts[n])
-            t_nums.append(int(seg.info))
+            if seg.info is not None:
+                t_nums.append(int(seg.info))
+                warnt = False
+            else:
+                t_nums.append(n)
+                warnt = True
+        if warnt:
+            print "warning: auto assigned trial numbers"
+        
         
         t_centers = self.read_timestamps()
         
