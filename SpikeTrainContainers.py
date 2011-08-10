@@ -429,7 +429,7 @@ class SpikePicker:
         x = np.recarray(shape=(N_RECORDS,),
             dtype=[('unit', np.int32), ('trial', np.int32), 
                 ('tetrode', np.int32), ('spike_time', np.int),
-                ('adj_spike_time', np.int)])
+                ('adj_spike_time', np.int), ('trial_time', np.int)])
         
         x['spike_time'] = np.concatenate([
             st.spike_times for st in spiketrains.values()])
@@ -441,27 +441,39 @@ class SpikePicker:
         
         self._p = Picker.Picker(data=x)
         
-        self.units = np.unique(self._p._data['unit'])
-        self.tetrodes = np.unique(self._p._data['tetrode'])
+        self.units = np.unique(self._p['unit'])
+        self.tetrodes = np.unique(self._p['tetrode'])
         self.f_samp = f_samp
     
     def __len__(self):
-        return len(self._p._data)
+        return self._p.__len__()
+    
+    def __getitem__(self, *args, **kwargs):
+        return self._p.__getitem__(*args, **kwargs)
     
     def assign_trial_numbers(self, t_nums, t_starts, t_stops, t_centers):
-        self.t_starts = t_starts
-        self.t_stops = t_stops
-        self.t_centers = t_centers
-        self.t_nums = t_nums
+        # Create and store separate Picker for trial times
+        N_RECORDS = len(t_nums)
+        x = np.recarray(shape=(N_RECORDS,),
+            dtype=[('t_num', np.int32), ('t_start', np.int), ('t_stop', np.int),
+            ('t_center', np.int)])
+        x['t_start'] = t_starts        
+        x['t_stop'] = t_stops
+        x['t_center'] = t_centers
+        x['t_num'] = t_nums
+        self.trialPicker = Picker.Picker(data=x)
         
+        # Initialize spike picker trial label to -1
         self._p._data['trial'] = -1
         
-        for t_num, t_start, t_stop, t_center in zip(t_nums, t_starts, t_stops, t_centers):
+        # Label spikes in each trial
+        for t_num, t_start, t_stop, t_center in self.trialPicker._data:
             msk = (
                 (self._p._data['spike_time'] >= t_start) &
                 (self._p._data['spike_time'] <  t_stop))
             assert np.all(self._p._data['trial'][msk] == -1)
             self._p._data['trial'][msk] = t_num
+            self._p._data['trial_time'][msk] = t_center
             self._p._data['adj_spike_time'][msk] = \
                 self._p._data['spike_time'][msk] - t_center
         
@@ -473,15 +485,30 @@ class SpikePicker:
         # Would be nice to return a PSTH object instead of raw times
 
         if adjusted:
-            return self._p.filter(**kwargs)._data['adj_spike_time']
+            return self._p.filter(**kwargs)['adj_spike_time']
         else:
-            return self._p.filter(**kwargs)._data['spike_time']
+            return self._p.filter(**kwargs)['spike_time']
     
     def get_psth(self, adjusted=True, binwidth=.005, **kwargs):
+        # Apply user's filters to my Picker
+        p2 = self._p.filter(**kwargs)
+        
+        # Get the remaining spike times
         spike_times = self.pick_spikes(adjusted, **kwargs)
+        
+        # Figure out how many trials were requested
+        if 'trial' not in kwargs.keys():
+            # No trial filtering
+            t_num = self.trialPicker['t_num']            
+        else:
+            t_num = kwargs['trial']
+        
+        p3 = self.trialPicker.filter(t_num=t_num)
+        t_starts, t_stops, t_centers = p3['t_start'], p3['t_stop'], p3['t_center']
+        
         psth = PSTH(adjusted_spike_times=spike_times,             
             F_SAMP=self.f_samp, binwidth=binwidth,
-            t_starts=self.t_starts, t_stops=self.t_stops, 
-            t_centers=self.t_centers)
+            t_starts=t_starts, t_stops=t_stops, 
+            t_centers=t_centers)
         return psth
         

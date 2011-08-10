@@ -1,5 +1,10 @@
 import numpy as np
 
+"""TODO:
+add __getitem__ to call self._data.__getitem__
+"""
+
+
 class Picker:
     def __init__(self, data, method=1, info="A Picker"):
         self._data = data
@@ -11,7 +16,13 @@ class Picker:
             self._calculate_pick_mask = self._calculate_pick_mask_meth2
         elif method is 3:
             self._calculate_pick_mask = self._calculate_pick_mask_meth3
-            
+    
+    def __getitem__(self, *args, **kwargs):
+        return self._data.__getitem__(*args, **kwargs)
+    
+    def __len__(self):
+        return self._data.__len__()
+    
     def _get_cols_from_args(self, args, kwargs):
         """Parse calling syntax.
         
