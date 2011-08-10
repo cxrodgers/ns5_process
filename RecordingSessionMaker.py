@@ -303,13 +303,8 @@ def convert_trial_numbers_to_segments(rs, trial_numbers, block='spike'):
     return seglist
     
 
-def plot_all_spike_psths_by_stim(rs, savefig=None):
-    """Dump PSTHs of all spikes from each tetrode to disk, by stimulus.
-    
-    Does not use clustering information even if it exists.
-    
-    Currently doesn't work for any use case other than hard limits around
-    each time stamp.
+def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True):
+    """Dump PSTHs of all SUs to disk, arranged by stimulus.
     
     This function handles arrangement into figure, but actual plotting
     is a method of PSTH.
@@ -323,7 +318,17 @@ def plot_all_spike_psths_by_stim(rs, savefig=None):
     # Load spike picker
     sp = rs.get_spike_picker()
     
-    for unit in sp.units:
+    # Choose units to plot
+    if skipNoScore:
+        session = rs.get_OE_session()
+        nl = session.query(OE.Neuron).filter(OE.Neuron.sortingScore != None).all()
+        good_SU_list = [n.id for n in nl]
+    else:
+        # Plot all
+        good_SU_list = sp.units
+    
+    for unit in good_SU_list:
+        assert unit in sp.units
         f = plt.figure(figsize=(16,12))
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
