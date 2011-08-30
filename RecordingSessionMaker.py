@@ -444,7 +444,8 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True):
             f.savefig(savefig)
             plt.close()
 
-def plot_MUA_by_stim(rs, savefig=None):
+def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None, 
+    binwidth=.010):
     """Dump PSTHs of all spikes from each tetrode to disk, by stimulus.
     
     Does not use clustering information even if it exists.
@@ -454,6 +455,14 @@ def plot_MUA_by_stim(rs, savefig=None):
     
     This function handles arrangement into figure, but actual plotting
     is a method of PSTH.
+    
+    savefig : if True, then a filename is auto-generated and the figure
+        is saved to the RecordingSession directory.
+        if False, then the figure is displayed.
+        otherwise, a filename is auto-generated and savefig is appended
+        to this filename and then saved to the directory.
+    t_start, t_stop : if both are not None, then the t limits of each
+        axis will be changed to this.
     """
     # Load trial info
     bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
@@ -472,8 +481,11 @@ def plot_MUA_by_stim(rs, savefig=None):
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
             ax = f.add_subplot(3, 4, sn)
-            psth = sp.get_psth(tetrode=[tetnum], trial=sn2trials[sn], binwidth=.010)
+            psth = sp.get_psth(tetrode=[tetnum], trial=sn2trials[sn], 
+                binwidth=binwidth)
             psth.plot(ax, style='elastic')
+            if t_start is not None and t_stop is not None:
+                ax.set_xlim(t_start, t_stop)
             plt.title(name)
             plt.suptitle('%s - tetrode %d' % (rs.session_name, tetnum))
     
@@ -486,8 +498,11 @@ def plot_MUA_by_stim(rs, savefig=None):
             f.savefig(filename)
             plt.close()        
         else:
-            f.savefig(savefig)
-            plt.close()
+            filename = os.path.join(rs.full_path, rs.session_name + 
+                ('_psth_by_stim_tet_%d_' % tetnum) + 
+                savefig + '.png')       
+            f.savefig(filename)
+            plt.close(f)
 
 # Plot average audio signal
 def plot_avg_audio(rs, event_name='Timestamp', meth='all', savefig=None,
