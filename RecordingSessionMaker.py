@@ -739,8 +739,30 @@ def add_bcontrol_data_to_session(bcontrol_folder, session, verbose=False,
     # Add to session
     session.add_file(bdata_filename)
 
-def add_behavioral_trial_numbers(rs):
-    """Syncs trial numbers and adds behavioral to Segment info field."""
+def add_behavioral_trial_numbers(rs, bskip=1):
+    """Syncs trial numbers and adds behavioral to Segment info field.
+    
+    There is a hacky parameter that skips the first `bskip` behavioral
+    trials. There are two common use cases:
+    
+    * bskip = 1. Tested a lot. Basically, the first trial is often not
+        recorded in the neural data. So don't include it in the syncer.
+        If it was recorded, there's a try/except loop that is specific
+        to the first neural trial, and assumes it's behavioral trial 0.
+    
+    * bskip > 1. This is for the case where you've removed a lot of
+        trials from TIMESTAMPS manually. It won't be able to sync. So
+        choose bskip to be about 10 trials or so less than the number you
+        removed. Then it should be able to sync and find all of the neural
+        trials that belong to the remaining behavioral trials. If it can't
+        find a neural trial, then an error occurs (actually it's labelled
+        -99 and a warning is printed). That's why you want to choose bskip
+        to be 10 less than the actual number that were removed.
+    
+    If you removed TIMESTAMPS from the end, there should be no problem.
+    The errors are worse when the behavioral trial can't be found because
+    you skipped it
+    """
     # fake a data structure that the syncer needs
     Kls = collections.namedtuple('kls', 'audio_onsets')
     
@@ -753,7 +775,7 @@ def add_behavioral_trial_numbers(rs):
     # for this in the loop below when we add one to the index into
     # TRIALS_INFO.
     # Neural timestamps are in samples.
-    behavioral_timestamps = Kls(audio_onsets=bcld.data['onsets'][1:])
+    behavioral_timestamps = Kls(audio_onsets=bcld.data['onsets'][bskip:])
     neural_timestamps = Kls(audio_onsets=rs.read_timestamps())
     
     # Sync. Will write CORR files to disk.
@@ -775,10 +797,12 @@ def add_behavioral_trial_numbers(rs):
         # Here we correct for the dropped first trial.
         try:
             b_trial = bcld.data['TRIALS_INFO']['TRIAL_NUMBER'][\
-                bs.map_n_to_b_masked[n_trial] + 1]
+                bs.map_n_to_b_masked[n_trial] + bskip]
         except IndexError:
             # masked trial
             if n_trial == 0:
+                if bskip != 1:
+                    print "warning: can't find behavior trial for n_trial==0, this shouldn't happen with this bskip"
                 #print "WARNING: Assuming this is the dropped first trial"
                 b_trial = bcld.data['TRIALS_INFO']['TRIAL_NUMBER'][0]
             else:
