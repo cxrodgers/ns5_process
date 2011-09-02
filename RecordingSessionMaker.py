@@ -397,7 +397,8 @@ def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
         plt.close()    
 
 
-def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True):
+def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True, 
+    binwidth=.010):
     """Dump PSTHs of all SUs to disk, arranged by stimulus.
     
     This function handles arrangement into figure, but actual plotting
@@ -427,7 +428,8 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True):
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
             ax = f.add_subplot(3, 4, sn)
-            psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], binwidth=.010)
+            psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], 
+                binwidth=binwidth)
             psth.plot(ax, style='elastic')
             plt.title(name)
             plt.suptitle('%s - unit %d' % (rs.session_name, unit))
