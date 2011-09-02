@@ -397,8 +397,8 @@ def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
         plt.close()    
 
 
-def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True, 
-    binwidth=.010):
+def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
+    skipNoScore=True, binwidth=.010):
     """Dump PSTHs of all SUs to disk, arranged by stimulus.
     
     This function handles arrangement into figure, but actual plotting
@@ -431,6 +431,8 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True,
             psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], 
                 binwidth=binwidth)
             psth.plot(ax, style='elastic')
+            if t_start is not None and t_stop is not None:
+                ax.set_xlim(t_start, t_stop)            
             plt.title(name)
             plt.suptitle('%s - unit %d' % (rs.session_name, unit))
     
@@ -441,10 +443,13 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, skipNoScore=True,
             filename = os.path.join(rs.full_path, rs.session_name + 
                 '_psth_by_stim_unit_%d.png' % unit)
             f.savefig(filename)
-            plt.close()        
+            plt.close(f)        
         else:
-            f.savefig(savefig)
-            plt.close()
+            filename = os.path.join(rs.full_path, rs.session_name + 
+                ('_psth_by_stim_unit_%d_' % unit) + 
+                savefig + '.png')       
+            f.savefig(filename)
+            plt.close(f)            
 
 def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None, 
     binwidth=.010):
