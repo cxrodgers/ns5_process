@@ -209,7 +209,7 @@ def plot_avg_lfp(rs, event_name='Timestamp', meth='avg', savefig=None,
     ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
     n_subplots = float(len(rs.read_neural_channel_ids()))
     spx = int(np.ceil(np.sqrt(n_subplots)))
-    spy = int(np.ceil(n_subplots / spx))
+    spy = int(np.ceil(n_subplots / float(spx)))
     
     # Call RecordingSession.avg_over_list_of_events for each channel
     for n, chn in enumerate(rs.read_neural_channel_ids()):
@@ -262,7 +262,7 @@ def plot_all_spike_psths(rs, savefig=None):
     # subplot info
     n_subplots = len(psths)
     spx = int(np.ceil(np.sqrt(n_subplots)))
-    spy = int(np.ceil(n_subplots / spx))
+    spy = int(np.ceil(n_subplots / float(spx)))
     
     # get tetrode numbers, which are keys to psths
     tetnums = sorted(psths.keys())
@@ -316,7 +316,7 @@ def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
     tetnums = sorted(sp.tetrodes)
     n_subplots = len(tetnums)
     spx = int(np.ceil(np.sqrt(n_subplots)))
-    spy = int(np.ceil(n_subplots / spx))
+    spy = int(np.ceil(n_subplots / float(spx)))
     
     # get block boundaries if possible
     session = rs.get_OE_session()
@@ -369,7 +369,7 @@ def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
     if n_subplots == 0:
         return
     spx = int(np.ceil(np.sqrt(n_subplots)))
-    spy = int(np.ceil(n_subplots / spx))
+    spy = int(np.ceil(n_subplots / float(spx)))
     
     # plot each SU
     f = plt.figure(figsize=(16, 12))
@@ -423,7 +423,9 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         good_SU_list = sp.units
     
     for unit in good_SU_list:
-        assert unit in sp.units
+        if unit not in sp.units:
+            raise ValueError(
+                "cannot find unit %d in spike times, try re-dumping")
         f = plt.figure(figsize=(16,12))
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
@@ -558,7 +560,7 @@ def plot_psd_by_channel(rs, event_name='Timestamp', meth='avg_db',
     ymin, ymax, tmin, tmax = np.inf, -np.inf, np.inf, -np.inf
     n_subplots = float(len(rs.read_neural_channel_ids()))
     spx = int(np.ceil(np.sqrt(n_subplots)))
-    spy = int(np.ceil(n_subplots / spx))
+    spy = int(np.ceil(n_subplots / float(spx)))
 
     # plot each channel
     for n, chn in enumerate(rs.read_neural_channel_ids()):
