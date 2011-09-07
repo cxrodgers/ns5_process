@@ -251,7 +251,8 @@ class PSTH(object):
             normalizing response to `per trial`
         F_SAMP : sampling rate, used for conversion to Hz
         nbins : Temporal resolution of the PSTH
-        range : Extent of the PSTH. If you wish to compare PSTH objects,
+        range : Must be specified in bins, not seconds.
+            Extent of the PSTH. If you wish to compare PSTH objects,
             they should have the same extent, because this also affects
             the temporal resolution. If you don't specify it, then the minimum
             and maximum spike times will be used, but for low firing rates
@@ -299,11 +300,29 @@ class PSTH(object):
         self._calc_psth()
     
     def _calc_psth(self):
+        """Recalculates underlying data self._t, self._counts, self._trials.
+        
+        Tries to intelligently satisfy your binwidth and range requests.
+        * If nothing is specified, uses np.histogram defaults
+        * If self.binwidth AND self.range are specified, then the range is
+          recalculated to be a multiple of the bin width, and any value
+          for self.nbins is overwritten.
+        * Otherwise, the current values for self.nbins and self.range are
+          passed to np.histogram.
+        
+        Also tries to calculate the number of trials.
+        * If self.t_starts is not None, this means that you have used
+          variable trial sizes. Therefore self._trials is set intelligently
+          based on t_starts etc. 
+        * Otherwise, hopefully you set self.n_trials.
+        """
+        # Simple return if no spikes
         if len(self.adjusted_spike_times) == 0:
             self._t = np.array([])
             self._counts = np.array([])
             return
         
+        # If bin width is specified, choose nice range and nbins.
         if self.binwidth is not None and self.range is not None:    
             # Convert range to multiples of binwidth, and calculate nbins
             self.range[0] = \
@@ -510,6 +529,8 @@ class SpikePicker:
         Picks spikes from the data using kwargs and `adjusted`.
         Tries to get t_starts, t_stops, etc from self.trialPicker.
         Then creates a PSTH using `binwidth` and `range` and the trial times.
+        
+        `range` must be specified in number of bins, not seconds.
         
         TODO: if trialPicker doesn't exist, then don't bother trying to
         pass this to PSTH. I think this will work if you just pass None for
