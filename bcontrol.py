@@ -6,6 +6,11 @@ import pickle
 
 class LBPB_constants(object):
     def __init__(self, sn2name=None):
+        if sn2name is None:
+            sn2name = \
+                {1: u'lo_pc_go', 2: u'hi_pc_no', 3: u'le_lc_go', 4: u'ri_lc_no',
+                 5: u'le_hi_pc', 6: u'ri_hi_pc', 7: u'le_lo_pc', 8: u'ri_lo_pc',
+                 9: u'le_hi_lc', 10: u'ri_hi_lc', 11: u'le_lo_lc', 12: u'ri_lo_lc'}            
         self.sn2name = sn2name
     
     def ordered_by_sound(self):
