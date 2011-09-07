@@ -9,13 +9,13 @@ class Picker:
     def __init__(self, data, method=1, info="A Picker"):
         self._data = data
         self.info = info
-        self.method = method
-        if method is 1:
-            self._calculate_pick_mask = self._calculate_pick_mask_meth1
-        elif method is 2:
-            self._calculate_pick_mask = self._calculate_pick_mask_meth2
-        elif method is 3:
-            self._calculate_pick_mask = self._calculate_pick_mask_meth3
+        #~ self.method = method
+        #~ if method is 1:
+            #~ self._calculate_pick_mask = self._calculate_pick_mask_meth1
+        #~ elif method is 2:
+            #~ self._calculate_pick_mask = self._calculate_pick_mask_meth2
+        #~ elif method is 3:
+            #~ self._calculate_pick_mask = self._calculate_pick_mask_meth3
     
     def __getitem__(self, *args, **kwargs):
         return self._data.__getitem__(*args, **kwargs)
@@ -34,6 +34,16 @@ class Picker:
         for colname in args:
             kwargs[colname] = np.unique(self._data[colname])
         return kwargs
+    
+    def one(self, colname=None, *args, **kwargs):
+        """Returns the one and only one result"""
+        d = self._data[colname][self._calculate_pick_mask(**kwargs)]
+        if len(d) != 1:
+            raise ValueError("Requested only one, but %d exist" % len(d))
+        return d[0]
+    
+    def __repr__(self):
+        return self._data.__repr__()    
     
     def list_by(self, *args, **kwargs):
         """Returns a list of Picker split by colname.
@@ -104,13 +114,14 @@ class Picker:
         return Picker(self._data[self._calculate_pick_mask(**kwargs)])
     
     def pick_data(self, colname, **kwargs):
+        """TODO: default to last column"""
         return self._data[colname][self._calculate_pick_mask(**kwargs)]
     
     def pick_mask(self, **kwargs):
         """TODO: memoize (optionally)"""
         return self._calculate_pick_mask(**kwargs)
     
-    def _calculate_pick_mask_meth1(self, **kwargs):
+    def _calculate_pick_mask(self, **kwargs):
         # Begin with all true
         mask = np.ones(self._data.shape, dtype=bool)
         
