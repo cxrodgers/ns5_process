@@ -260,6 +260,12 @@ class PSTH(object):
         If binwidth is specified (in seconds), then nbins is ignored and
         calculated from binwidth instead. In this case self.range must be set,
         which only happens automatically if t_starts etc are specified.
+        
+        I need to have some way of knowing the extent of each trial, because
+        that's how I know where spikes could possibly have occurred. Right
+        now this is either range and n_trials (for fixed width), or
+        t_starts, t_stops, t_centers for variable width. In the latter case,
+        the range can be automatically or manually set.
         """
         # Store parameters and data
         self.F_SAMP = F_SAMP
@@ -267,7 +273,7 @@ class PSTH(object):
         self.n_trials = n_trials
         self.adjusted_spike_times = np.asarray(adjusted_spike_times, 
             dtype=np.int)
-        self.range = range
+        self.range = list(range)
         self.binwidth = binwidth
         
         if t_starts is not None:
@@ -322,6 +328,11 @@ class PSTH(object):
                 hist, be = np.histogram(np.arange(
                     t_start - t_center, t_stop - t_center), bins=self._bin_edges)
                 self._trials += hist
+    
+    def change_bin_width(self, new_bin_width):
+        """Changes bin width, recalculates internal data."""
+        self.binwidth = new_bin_width
+        self._calc_psth()
     
     def hist_values(self, units='spikes', style='rigid'):
         """Returns the histogram values as (t, counts)"""
@@ -447,6 +458,7 @@ class SpikePicker:
         self.units = np.unique(self._p['unit'])
         self.tetrodes = np.unique(self._p['tetrode'])
         self.f_samp = f_samp
+        self.trialPicker = None
     
     def __len__(self):
         return self._p.__len__()
@@ -492,7 +504,17 @@ class SpikePicker:
         else:
             return self._p.filter(**kwargs)['spike_time']
     
-    def get_psth(self, adjusted=True, binwidth=.005, **kwargs):
+    def get_psth(self, adjusted=True, binwidth=.005, range=None, **kwargs):
+        """Returns a PSTH object from this data.
+        
+        Picks spikes from the data using kwargs and `adjusted`.
+        Tries to get t_starts, t_stops, etc from self.trialPicker.
+        Then creates a PSTH using `binwidth` and `range` and the trial times.
+        
+        TODO: if trialPicker doesn't exist, then don't bother trying to
+        pass this to PSTH. I think this will work if you just pass None for
+        these.
+        """
         # Apply user's filters to my Picker
         p2 = self._p.filter(**kwargs)
         
@@ -508,14 +530,18 @@ class SpikePicker:
             t_num = kwargs['trial']
         
         # Now filter trial times by requested trial numbers
-        p3 = self.trialPicker.filter(t_num=t_num)
-        t_starts, t_stops, t_centers = \
-            p3['t_start'], p3['t_stop'], p3['t_center']
+        if self.trialPicker is not None:
+            p3 = self.trialPicker.filter(t_num=t_num)
+            t_starts, t_stops, t_centers = \
+                p3['t_start'], p3['t_stop'], p3['t_center']
+        else:
+            print "warning, no trial info, this is not tested"
+            t_starts, t_stops, t_centers = None, None, None
         
         # Create a new psth using the filtered spike and trial times
         psth = PSTH(adjusted_spike_times=spike_times,             
             F_SAMP=self.f_samp, binwidth=binwidth,
             t_starts=t_starts, t_stops=t_stops, 
-            t_centers=t_centers)
+            t_centers=t_centers, range=range)
         return psth
         
