@@ -267,6 +267,10 @@ class PSTH(object):
         now this is either range and n_trials (for fixed width), or
         t_starts, t_stops, t_centers for variable width. In the latter case,
         the range can be automatically or manually set.
+        
+        
+        TODO: in order to plot a raster, need to know from which trial
+        each spike came.
         """
         # Store parameters and data
         self.F_SAMP = F_SAMP
@@ -353,8 +357,11 @@ class PSTH(object):
         self.binwidth = new_bin_width
         self._calc_psth()
     
-    def hist_values(self, units='spikes', style='rigid'):
+    def hist_values(self, units='spikes', style=None):
         """Returns the histogram values as (t, counts)"""
+        if style is None:
+            style = self.my_style()
+        
         # Is the number of trials per bin fixed or variable?
         if style == 'rigid':
             trial_count = float(self.n_trials)
@@ -400,34 +407,40 @@ class PSTH(object):
         p.n_trials = self.n_trials + psth2.n_trials
         return p
     
-    def time_slice(self, epoch, norm_to_spont=False, units='spikes'):
+    def my_style(self):
+        if self.t_starts is None:
+            return 'rigid'
+        else:
+            return 'elastic'
+    
+    def time_slice(self, epoch, units='spikes'):
         """Return total count in epoch specified by inclusive tuple of bins.
         
         Note that because it is inclusive (unlike python indexing!), you
         have a 'fencepost problem': an epoch of (102, 110) will include
         9 bins and 9 * self.bin_width() seconds of time.
         
-        If norm_to_spont, the number of spikes expected from the signal
-        where self._t < 0 is subtracted from the returned value.
-        """
-        # Count the number of bins and the time included in them
-        n_bins = epoch[1] - epoch[0] + 1
-        t_bins = n_bins * self.bin_width()
+        The computation is done in self.hist_values(units=units). Then:
+        If units == 'spikes':
+            * Result is summed across requested bins
+        If units == 'Hz':
+            * Result is averaged across requested bins
         
-        # Count the number of spikes
-        n = self._counts[epoch[0]:epoch[1]+1].sum()
-                
-        if norm_to_spont:
-            # Subtract off the number of expected spikes, which is the
-            # spontaneous firing rate * amount of time * number of trials.
-            n = n - self.spont_rate(units='hz') * t_bins * self.n_trials
-
-        # Return in the requested units
-        val_in_spikes = n / float(self.n_trials)
-        if units is 'spikes':
-            return val_in_spikes
-        elif (units is 'hz') or (units is 'Hz'):
-            return val_in_spikes / t_bins
+        This is the same for both fixed- and variable-length PSTHs. In the
+        case of a variable-length PSTH and units='Hz', you could make a case
+        that bins with more trials should be weighted more highly in the
+        average. But this is not done here.
+        """
+        # Get the results over the requested bins
+        t, counts = self.hist_values(units=units)
+        slc = counts[epoch[0]:epoch[1]+1]
+        
+        # Combine over epoch
+        if units == 'spikes':
+            val = slc.sum()
+        elif units == 'Hz' or units == 'hz':
+            val = slc.mean()
+        return val
     
     def closest_bin(self, t):
         """Returns the index of the bin whose time is closest to `t`."""
@@ -439,9 +452,8 @@ class PSTH(object):
         This regime is defined as (0, self.closest_bin(0.)), ie, from the
         first sample to the sample closest to 0 inclusive.
         """
-        # We must use norm_to_spont=False here to avoid infinite loop!
         epoch = (0, self.closest_bin(0.))
-        return self.time_slice(epoch=epoch, norm_to_spont=False, units=units)
+        return self.time_slice(epoch=epoch, units=units)
     
     def bin_width(self):
         """Returns width of a single bin in seconds.
