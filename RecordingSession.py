@@ -39,6 +39,12 @@ TIMESTAMPS_FILENAME = 'TIMESTAMPS'
 TIME_LIMITS_FILENAME = 'TIME_LIMITS'
 FULL_RANGE_UV = 8192. # maximum input range of signal
 
+# Fs is read from ns5 file, but after the db exists, it will just assume
+# 30K rather than try to re-read from ns5 file (which may no longer exist).
+# a better solution is to read from the actual signals of interest.
+FIXED_SAMPLING_RATE = 30000. 
+
+
 RAW_BLOCK_NAME = 'Raw Data'
 SPIKE_BLOCK_NAME = 'Spike-filtered Data'
 
@@ -728,8 +734,9 @@ class RecordingSession:
         w.write_block(self.get_spike_block())        
     
     def get_sampling_rate(self):
-        """Reads and returns sampling rate from ns5 file"""
-        return self.get_ns5_loader().header.f_samp
+        """Reads and returns sampling rate from ns5 file. Always 30K"""
+        return FIXED_SAMPLING_RATE
+        #return self.get_ns5_loader().header.f_samp
     
     def get_spiketrains_raw(self):
         """Reads neural data from directory and returns as spiketrains"""
@@ -874,3 +881,25 @@ class RecordingSession:
             #~ else:
                 #~ nn_list.append(int(m.group(1)))
         #~ return nn_list
+    
+
+class RS_CR12B(RecordingSession):
+    def calculate_trial_boundaries(self):
+        t = self.read_timestamps()
+        return (t-7500, t+15000)
+
+    def get_spike_block(self):
+        """Returns Block with spike block name, or None"""
+        # Open database, get session
+        #self.open_db()
+        session = self.get_OE_session()
+        
+        # Check to see whether data has already been added
+        q = session.query(OE.Block).filter(OE.Block.name == 'CAR Tetrode Data')
+        if q.count() > 0:
+            return q.one()   
+        else:
+            return None
+    
+    def get_db_filename(self):
+        return glob.glob(os.path.join(self.full_path, '*.db'))[0]
