@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.mlab as mlab
 
 """TODO:
 add __getitem__ to call self._data.__getitem__
@@ -22,6 +23,39 @@ class Picker:
     
     def __len__(self):
         return self._data.__len__()
+    
+    def append(self, picker2, **kwargs):
+        """Resize my data and add in the data from picker 2
+        note: equality test fails on picker2 for some reason 
+        
+        Will also add a new column if you specify.
+        
+        Usage:
+        p1.append(p2, ratname=(0,1))
+        
+        Now p1 has all of the data from p1 and p2, and p1['ratname'] is 0
+        if it came from p1 and 1 if it came from p2.
+        
+        For now, the new values have to be integers, not strings.
+        """
+        old_length = len(self)
+        new_length = old_length + len(picker2)
+        new_data = np.resize(self._data, (new_length,))
+        new_data[old_length:] = picker2._data
+        
+        # optionally add a new column
+        if len(kwargs) > 0:
+            if len(kwargs) > 1:
+                print "warning: too many arguments"
+            fieldname = kwargs.keys()[0]
+            oldname = kwargs[fieldname][0]
+            newname = kwargs[fieldname][1]
+            newcolumn = np.empty(shape=(new_length,), dtype=np.int)
+            newcolumn[:old_length] = oldname
+            newcolumn[old_length:] = newname
+            new_data = mlab.rec_append_fields(new_data, fieldname, newcolumn)
+        
+        self._data = new_data
     
     def _get_cols_from_args(self, args, kwargs):
         """Parse calling syntax.
