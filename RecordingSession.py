@@ -884,6 +884,14 @@ class RecordingSession:
     
 
 class RS_CR12B(RecordingSession):
+    def __init__(self, *args, **kwargs):
+        # Session name is corrupted with these guys because they
+        # are in directories like 001, 002, etc.
+        # Also super() only works with new-style classes
+        #super(RS_CR12B, self).__init__(*args, **kwargs)
+        RecordingSession.__init__(self, *args, **kwargs)
+        self.session_name = self.full_path
+    
     def calculate_trial_boundaries(self):
         t = self.read_timestamps()
         return (t-7500, t+15000)
