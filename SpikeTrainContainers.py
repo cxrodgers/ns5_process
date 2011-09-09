@@ -278,7 +278,7 @@ class PSTH(object):
         self.n_trials = n_trials
         self.adjusted_spike_times = np.asarray(adjusted_spike_times, 
             dtype=np.int)
-        self.range = list(range)
+        self.range = range
         self.binwidth = binwidth
         
         if t_starts is not None:
@@ -329,6 +329,7 @@ class PSTH(object):
         # If bin width is specified, choose nice range and nbins.
         if self.binwidth is not None and self.range is not None:    
             # Convert range to multiples of binwidth, and calculate nbins
+            self.range = list(self.range)
             self.range[0] = \
                 int(np.rint(np.floor(self.range[0] / self.F_SAMP / self.binwidth) * \
                 self.F_SAMP * self.binwidth))
