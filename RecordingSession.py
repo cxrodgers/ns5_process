@@ -673,7 +673,19 @@ class RecordingSession:
         if meth == 'all':
             return (10*np.log10(np.array(Pxx_list)), freqs)
         elif meth == 'avg_db':
-            return (np.mean(10*np.log10(np.array(Pxx_list)), axis=0), freqs)
+            # Create list of spectra in db, discarding infs
+            Pxx_list_db = []
+            for Pxx in Pxx_list:
+                Pxx_db = 10 * np.log10(Pxx)
+                if not np.any(np.isinf(Pxx_db)): 
+                    Pxx_list_db.append(Pxx_db)
+            
+            # Warn
+            if len(Pxx_list_db) != len(Pxx_list):
+                print "warning: discarding spectra with infs"
+            
+            # Average and return
+            return (np.mean(np.array(Pxx_list_db), axis=0), freqs)
 
     def run_spikesorter(self, save_to_db=True, save_cluster_figs=False):
         """Sorts all groups in the database.
