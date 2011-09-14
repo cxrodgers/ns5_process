@@ -19,42 +19,55 @@ class Picker:
             #~ self._calculate_pick_mask = self._calculate_pick_mask_meth3
     
     def __getitem__(self, *args, **kwargs):
+        # this should return a Picker
         return self._data.__getitem__(*args, **kwargs)
     
     def __len__(self):
         return self._data.__len__()
     
-    def append(self, picker2, **kwargs):
-        """Resize my data and add in the data from picker 2
+    def append(self, picker_list, **kwargs):
+        """Resize my data and add in the data from Pickers in picker_list
         note: equality test fails on picker2 for some reason 
         
         Will also add a new column if you specify.
         
         Usage:
-        p1.append(p2, ratname=(0,1))
+        p1.append([p2, p3], ratname=(1,2,3))
         
-        Now p1 has all of the data from p1 and p2, and p1['ratname'] is 0
-        if it came from p1 and 1 if it came from p2.
-        
-        For now, the new values have to be integers, not strings.
+        Now p1 has all of the data from p1, p2, and p3.
+        p1['ratname'] is 1, 2, or 3, depending on the source.        
         """
+        # Calculate new size and resize
         old_length = len(self)
-        new_length = old_length + len(picker2)
+        new_length = old_length + np.sum(len(p) for p in picker_list)
         new_data = np.resize(self._data, (new_length,))
-        new_data[old_length:] = picker2._data
+        
+        # Store data from each new picker
+        row_idx = old_length
+        for picker in picker_list:
+            new_data[row_idx:row_idx+len(picker._data)] = picker._data
+            row_idx += len(picker._data)
         
         # optionally add a new column
         if len(kwargs) > 0:
-            if len(kwargs) > 1:
-                print "warning: too many arguments"
+            if len(kwargs) > 1: print "warning: too many arguments"
+            
+            # get the name of the new field and the labels for each Picker
             fieldname = kwargs.keys()[0]
-            oldname = kwargs[fieldname][0]
-            newname = kwargs[fieldname][1]
+            labels = kwargs[fieldname]
+            
+            # create the new column and store the labels for each Picker
             newcolumn = np.empty(shape=(new_length,), dtype=np.int)
-            newcolumn[:old_length] = oldname
-            newcolumn[old_length:] = newname
+            newcolumn[:old_length] = labels[0]
+            row_idx = old_length
+            for label, picker in zip(labels[1:], picker_list):
+                newcolumn[row_idx:row_idx+len(picker._data)] = label
+                row_idx += len(picker._data)
+            
+            # store the new column
             new_data = mlab.rec_append_fields(new_data, fieldname, newcolumn)
         
+        # overwrite my data with the new version
         self._data = new_data
     
     def _get_cols_from_args(self, args, kwargs):
@@ -116,9 +129,12 @@ class Picker:
         for combo in all_combos:
             # Create a filter based on each colname and its value in this combo
             kwargs2 = dict([(k, [v]) for k, v in zip(name_vals.keys(), combo)])
-            # Use `filter` here instead                
-            p.append(Picker(self._data[self._calculate_pick_mask(**kwargs2)],
-                info='sliced'))
+            
+            res = self.filter(**kwargs2)
+            if len(res) > 0: 
+                p.append(res)
+            #p.append(Picker(self._data[self._calculate_pick_mask(**kwargs2)],
+            #    info='sliced'))
         return p
     
     def __str__(self):
