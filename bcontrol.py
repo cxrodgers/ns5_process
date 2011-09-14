@@ -12,6 +12,8 @@ class LBPB_constants(object):
                  5: u'le_hi_pc', 6: u'ri_hi_pc', 7: u'le_lo_pc', 8: u'ri_lo_pc',
                  9: u'le_hi_lc', 10: u'ri_hi_lc', 11: u'le_lo_lc', 12: u'ri_lo_lc'}            
         self.sn2name = sn2name
+        self.name2sn = dict([(val, key) for key, val in sn2name.items()])
+            
     
     def ordered_by_sound(self):
         sns = (5, 9, 6, 10, 7, 11, 8, 12)
@@ -41,6 +43,88 @@ class LBPB_constants(object):
 
     def ri(self):
         return set(('ri_lo_lc', 'ri_hi_lc', 'ri_lo_pc', 'ri_hi_pc'))
+    
+    def comparisons(self, comp='sound'):
+        """Returns meaningful comparisons.
+        
+        Returns a tuple (names, idxs, groupnames). 
+        `names` and `idxs` each have the same form: it is
+        an N-tuple of 2-tuples. N is the number of pairwise comparisons.
+        Each entry of the 2-tuple is a tuple of stimuli to be pooled.
+        
+        `groupnames` is an N-tuple of 2-tuples of strings, the name of each
+        pool.
+        
+        Example: blockwise comparison
+        (((5,6,7,8), (9,10,11,12)))
+        
+        Example: soundwise comparison
+        (((5,), (9,)), ((6,), (10,)), ((7,), (11,)), ((8,), (12,)))
+        
+        Usage: 
+        names, idxs, groupnames = comparisons()
+        len(names) # the number of comparisons
+        len(names[n]) # length of nth comparison, always 2 since pairwise
+        len(names[n][m]) # size of mth pool in nth comparison        
+        groupnames[n][m] # name of the mth pool in nth comparison
+        """
+        x_labels = []
+        stim_groups = []
+        groupnames = []
+        idxs, names = self.ordered_by_sound()
+        if comp == 'sound':
+            for n_pairs in range(4):
+                n = n_pairs * 2
+                pool1 = (idxs[n],)
+                pool2 = (idxs[n+1],)
+                stim_groups.append((pool1, pool2))
+                
+                pool1 = (names[n],)
+                pool2 = (names[n+1],)
+                x_labels.append((pool1, pool2))
+                
+                groupnames.append((names[n], names[n+1]))
+
+        elif comp == 'block':
+            for n_pairs in range(1):
+                pool1 = tuple(idxs[::2])
+                pool2 = tuple(idxs[1::2])
+                stim_groups.append((pool1, pool2))
+                
+                pool1 = tuple(names[::2])
+                pool2 = tuple(names[1::2])
+                x_labels.append((pool1, pool2))
+                
+                groupnames.append(('PB', 'LB'))
+        
+        elif comp == 'leri':
+            for n_pairs in range(1):
+                pool1 = [idxs[0], idxs[1], idxs[4], idxs[5]]
+                pool2 = [idxs[2], idxs[3], idxs[6], idxs[7]]
+                stim_groups.append((pool1, pool2))
+                
+                pool1 = [names[0], names[1], names[4], names[5]]
+                pool2 = [names[2], names[3], names[6], names[7]]
+                x_labels.append((pool1, pool2))
+                
+                groupnames.append(('Le', 'Ri'))
+        
+        elif comp == 'lohi':
+            for n_pairs in range(1):
+                pool1 = idxs[4:8]
+                pool2 = idxs[0:4]
+                stim_groups.append((pool1, pool2))
+                
+                pool1 = names[4:8]
+                pool2 = names[0:4]
+                x_labels.append((pool1, pool2))
+                
+                groupnames.append(('Lo', 'Hi'))        
+        
+        else:
+            raise ValueError("unrecognized comparison: %s" % comp)
+        
+        return x_labels, stim_groups, groupnames
 
 
 class Bcontrol_Loader_By_Dir(object):
