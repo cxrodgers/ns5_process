@@ -687,10 +687,20 @@ class RecordingSession:
             # Average and return
             return (np.mean(np.array(Pxx_list_db), axis=0), freqs)
 
-    def run_spikesorter(self, save_to_db=True, save_cluster_figs=False):
+    def run_spikesorter(self, save_to_db=True, feature_kwargs=None,
+        cluster_kwargs=None):
         """Sorts all groups in the database.
         
+        Figures out which groups exist. Then calls another method to
+        sort each group.
+        
         If save_to_db is True, the sorted info will be written to the database.
+        
+        feature_kwargs : dict of arguments to be passed to
+            spikesorter.computeFeatures, or None for RecordingSession defaults. 
+            Default for unspecified keywords is the OE default, not the 
+            RecordingSession default.
+        cluster_kwargs : ditto for clustering
         """
         session = self.get_OE_session()
         
@@ -701,18 +711,32 @@ class RecordingSession:
         
         # spike sort
         for group in group_list:
-            spikesorter = self.run_spikesorter_on_group(group, save_to_db)
-            if save_cluster_figs:
-                pass
+            spikesorter = self.run_spikesorter_on_group(group, save_to_db,
+                feature_kwargs=feature_kwargs, cluster_kwargs=cluster_kwargs)
     
-    def run_spikesorter_on_group(self, group, save_to_db=True):
+    def run_spikesorter_on_group(self, group, save_to_db=True, 
+        feature_kwargs=None, cluster_kwargs=None):
         """Run spike sorting on one group and return spikesorter object.
         
         Useful for playing around with the returned data.
         
         group : integer, number of group to sort
         save_to_db : if True, writes sorted info to database
+        feature_kwargs : dict of keyword arguments to pass to OE
+            computeFeatures. If None, then use the defaults as defined
+            here, or in the feature method.
+            Default for unspecified keywords is the OE default, not the 
+            RecordingSession default.            
+        cluster_kwargs : ditto for clustering.
         """
+        # Default keyword arguments dict
+        # Override OE algorithms defaults here, if desired.
+        if feature_kwargs is None:
+            feature_kwargs = {'output_dim': 8, 'start_sample': 0, 
+                'num_samples': 0}
+        if cluster_kwargs is None:
+            cluster_kwargs = {'n': 8}
+        
         session = self.get_OE_session()
         
         # Get RecordingPoint on this group
@@ -731,8 +755,8 @@ class RecordingSession:
             consistent_across_channels=False, correct_times=True)     
         
         spikesorter.computeExtraction(OE.extraction.WaveformExtractor)        
-        spikesorter.computeFeatures(OE.feature.PCA, output_dim=8)
-        spikesorter.computeClustering(OE.clustering.KMean, n=4)
+        spikesorter.computeFeatures(OE.feature.PCA, **feature_kwargs)
+        spikesorter.computeClustering(OE.clustering.KMean, **cluster_kwargs)
         
         if save_to_db:
             spikesorter.save_to_db()        
@@ -825,7 +849,7 @@ class RecordingSession:
         return psths
     
     
-    def get_spike_picker(self):
+    def get_spike_picker(self, skip_trial_numbering=False):
         sts = self.get_spiketrains_raw()
         fs = self.get_sampling_rate()
         sp = SpikeTrainContainers.SpikePicker(sts, f_samp=fs)
@@ -851,7 +875,8 @@ class RecordingSession:
         t_centers = self.read_timestamps()
         
         # assign trial number to each spike
-        sp.assign_trial_numbers(t_nums, t_starts, t_stops, t_centers)
+        if not skip_trial_numbering:
+            sp.assign_trial_numbers(t_nums, t_starts, t_stops, t_centers)
         
         return sp
 
