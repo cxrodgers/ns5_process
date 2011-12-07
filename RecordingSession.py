@@ -911,8 +911,9 @@ class RecordingSession:
                 warnt = True
             
             # Get times
-            t_starts.append(int(np.rint(seg._analogsignals[0].t_start * fs)))
-            t_stops.append(t_starts[-1] + len(seg._analogsignals[0]))
+            sig = seg._analogsignals[0]
+            t_starts.append(int(np.rint(sig.t_start * fs)))
+            t_stops.append(t_starts[-1] + len(sig.signal))
     
         # Warn if couldn't parse the info field
         if warnt:
