@@ -217,13 +217,17 @@ class KK_loader(object):
         # Number of clustering features is integer on first line
         nbFeatures = int(f.readline().strip())
         
+        # I think the number of features is supposed to include the time
+        if nbFeatures == 0:
+            nbFeatures = 1
+        
         # Each subsequent line consists of nbFeatures values, followed by
         # the spike time in samples.
-        names = ['feat%d' % n for n in xrange(nbFeatures)]
+        names = ['feat%d' % n for n in xrange(nbFeatures - 1)]
         names.append('spike_time')
         
         # Load into recarray
-        data = mlab.csv2rec(f, names=names, skiprows=1)
+        data = mlab.csv2rec(f, names=names, skiprows=1, delimiter=' ')
         f.close()
         
         # Return the spike_time column
