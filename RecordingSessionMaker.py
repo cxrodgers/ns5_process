@@ -398,11 +398,14 @@ def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
 
 
 def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
-    skipNoScore=True, binwidth=.010):
+    skipNoScore=True, binwidth=.010, specify_unit_ids=None):
     """Dump PSTHs of all SUs to disk, arranged by stimulus.
     
     This function handles arrangement into figure, but actual plotting
     is a method of PSTH.
+    
+    skipNoScore : if True, queries OE db for each unit id and only handles
+        ones that have been assigned a score. will error if not found in db.
     """
     # Load trial info
     bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
@@ -626,7 +629,7 @@ def query_events(rs, event_name='Timestamp'):
 
 # Function to load audio data from raw file and detect onsets
 def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50,
-    pre_first=0, post_last=0, verbose=False):
+    pre_first=0, post_last=0, verbose=False, trigger_channel=None):
     """Given a RecordingSession, makes TIMESTAMPS file.
     
     I'm a thin wrapper over `calculate_timestamps` that knows how to get
@@ -639,6 +642,11 @@ def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50
     `calculate_timestamps`, then tell the session what I've calculated.
     
     Returns onsets and offsets that were calculated, or empty lists if
+    
+    If trigger channel
+        * Should be integer, not list
+        * manual threshhold should be specified, use something like 15e3,
+          not dB like other case
     """
     # Check whether we need to run
     if os.path.exists(os.path.join(rs.full_path, 
@@ -651,15 +659,18 @@ def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50
     
     # Calculate timestamps
     t_on, t_off = calculate_timestamps(filename, manual_threshhold, audio_channels,
-        minimum_duration_ms, pre_first, post_last, verbose=verbose)
+        minimum_duration_ms, pre_first, post_last, verbose=verbose,
+        trigger_channel=trigger_channel)
       
     # Tell RecordingSession about them
     rs.add_timestamps(t_on)
         
     return (t_on, t_off)
 
+
 def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None, 
-    minimum_duration_ms=50, pre_first=0, post_last=0, debug_mode=False, verbose=False):
+    minimum_duration_ms=50, pre_first=0, post_last=0, debug_mode=False, 
+    verbose=False, trigger_channel=None):
     """Given ns5 file and channel numbers, returns audio onsets.
     
     I uses `ns5.Loader` to open ns5 file and `AudioTools.OnsetDetector`
@@ -699,8 +710,12 @@ def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None,
     if len(audio_channels) > 2: print "warning: >2 channel data is not tested"
 
     # Now create the numpy array containing mono or stereo data
-    audio_data = np.array(\
-        [l.get_analog_channel_as_array(ch) for ch in audio_channels])
+    if trigger_channel is None:
+        audio_data = np.array(\
+            [l.get_analog_channel_as_array(ch) for ch in audio_channels])
+    else:
+        audio_data = np.array(\
+            [l.get_analog_channel_as_array(trigger_channel)])
     
     # Slice out beginning and end of data
     if post_last == 0: 
@@ -724,10 +739,17 @@ def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None,
         manual_threshhold=manual_threshhold,
         minimum_duration_ms=minimum_duration_ms,
         verbose=verbose)
+
+    if trigger_channel is None:
+        # Run it and get the answer. Account for pre_first offset. Return.
+        od.execute()
+    else:
+        # Override
+        sound_bool = audio_data > manual_threshhold
+        od._error_check_onsets(sound_bool)
     
-    # Run it and get the answer. Account for pre_first offset. Return.
-    od.execute()
     return (od.detected_onsets + pre_first, od.detected_offsets + pre_first)
+    
 
 
 # Functions to find and add bcontrol data to RecordingSession
