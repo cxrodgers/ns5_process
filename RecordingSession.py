@@ -316,7 +316,8 @@ class RecordingSession:
         
         Returns: (t_starts, t_stops)
         """
-        l = self.get_ns5_loader()
+        #l = self.get_ns5_loader()
+        fs = self.get_sampling_rate()
         t = self.read_timestamps()
         
         # Get time limits for slicing
@@ -325,9 +326,9 @@ class RecordingSession:
         if soft_limits_sec is None:
             soft_limits_sec = self.read_time_limits()[0]
         hard_limits = np.array(\
-            np.asarray(hard_limits_sec) * l.header.f_samp, dtype=np.int)
+            np.asarray(hard_limits_sec) * fs, dtype=np.int)
         soft_limits = np.array(\
-            np.asarray(soft_limits_sec) * l.header.f_samp, dtype=np.int)
+            np.asarray(soft_limits_sec) * fs, dtype=np.int)
         
         # Slice Trials around timestamps
         t_starts, t_stops = TrialSlicer.slice_trials(\
