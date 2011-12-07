@@ -687,8 +687,8 @@ class RecordingSession:
             # Average and return
             return (np.mean(np.array(Pxx_list_db), axis=0), freqs)
 
-    def run_spikesorter(self, save_to_db=True, feature_kwargs=None,
-        cluster_kwargs=None):
+    def run_spikesorter(self, save_to_db=True, detection_kwargs=None,
+        feature_kwargs=None, cluster_kwargs=None):
         """Sorts all groups in the database.
         
         Figures out which groups exist. Then calls another method to
@@ -701,6 +701,9 @@ class RecordingSession:
             Default for unspecified keywords is the OE default, not the 
             RecordingSession default.
         cluster_kwargs : ditto for clustering
+        
+        detection_kwargs : similar, but defaults are different, see
+            run_spikesorter_on_group
         """
         session = self.get_OE_session()
         
@@ -712,10 +715,11 @@ class RecordingSession:
         # spike sort
         for group in group_list:
             spikesorter = self.run_spikesorter_on_group(group, save_to_db,
+                detection_kwargs=detection_kwargs,
                 feature_kwargs=feature_kwargs, cluster_kwargs=cluster_kwargs)
     
     def run_spikesorter_on_group(self, group, save_to_db=True, 
-        feature_kwargs=None, cluster_kwargs=None):
+        detection_kwargs=None, feature_kwargs=None, cluster_kwargs=None):
         """Run spike sorting on one group and return spikesorter object.
         
         Useful for playing around with the returned data.
@@ -728,6 +732,20 @@ class RecordingSession:
             Default for unspecified keywords is the OE default, not the 
             RecordingSession default.            
         cluster_kwargs : ditto for clustering.
+        
+        A slightly different syntax for detection that I think is more clear.
+        A default dict for detection kwargs is defined in this function.
+        This dict will be updated with the dict that you pass as
+        `detection_kwargs`. That means that anything you don't specify will
+        be set to the default in this method, rather than the OE default.
+        Here are the defaults for `detection_kwargs`:
+            'sign' : '-', 
+            'median_thresh' : 3.5,
+            'left_sweep' : .001, 
+            'right_sweep' : .002,
+            'consistent_across_segments' : True,
+            'consistent_across_channels' : False,
+            'correct_times' : True         
         """
         # Default keyword arguments dict
         # Override OE algorithms defaults here, if desired.
@@ -736,6 +754,18 @@ class RecordingSession:
                 'num_samples': 0}
         if cluster_kwargs is None:
             cluster_kwargs = {'n': 8}
+                
+        # New syntax for default detection kwargs
+        detection_kwargs_to_use = {
+            'sign' : '-', 
+            'median_thresh' : 3.5,
+            'left_sweep' : .001, 
+            'right_sweep' : .002,
+            'consistent_across_segments' : True,
+            'consistent_across_channels' : False,
+            'correct_times' : True }
+        if detection_kwargs is not None:
+            detection_kwargs_to_use.update(detection_kwargs)
         
         session = self.get_OE_session()
         
@@ -748,11 +778,10 @@ class RecordingSession:
         spikesorter = OE.SpikeSorter(mode='from_filtered_signal', 
             session=session, recordingPointList=rp_list)
 
+        # Call detection algorithm with the specified kwargs
         spikesorter.computeDetectionEnhanced(\
             OE.detection.EnhancedMedianThreshold, 
-            sign='-', median_thresh=3.5, left_sweep=.001, 
-            right_sweep=.002, consistent_across_segments=True,
-            consistent_across_channels=False, correct_times=True)     
+            **detection_kwargs_to_use)     
         
         spikesorter.computeExtraction(OE.extraction.WaveformExtractor)        
         spikesorter.computeFeatures(OE.feature.PCA, **feature_kwargs)
