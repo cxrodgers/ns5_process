@@ -879,34 +879,62 @@ class RecordingSession:
         return psths
     
     
-    def get_spike_picker(self, skip_trial_numbering=False):
+    def get_spike_picker(self, skip_trial_numbering=False,
+        check_against_trial_slicer=True):
+        """Returns a SpikePicker object for spike time analysis.
+        
+        skip_trial_numbering : if True, attempt to assign trial numbers
+            to each spike, based on trial times. if False, spikes will not
+            be assigned to trials.
+        
+        check_against_trial_slicer : if True, reslice trials and confirm
+            that this matches the times of each segment. The original
+            ns5 file must be available.        
+        """
         sts = self.get_spiketrains_raw()
         fs = self.get_sampling_rate()
         sp = SpikeTrainContainers.SpikePicker(sts, f_samp=fs)
-        t_starts, t_stops = self.calculate_trial_boundaries()
         
-        # get behavioral trial numbers
-        t_nums = []
+        # Return now if no need to number trials
+        if skip_trial_numbering:
+            return sp
         
-        for n, seg in enumerate(self.get_spike_block()._segments):
-            # check that segments are ordered correctly
-            assert(int(np.rint(seg._analogsignals[0].t_start * fs)) == \
-                t_starts[n])
+        # Iterate through segments and get trial numbers and times
+        t_nums, t_starts, t_stops = [], [], []        
+        for n, seg in enumerate(self.get_spike_block()._segments):                        
+            # Get trial label from info field (or raw number)
             if seg.info is not None:
                 t_nums.append(int(seg.info))
                 warnt = False
             else:
                 t_nums.append(n)
                 warnt = True
+            
+            # Get times
+            t_starts.append(int(np.rint(seg._analogsignals[0].t_start * fs)))
+            t_stops.append(t_starts[-1] + len(seg._analogsignals[0]))
+    
+        # Warn if couldn't parse the info field
         if warnt:
             print "warning: auto assigned trial numbers"
         
+        # Error check trial labels and times
+        if len(t_nums) != len(np.unique(t_nums)):
+            raise ValueError("Inconsistent trial labels")
+        if not np.all(np.argsort(t_starts) == range(len(t_starts))):
+            raise ValueError("unsorted trial starts")
+        if not np.all(np.argsort(t_stops) == range(len(t_stops))):
+            raise ValueError("unsorted trial stops")        
         
-        t_centers = self.read_timestamps()
+        # reslice and error check
+        if check_against_trial_slicer:
+            t_starts2, t_stops2 = self.calculate_trial_boundaries()
+            assert np.all(np.asarray(t_starts) == np.asarray(t_starts2))
+            assert np.all(np.asarray(t_stops) == np.asarray(t_stops2))
         
         # assign trial number to each spike
-        if not skip_trial_numbering:
-            sp.assign_trial_numbers(t_nums, t_starts, t_stops, t_centers)
+        t_centers = self.read_timestamps()
+        sp.assign_trial_numbers(t_nums, t_starts, t_stops, t_centers)
         
         return sp
 
