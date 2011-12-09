@@ -933,7 +933,7 @@ class RecordingSession:
         # check for trials not in mat-file, often indicated by -99
         to_remove = (trial_info_a[:, 0] < 0)
         if np.sum(to_remove) > 0:
-            print ("warning: %d trials missing in behavior" % len(to_remove))
+            print ("warning: %d trials missing in behavior" % np.sum(to_remove))
             trial_info_a = trial_info_a[~to_remove, :]
         
         # sort by trial numbers
