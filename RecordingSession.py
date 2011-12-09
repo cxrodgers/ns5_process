@@ -24,7 +24,10 @@ import os.path
 import ns5
 import numpy as np
 import TrialSlicer
-import OpenElectrophy as OE
+try:
+    import OpenElectrophy as OE
+except:
+    print "cannot import OE"
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import KlustaKwikIO
@@ -316,7 +319,7 @@ class RecordingSession:
         
         Returns: (t_starts, t_stops)
         """
-        #l = self.get_ns5_loader()
+        l = self.get_ns5_loader()
         fs = self.get_sampling_rate()
         t = self.read_timestamps()
         
@@ -878,6 +881,74 @@ class RecordingSession:
         
         return psths
     
+    def get_trial_timing_from_db(self):
+        """Returns number, start, stop, and center of each trial in samples.
+        
+        Returns:
+            recarray with labels (trial, t_start, t_stop, t_center)
+        
+        Python indexing (half-open) is used.
+        Does this by querying db. Could also run TrialSlicer on ns5 file.
+        """
+        fs = self.get_sampling_rate()
+        t_nums, t_starts, t_stops = [], [], []
+        warnt = False
+        
+        # Find all segments from spike block, ordered by id
+        session = self.get_OE_session()
+
+        # Get segment_id, t_start, and signal length from EVERY SIGNAL
+        q2 = session.query(OE.AnalogSignal.id_segment,
+            OE.AnalogSignal.t_start,
+            OE.AnalogSignal.signal_shape)
+        
+        # Put results in array, converting to float (or else it foolishly
+        # truncates the t_start to 3 decimals)
+        sig_info = np.array(q2.all(), dtype=np.float)
+        
+        # Get segment_id and info field from EVERY SEGMENT (in spike block)
+        seg_info = np.array(session.query(OE.Segment.id, OE.Segment.info).
+            filter(OE.Segment.block == self.get_spike_block()).all())
+        
+        # For each segment id, find the corresponding signals and extract
+        # the trial start and trial duration
+        trial_info = []
+        for seg_id, seg_info_field in seg_info:
+            seg_id_int = int(seg_id)
+            matching_sigs = sig_info[np.rint(sig_info[:, 0]).astype(np.int) == seg_id_int]
+            
+            t_start = np.unique(np.rint(fs * matching_sigs[:, 1]).astype(np.int))
+            assert len(t_start) == 1
+            
+            sig_shape = np.unique(np.rint(matching_sigs[:, 2]).astype(np.int))
+            assert len(sig_shape) == 1            
+            
+            # Now append info field (trial number), trial start, and trial len            
+            trial_info.append((int(seg_info_field), t_start[0], sig_shape[0]))
+        
+        # Now we have an array with trial number, start, and length
+        trial_info_a = np.array(trial_info, dtype=np.int)
+        
+        # sort by trial numbers
+        i = np.argsort(trial_info_a[:, 0])
+        
+        # assert that trials are ordered in time
+        assert np.all(i == np.argsort(trial_info_a[:, 1]))
+        
+        # get onset times
+        t_centers = self.read_timestamps()
+        
+        # assert stimulus is actually within the trial
+        assert np.all(t_centers > trial_info_a[i, 1])
+        
+        return np.rec.fromarrays([
+            trial_info_a[i, 0], # trial numbers
+            trial_info_a[i, 1], # trial starts
+            trial_info_a[i, 1] + trial_info_a[i, 2], # trial stops
+            t_centers], # stimulus onsets
+            names='trial,t_start,t_stop,t_center')
+
+
     
     def get_spike_picker(self, skip_trial_numbering=False,
         check_against_trial_slicer=True):
@@ -901,11 +972,11 @@ class RecordingSession:
         
         # Iterate through segments and get trial numbers and times
         t_nums, t_starts, t_stops = [], [], []        
+        warnt = False
         for n, seg in enumerate(self.get_spike_block()._segments):                        
             # Get trial label from info field (or raw number)
             if seg.info is not None:
                 t_nums.append(int(seg.info))
-                warnt = False
             else:
                 t_nums.append(n)
                 warnt = True
