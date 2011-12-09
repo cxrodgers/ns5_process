@@ -15,7 +15,11 @@ import RecordingSession
 import numpy as np
 import ns5
 import AudioTools
-import OpenElectrophy as OE
+try:
+    import OpenElectrophy as OE
+except:
+    print "cannot import OE"
+    pass
 import matplotlib
 matplotlib.rcParams['figure.subplot.hspace'] = .5
 matplotlib.rcParams['figure.subplot.wspace'] = .5
