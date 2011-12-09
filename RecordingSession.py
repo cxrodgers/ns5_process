@@ -907,14 +907,15 @@ class RecordingSession:
         sig_info = np.array(q2.all(), dtype=np.float)
         
         # Get segment_id and info field from EVERY SEGMENT (in spike block)
+        # This also truncates integers to 3 decimal places!
         seg_info = np.array(session.query(OE.Segment.id, OE.Segment.info).
-            filter(OE.Segment.block == self.get_spike_block()).all())
+            filter(OE.Segment.block == self.get_spike_block()).all(), 
+            dtype=np.int)
         
         # For each segment id, find the corresponding signals and extract
         # the trial start and trial duration
         trial_info = []
-        for seg_id, seg_info_field in seg_info:
-            seg_id_int = int(seg_id)
+        for seg_id_int, seg_info_field in seg_info:
             matching_sigs = sig_info[np.rint(sig_info[:, 0]).astype(np.int) == seg_id_int]
             
             t_start = np.unique(np.rint(fs * matching_sigs[:, 1]).astype(np.int))
@@ -924,10 +925,16 @@ class RecordingSession:
             assert len(sig_shape) == 1            
             
             # Now append info field (trial number), trial start, and trial len            
-            trial_info.append((int(seg_info_field), t_start[0], sig_shape[0]))
+            trial_info.append((seg_info_field, t_start[0], sig_shape[0]))
         
         # Now we have an array with trial number, start, and length
         trial_info_a = np.array(trial_info, dtype=np.int)
+        
+        # check for trials not in mat-file, often indicated by -99
+        to_remove = (trial_info_a[:, 0] < 0)
+        if np.sum(to_remove) > 0:
+            print ("warning: %d trials missing in behavior" % len(to_remove))
+            trial_info_a = trial_info_a[~to_remove, :]
         
         # sort by trial numbers
         i = np.argsort(trial_info_a[:, 0])
@@ -937,6 +944,9 @@ class RecordingSession:
         
         # get onset times
         t_centers = self.read_timestamps()
+        if len(to_remove) > 0:
+            t_centers = t_centers[~to_remove]
+        
         
         # assert stimulus is actually within the trial
         assert np.all(t_centers > trial_info_a[i, 1])
