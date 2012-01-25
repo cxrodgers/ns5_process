@@ -753,7 +753,8 @@ class BehavingSyncer:
     
     
     def gauss_event_train( self, timestamps, filter_std=10, 
-        filter_truncation_width=None): 
+        filter_truncation_width=None,
+        n_min=None, n_max=None): 
         """Returns a filtered time series representation.
         
         BEHAVIOR
@@ -782,6 +783,9 @@ class BehavingSyncer:
         filter_truncation_width: probably don't mess with this. 
         The gaussians are finite in extent. default is 5 standard deviations.
         
+        n_min : force n_op.min() to be at most this, will not truncate
+        n_max : force n_op.max() to be at least this, will not truncate
+        
         
         OUTPUTS
         -------
@@ -804,6 +808,10 @@ class BehavingSyncer:
         # Determine the range of the output
         start_sample = np.min(timestamps) - filter_truncation_width
         stop_sample = np.max(timestamps) + filter_truncation_width
+        if n_min is not None and n_min < start_sample:
+            start_sample = n_min
+        if n_max is not None and n_max > stop_sample:
+            stop_sample = n_max
                
         # generate normalized gaussian on n_gauss and x_gauss
         n_gauss = np.arange(-filter_truncation_width,
