@@ -638,20 +638,22 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
             values=['counts', 'trials'], aggfunc=np.sum)
     else:
         # Split according to request
-        pdata = df.pivot_table(rows=['time'], cols=['sound', 'block', split_on],
+        pdata = df.pivot_table(rows=['time'], cols=(['sound', 'block'] + split_on),
             values=['counts', 'trials'], aggfunc=np.sum)
     
     # Double-check we didn't lose data
-    if len(df) != pdata['counts'].shape[0] * pdata['counts'].shape[1]:
+    #if len(df) != pdata['counts'].shape[0] * pdata['counts'].shape[1]:
+    if len(df) != np.sum(~np.isnan(pdata['counts'].values)):    
         print "warning: refolded data doesn't match shape"
         print "avoid this warning by passing a single trace, or specifying merge column"
     
     # Iterate over sounds (one axis per sound)
     for n, sound_name in enumerate(['lehi', 'rihi', 'lelo', 'rilo']):
-        LB_counts = pdata['counts'][sound_name]['LB'].values.astype(np.int)
-        LB_trials = pdata['trials'][sound_name]['LB'].values.astype(np.int)
-        PB_counts = pdata['counts'][sound_name]['PB'].values.astype(np.int)
-        PB_trials = pdata['trials'][sound_name]['PB'].values.astype(np.int)
+        # extract data
+        LB_counts = pdata['counts'][sound_name]['LB'].dropna(axis=1).values.astype(np.int)
+        LB_trials = pdata['trials'][sound_name]['LB'].dropna(axis=1).values.astype(np.int)
+        PB_counts = pdata['counts'][sound_name]['PB'].dropna(axis=1).values.astype(np.int)
+        PB_trials = pdata['trials'][sound_name]['PB'].dropna(axis=1).values.astype(np.int)
         
         # get time vector and check for consistency
         # technically could be in arbitrary order, in which case will error
