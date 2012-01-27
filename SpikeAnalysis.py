@@ -16,6 +16,7 @@ import os.path
 import bcontrol
 import myutils
 import matplotlib.pyplot as plt
+import scipy.stats
 
 def get_stim_idxs_and_names():
     """Returns list of sound names and indexes.
@@ -477,26 +478,19 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
                 label='diff', color='m', axis=1, errorbar=True)
             ax.plot(times, np.zeros_like(times), 'k')
         
-        #~ p_vals = scipy.stats.ttest_rel(LB_rate, PB_rate)[1]
-        #~ p_vals = r_adj_pval(p_vals, meth='BH')
-        
-        #~ pp = np.where(p_vals < .05)[0]
-        #~ plt.plot(pp, 0.5 * np.mean(LB_rate[pp] + PB_rate[pp], axis=0), 'k*')
-        
-        #~ pp = np.where(p_vals < .01)[0]
-        #~ plt.plot(pp, 0.5 * np.mean(LB_rate[pp] + PB_rate[pp], axis=0), 'ko',
-            #~ markerfacecolor='w')
-        
-        
-        #~ if plot_difference and LB_rate.shape[0] > 1:
-            #~ plt.errorbar(np.arange(LB_rate.shape[1]), 
-                #~ np.mean(LB_rate - PB_rate, axis=0), 
-                #~ yerr=np.std(np.asarray(LB_rate - PB_rate), axis=0) /
-                #~ np.sqrt(LB_rate.shape[0]))
-        #~ plt.plot(np.zeros_like(np.mean(LB_rate, axis=0)))
-        
-        #~ pp = np.where(p_vals < .005)[0]
-        #~ #plt.plot(pp, 0.5 * np.mean(LB_rate[pp] + PB_rate[pp], axis=0), 'kv')
+        if mark_significance:
+            LB_rate = LB_counts / LB_trials.astype(np.float)
+            PB_rate = PB_counts / PB_trials.astype(np.float)
+            p_vals = scipy.stats.ttest_rel(LB_rate.transpose(), 
+                PB_rate.transpose())[1]
+            p_vals = myutils.r_adj_pval(p_vals, meth='BH')
+            
+            pp = np.where(p_vals < .05)[0]
+            plt.plot(times[pp], np.zeros_like(pp), 'k*')
+            
+            pp = np.where(p_vals < .01)[0]
+            plt.plot(times[pp], np.zeros_like(pp), 'ko',
+                markerfacecolor='w')
         
         ax.set_title(sound_name)
         plt.legend()
