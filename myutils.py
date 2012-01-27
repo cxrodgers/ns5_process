@@ -32,6 +32,37 @@ def printnow(s):
     sys.stdout.write(s + "\n")
     sys.stdout.flush()
 
+def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs):
+    
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(1, 1, 1)
+    
+    if np.min(data.shape) == 1:
+        data = data.flatten()
+    if data.ndim == 1:
+        single_trace = True
+        errorbar = False
+        
+        if x is None:
+            x = range(len(data))
+    else:
+        single_trace = False
+        
+        if x is None:
+            x = range(data.shape[axis])
+    
+    if single_trace:
+        ax.plot(x, data, **kwargs)
+    else:
+        if errorbar:
+            ax.errorbar(x=x, y=np.mean(data, axis=axis),
+                yerr=std_error(data, axis=axis), **kwargs)
+        else:
+            ax.plot(np.mean(data, axis=axis), **kwargs)
+    
+    
+
 
 def plot_rasters(obj, ax=None, full_range=1.0, plot_kwargs=None):
     """Plots raster of spike times or psth object.
@@ -85,3 +116,16 @@ def plot_rasters(obj, ax=None, full_range=1.0, plot_kwargs=None):
             np.ones(trial_spikes.shape, dtype=np.float) * 
             n / float(len(folded_spike_times)) * full_range,
             **plot_kwargs)
+
+
+def pick_mask(df, **kwargs):
+    """Returns mask of df, s.t df[mask][key] == val for key, val in kwargs
+    """
+    mask = np.ones(len(df), dtype=np.bool)
+    for key, val in kwargs.items():
+        mask = mask & (df[key] == val)
+    
+    return mask
+
+def pick_count(df, **kwargs):
+    return np.sum(pick_mask(df, **kwargs))
