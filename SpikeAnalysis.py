@@ -3,6 +3,11 @@
 TODO: object that knows about sdf and tdf from a single session
 This is necessary to, for instance, count # of correct trials during PSTHing.
 Should probably sanitize the sound names, outcomes, etc into strings during loading.
+
+Separate plotting code from computation code
+
+Create consistent interface for plotting average response over units (or tetrodes),
+and plotting just one.
 """
 import numpy as np
 import pandas
