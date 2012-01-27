@@ -8,6 +8,16 @@ Separate plotting code from computation code
 
 Create consistent interface for plotting average response over units (or tetrodes),
 and plotting just one.
+
+There are three formats that are useful:
+    flat (one row per spike)
+    binned (lowest level is bins * variable # of trials)
+    binned and averaged (lowest level is simply bins)
+
+It would also be useful to have (sound, block) iterators over those formats,
+which the plotting functions would use.
+
+Also, a containing object to remember time-parameters like f_samp, binwidth
 """
 import numpy as np
 import pandas
@@ -353,6 +363,7 @@ def create_unique_neural_id(df, split_on='unit', column='nid'):
     for n, (key, idxs) in enumerate(g.groups.items()):
         df[column][idxs] = n
 
+
 def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
     """Plots PSTHs by sound from flat frame, to allow rasters.
     
@@ -409,10 +420,166 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
                 myutils.plot_rasters(folded_spikes, ax=ax, y_offset=-0.25,
                     full_range=0.25, plot_kwargs={'color': 'r'})
             ax.set_xlim((-.25, .5))
-            
 
+def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None):
+    """Compare two frames across replicates.
     
+    bspikes1.shape = (N_features, N_trials1)
+    bspikes2.shape = (N_features, N_trials2)
     
+    Returns shape (N_features,), calculated as:
+        mean_diff   : np.mean(A - B, axis=1)
+        sqrt_diff   : np.mean(np.sqrt(A) - np.sqrt(B))
+        
+    """
+    if meth == 'ttest':
+        mag, p = scipy.stats.ttest_ind(bspikes1, bspikes2, axis=1)
+    elif meth == 'sqrt_ttest':
+        mag, p = scipy.stats.ttest_ind(np.sqrt(bspikes1), np.sqrt(bspikes2), 
+            axis=1)
+    else:
+        raise ValueError("%s not accepted method" % meth)
+    
+    if p_adj_meth is not None:
+        p = myutils.r_adj_pval(p, p_adj_meth)
+    
+    return mag, p
+    
+
+def plot_effect_size_by_sound(fdf, fig=None, p_thresh=.05, **kwargs):
+    """Wrapper around calc_effect_size_by_sound and a masked heatmap plot"""
+    
+    mag_d, p_d, names, t = calc_effect_size_by_sound(fdf, **kwargs)
+    
+    masked_heatmaps_by_sound(mag_d, p_d, t, fig=fig, p_thresh=p_thresh)
+    
+    return mag_d, p_d, names, t
+
+def masked_heatmaps_by_sound(mag_d, p_d, t, fig=None, p_thresh=.05,
+    clim=None):
+    """Plot mag_d heatmap, masked by p_d, for each stimulus."""    
+    if clim is None:
+        clim = (-10, 10)
+    
+    if fig is None:
+        fig = plt.figure()
+
+        for n, sound_name in enumerate(['lehi', 'rihi', 'lelo', 'rilo']):
+            # get axis
+            try:
+                ax = fig.axes[n]
+            except IndexError:
+                ax = fig.add_subplot(2, 2, n + 1)
+            
+            to_plot = mag_d[sound_name]
+            to_plot[p_d[sound_name] > p_thresh] = np.nan
+            
+            myutils.my_imshow(to_plot, ax=ax, x=t)
+            ax.set_title(sound_name)
+            plt.clim(clim)
+    
+    plt.show()
+
+
+
+def calc_effect_size_by_sound(fdf, trial_lister=None, 
+    comp_meth='sqrt_ttest', p_adj_meth='BH', split_on=None, split_on_filter=None,
+    t_start=-.25, t_stop=.5, bins=75):
+    """Calculates a heat map of effect size for each sound, masked by p-value.
+    
+    Groups spikes by :split_on:, eg nid. Then compares across blocks,
+    using compare_rasters(comp_meth, p_adj_meth).
+    
+    fdf : flat spike times
+    trial_list : SpikeSorter.list_trials_by_type
+    fig : figure to plot into
+    comp_meth : how to compare the binned spike times across  blocks
+    
+    Returns
+        mag_d : dict of effect magnitude by sound name
+        p_d : dict of p-value by sound name
+        names : list of values of :split_on:
+        t : time bins
+    """
+    names, mag_d, p_d = [], {}, {}
+    if split_on is None:
+        g = {None: fdf}.items()
+    else:
+        g = fdf.groupby(split_on)
+    
+    # Iterate over groups
+    n_incl = 0
+    for key, df in g:        
+        if split_on_filter is not None and key not in split_on_filter:
+            continue
+        else:
+            n_incl += 1
+        
+        # get session name
+        session_l = np.unique(np.asarray(df.session))
+        if len(session_l) != 1:
+            print "error: must be exactly one session!"
+            1/0
+        session = session_l[0]     
+        names.append(key)
+
+        # iterate over sound * block
+        g1 = df.groupby(['sound', 'block'])    
+        for n, sound_name in enumerate(['lehi', 'rihi', 'lelo', 'rilo']):
+            # Keep a running list in each sound
+            if sound_name not in mag_d:
+                mag_d[sound_name] = []
+                p_d[sound_name] = []
+            
+            # iterate over blocks and get folded spike times
+            fsdict = {}
+            for block_name in ['LB', 'PB']:
+                # get spikes form this sound * block
+                x = df.ix[g1.groups[sound_name, block_name]]            
+                folded_spikes = fold(x, trial_lister(session, 
+                    sound=sound_name, block=block_name))
+                
+                # convert to bins
+                ns, t = myutils.times2bins(folded_spikes, return_t=True,
+                    t_start=t_start, t_stop=t_stop, bins=bins, f_samp=30000.)
+                
+                fsdict[block_name] = ns.transpose()
+            
+            # Do the comparison
+            mag, p = compare_rasters(fsdict['LB'], fsdict['PB'],
+                meth=comp_meth, p_adj_meth=p_adj_meth)
+            mag_d[sound_name].append(mag)
+            p_d[sound_name].append(p)
+    
+    for key in mag_d:
+        mag_d[key] = np.array(mag_d[key])
+        p_d[key] = np.array(p_d[key])
+    
+    if split_on_filter is not None and len(split_on_filter) != n_incl:
+        print "warning: %d in filter but only found %d" % (len(split_on_filter),
+            n_incl)
+    
+    return mag_d, p_d, names, t
+
+def fold(x, trial_list):
+    # group those spikes by the trial from which they came
+    g2 = x.groupby('trial')
+    
+    # grab spikes by trial
+    folded_spikes = []
+    for trial_number in trial_list:
+        try:
+            spike_idxs = g2.groups[trial_number]
+        except KeyError:
+            spike_idxs = np.array([])
+        folded_spikes.append(
+            np.asarray(x.ix[spike_idxs]['adj_time']))
+    
+    # error check
+    n_empty_trials = sum([len(s) == 0 for s in folded_spikes])
+    assert (n_empty_trials + len(np.unique(x.trial))) == len(trial_list)    
+    
+    return folded_spikes
 
 def plot_psths_by_sound(df, plot_difference=True, split_on=None,
     mark_significance=False, plot_errorbars=True, p_adj_meth=None):
