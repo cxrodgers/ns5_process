@@ -415,7 +415,7 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
     
 
 def plot_psths_by_sound(df, plot_difference=True, split_on=None,
-    mark_significance=False, plot_errorbars=True):
+    mark_significance=False, plot_errorbars=True, p_adj_meth=None):
     """Plots PSTHs for each sound, for a single unit or average across multiple.
     
     df : DataFrame containing binned data with following columns
@@ -483,7 +483,9 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
             PB_rate = PB_counts / PB_trials.astype(np.float)
             p_vals = scipy.stats.ttest_rel(LB_rate.transpose(), 
                 PB_rate.transpose())[1]
-            p_vals = myutils.r_adj_pval(p_vals, meth='BH')
+            
+            if p_adj_meth is not None:
+                p_vals = myutils.r_adj_pval(p_vals, meth=p_adj_meth)
             
             pp = np.where(p_vals < .05)[0]
             plt.plot(times[pp], np.zeros_like(pp), 'k*')
