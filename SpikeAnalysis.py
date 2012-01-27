@@ -221,6 +221,10 @@ class SpikeServer:
     
     def count_trials_by_type(self, session=None, include_trials='hits', 
         **kwargs):
+        return len(self.list_trials_by_type(session, include_trials, **kwargs))
+    
+    def list_trials_by_type(self, session=None, include_trials='hits',
+        **kwargs):
         idx = np.nonzero(self.session_names == session)[0].item()
         tdf = pandas.load(self.tdf_list[idx])
         if include_trials == 'hits':
@@ -230,32 +234,8 @@ class SpikeServer:
 
         replace_stim_numbers_with_names(tdf)
         
-        return myutils.pick_count(tdf, **kwargs)
-
-    
-    def trial_averaged_spike_data(session='all'):
-        """Returns DataFrame in this format
-        
-        pivoted_psths = all_psths.pivot_table(
-            values=['counts', 'trials'], rows=['session', 'unit'], 
-            cols=['sound', 'block'])
-        
-        all_psths.pivot_table(
-            rows=['session', 'unit', 'bin'], 
-            cols=['sound', 'block'], 
-            values=['counts', 'trials'])
-        
-        You can index a session
-
-        
-        Index a session like so:
-        pivoted_psths.ix[(session_name, unit)]
-        pivoted_psths.ix[session_name][unit]
-        pivoted_psths.ix[0]
-        
-        Index a 
-        """
-        pass
+        mask = myutils.pick_mask(tdf, **kwargs)        
+        return np.asarray(tdf.index[mask], dtype=np.int)
 
 
 
@@ -367,20 +347,64 @@ def create_unique_neural_id(df, split_on='unit', column='nid'):
     for n, (key, idxs) in enumerate(g.groups.items()):
         df[column][idxs] = n
 
-def plot_psths_by_sound_from_flat(fdf, trial_list=None):
+def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
     """Plots PSTHs by sound from flat frame, to allow rasters.
     
     
     """
-    if trial_list is None:
-        trial_list = np.unique(np.asarray(fdf.trial))
-        print "warning: trials with no spikes are lost!"
+    # get session name
+    session_l = np.unique(np.asarray(fdf.session))
+    if len(session_l) != 1:
+        print "error: must be exactly one session!"
+        1/0
+    session = session_l[0]
     
-    sound_name = 'lehi'
-    block_name ='LB'
-    
-    x = fdf[(fdf.sound == sound_name) & (fdf.block == block_name)]
-    folded_spikes = [np.asarray(x[x.trial == t]['adj_time']) for t in trial_list]
+    if fig is None:
+        fig = plt.figure()
+
+    # iterate over sounds and plot each
+    g1 = fdf.groupby(['sound', 'block'])    
+    for n, sound_name in enumerate(['lehi', 'rihi', 'lelo', 'rilo']):
+        # get axis
+        try:
+            ax = fig.axes[n]
+        except IndexError:
+            ax = fig.add_subplot(2, 2, n + 1)
+        
+        # iterate over blocks
+        for block_name in ['LB', 'PB']:
+            # get spikes form this sound * block
+            x = fdf.ix[g1.groups[sound_name, block_name]]
+        
+            # group those spikes by the trial from which they came
+            g2 = x.groupby('trial')
+            trial_list = trial_lister(session=session, sound=sound_name, 
+                block=block_name)
+            
+            # grab spikes by trial
+            folded_spikes = []
+            for trial_number in trial_list:
+                try:
+                    spike_idxs = g2.groups[trial_number]
+                except KeyError:
+                    spike_idxs = np.array([])
+                folded_spikes.append(
+                    np.asarray(x.ix[spike_idxs]['adj_time']) / 30000.0)
+            
+            # error check
+            n_empty_trials = sum([len(s) == 0 for s in folded_spikes])
+            assert (n_empty_trials + len(np.unique(x.trial))) == len(trial_list)
+            
+            old_xlim = ax.get_xlim()
+            if block_name == 'LB':
+                myutils.plot_rasters(folded_spikes, ax=ax, full_range=0.25,
+                    y_offset=-.5, plot_kwargs={'color': 'b'})
+            if block_name == 'PB':
+                myutils.plot_rasters(folded_spikes, ax=ax, y_offset=-0.25,
+                    full_range=0.25, plot_kwargs={'color': 'r'})
+            ax.set_xlim((-.25, .5))
+            
+
     
     
 
@@ -473,4 +497,4 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         plt.legend()
 
     plt.show()    
-    
+    return f
