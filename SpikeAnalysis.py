@@ -421,7 +421,8 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
                     full_range=0.25, plot_kwargs={'color': 'r'})
             ax.set_xlim((-.25, .5))
 
-def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None):
+def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None,
+    mag_meth='diff'):
     """Compare two frames across replicates.
     
     bspikes1.shape = (N_features, N_trials1)
@@ -432,11 +433,26 @@ def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None):
         sqrt_diff   : np.mean(np.sqrt(A) - np.sqrt(B))
         
     """
-    if meth == 'ttest':
-        mag, p = scipy.stats.ttest_ind(bspikes1, bspikes2, axis=1)
+    if mag_meth == 'diff':
+        mag = np.mean(bspikes1, axis=1) - np.mean(bspikes2, axis=1)
+    elif mag_meth == 'PI':
+        mag = (
+            (np.mean(bspikes1, axis=1) - np.mean(bspikes2, axis=1)) /
+            (np.mean(bspikes1, axis=1) + np.mean(bspikes2, axis=1)))
+    
+    if meth == 'ttest':        
+        p = scipy.stats.ttest_ind(bspikes1, bspikes2, axis=1)[1]
     elif meth == 'sqrt_ttest':
-        mag, p = scipy.stats.ttest_ind(np.sqrt(bspikes1), np.sqrt(bspikes2), 
-            axis=1)
+        p = scipy.stats.ttest_ind(np.sqrt(bspikes1), np.sqrt(bspikes2), 
+            axis=1)[1]
+    elif meth == 'mannwhitneyu':
+        p_l = []
+        for row1, row2 in zip(bspikes1, bspikes2):
+            if ~np.any(row1) and ~np.any(row2):
+                p_l.append(np.nan)
+            else:
+                p_l.append(scipy.stats.mannwhitneyu(row1, row2)[1])
+        p = np.array(p_l)
     else:
         raise ValueError("%s not accepted method" % meth)
     
@@ -458,33 +474,40 @@ def plot_effect_size_by_sound(fdf, fig=None, p_thresh=.05, **kwargs):
 def masked_heatmaps_by_sound(mag_d, p_d, t, fig=None, p_thresh=.05,
     clim=None):
     """Plot mag_d heatmap, masked by p_d, for each stimulus."""    
-    if clim is None:
-        clim = (-10, 10)
+    cm = 0.0
     
     if fig is None:
         fig = plt.figure()
 
-        for n, sound_name in enumerate(['lehi', 'rihi', 'lelo', 'rilo']):
-            # get axis
-            try:
-                ax = fig.axes[n]
-            except IndexError:
-                ax = fig.add_subplot(2, 2, n + 1)
-            
-            to_plot = mag_d[sound_name]
-            to_plot[p_d[sound_name] > p_thresh] = np.nan
-            
-            myutils.my_imshow(to_plot, ax=ax, x=t)
-            ax.set_title(sound_name)
-            plt.clim(clim)
+    for n, sound_name in enumerate(['lehi', 'rihi', 'lelo', 'rilo']):
+        # get axis
+        try:
+            ax = fig.axes[n]
+        except IndexError:
+            ax = fig.add_subplot(2, 2, n + 1)
+        
+        to_plot = mag_d[sound_name]
+        to_plot[p_d[sound_name] > p_thresh] = np.nan
+        to_plot[np.isnan(p_d[sound_name])] = np.nan
+        
+        cm = max([cm, np.abs(to_plot[~np.isnan(to_plot)].flatten()).max()])
+        
+        myutils.my_imshow(to_plot, ax=ax, x=t)
+        ax.set_title(sound_name)
+    
+    for ax in fig.axes:
+        if clim is None:
+            plt.clim((-cm, cm))
+        else:
+            plt.clim(clim)        
     
     plt.show()
 
 
 
 def calc_effect_size_by_sound(fdf, trial_lister=None, 
-    comp_meth='sqrt_ttest', p_adj_meth='BH', split_on=None, split_on_filter=None,
-    t_start=-.25, t_stop=.5, bins=75):
+    comp_meth='ttest', p_adj_meth='BH', split_on=None, split_on_filter=None,
+    t_start=-.25, t_stop=.5, bins=75, mag_meth='diff'):
     """Calculates a heat map of effect size for each sound, masked by p-value.
     
     Groups spikes by :split_on:, eg nid. Then compares across blocks,
@@ -547,7 +570,7 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
             
             # Do the comparison
             mag, p = compare_rasters(fsdict['LB'], fsdict['PB'],
-                meth=comp_meth, p_adj_meth=p_adj_meth)
+                meth=comp_meth, p_adj_meth=p_adj_meth, mag_meth=mag_meth)
             mag_d[sound_name].append(mag)
             p_d[sound_name].append(p)
     
