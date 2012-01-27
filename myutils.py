@@ -64,7 +64,7 @@ def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs)
     
 
 
-def plot_rasters(obj, ax=None, full_range=1.0, plot_kwargs=None):
+def plot_rasters(obj, ax=None, full_range=1.0, y_offset=0.0, plot_kwargs=None):
     """Plots raster of spike times or psth object.
     
     obj : PSTH object, or array of spike times (in seconds)
@@ -113,7 +113,7 @@ def plot_rasters(obj, ax=None, full_range=1.0, plot_kwargs=None):
     
     for n, trial_spikes in enumerate(folded_spike_times):
         ax.plot(trial_spikes, 
-            np.ones(trial_spikes.shape, dtype=np.float) * 
+            y_offset + np.ones(trial_spikes.shape, dtype=np.float) * 
             n / float(len(folded_spike_times)) * full_range,
             **plot_kwargs)
 
