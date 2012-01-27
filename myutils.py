@@ -2,6 +2,20 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
+def my_imshow(C, x=None, y=None, ax=None):
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(111)
+    
+    if x is None:
+        x = range(C.shape[1])
+    if y is None:
+        y = range(C.shape[0])
+    extent = x[0], x[-1], y[0], y[-1]
+    plt.imshow(np.flipud(C), interpolation='nearest', extent=extent)
+    ax.axis('auto')
+    plt.show()
+
 def list_intersection(l1, l2):
     return list(set.intersection(set(l1), set(l2)))
 
@@ -63,8 +77,48 @@ def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs)
         else:
             ax.plot(np.mean(data, axis=axis), **kwargs)
     
+def times2bins(times, f_samp=None, t_start=None, t_stop=None, bins=10,
+    return_t=False):
     
+    # dimensionality
+    is2d = True
+    try:
+        times[0][0]
+    except IndexError:
+        is2d = False
 
+    # optionally convert units    
+    if f_samp is not None:
+        if is2d:
+            times = np.array([t / f_samp for t in times])
+        else:
+            times = np.asarray(times) / f_samp
+    
+    # defaults for time
+    if is2d:
+        if t_start is None:
+            t_start = min([x.min() for x in times])
+        if t_stop is None:
+            t_stop = max([x.max() for x in times])
+    else:
+        if t_start is None:
+            t_start = times.min()
+        if t_stop is None:
+            t_stop = times.max()
+
+    # determine spacing of time bins
+    t_vals = np.linspace(t_start, t_stop, bins + 1)
+
+    # histogram
+    if not is2d:
+        res = np.histogram(times, bins=t_vals)[0]
+    else:
+        res = np.array([np.histogram(x, bins=t_vals)[0] for x in times])
+
+    if return_t:
+        return res, t_vals
+    else:
+        return res
 
 def plot_rasters(obj, ax=None, full_range=1.0, y_offset=0.0, plot_kwargs=None):
     """Plots raster of spike times or psth object.
