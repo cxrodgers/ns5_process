@@ -558,7 +558,13 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
             fsdict = {}
             for block_name in ['LB', 'PB']:
                 # get spikes form this sound * block
-                x = df.ix[g1.groups[sound_name, block_name]]            
+                try:
+                    x = df.ix[g1.groups[sound_name, block_name]]            
+                except KeyError:
+                    # no spikes of this sound * block!
+                    x = []
+                
+                # fold by trial
                 folded_spikes = fold(x, trial_lister(session, 
                     sound=sound_name, block=block_name))
                 
@@ -585,6 +591,9 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
     return mag_d, p_d, names, t
 
 def fold(x, trial_list):
+    if len(x) == 0:
+        return [np.array([]) for n in range(len(trial_list))]
+    
     # group those spikes by the trial from which they came
     g2 = x.groupby('trial')
     
