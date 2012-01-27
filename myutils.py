@@ -2,6 +2,8 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
+def list_intersection(l1, l2):
+    return list(set.intersection(set(l1), set(l2)))
 
 def parse_space_sep(s):
     """Returns a list of integers from a space-separated string"""
