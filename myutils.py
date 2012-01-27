@@ -19,6 +19,10 @@ def my_imshow(C, x=None, y=None, ax=None):
 def list_intersection(l1, l2):
     return list(set.intersection(set(l1), set(l2)))
 
+def list_union(l1, l2):
+    return list(set.union(set(l1), set(l2)))
+
+
 def parse_space_sep(s):
     """Returns a list of integers from a space-separated string"""
     s2 = s.strip()
@@ -83,7 +87,7 @@ def times2bins(times, f_samp=None, t_start=None, t_stop=None, bins=10,
     # dimensionality
     is2d = True
     try:
-        times[0][0]
+        len(times[0])
     except IndexError:
         is2d = False
 
