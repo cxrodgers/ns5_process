@@ -88,7 +88,7 @@ def times2bins(times, f_samp=None, t_start=None, t_stop=None, bins=10,
     is2d = True
     try:
         len(times[0])
-    except IndexError:
+    except (TypeError, IndexError):
         is2d = False
 
     # optionally convert units    
