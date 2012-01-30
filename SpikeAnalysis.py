@@ -215,6 +215,8 @@ class SpikeServer:
             # discard bad trials
             if include_trials == 'hits':
                 tdf = tdf[(tdf.outcome == 1) & (tdf.nonrandom == 0)]
+            elif include_trials == 'non-hits':
+                tdf = tdf[(tdf.outcome != 1) & (tdf.nonrandom == 0)]
             else:
                 raise "only hits supported for now"
             
@@ -245,6 +247,8 @@ class SpikeServer:
         tdf = pandas.load(self.tdf_list[idx])
         if include_trials == 'hits':
             tdf = tdf[(tdf.outcome == 1) & (tdf.nonrandom == 0)]
+        elif include_trials == 'non-hits':
+            tdf = tdf[(tdf.outcome != 1) & (tdf.nonrandom == 0)]
         else:
             raise "only hits supported for now"
 
@@ -253,6 +257,51 @@ class SpikeServer:
         mask = myutils.pick_mask(tdf, **kwargs)        
         return np.asarray(tdf.index[mask], dtype=np.int)
 
+def bin_flat_spike_data2(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75, 
+    t_start=-.25, t_stop=.5, split_on=None, include_trials='hits'):
+    """Bins in time over trials, splitting on split_on"""
+    
+    if split_on is None:
+        split_on = []
+    
+    # iterate over the groups and bin each one
+    rec_l = []    
+    for key, df in fsd.groupby(split_on):
+        for sound_name in ['lehi', 'rihi', 'lelo', 'rilo']:
+            for block_name in ['LB', 'PB']:
+                # subframe
+                subdf = df[(df.sound == sound_name) & (df.block == block_name)]
+                
+                # get session name
+                session_l = np.unique(np.asarray(df.session))
+                assert len(session_l) == 1
+                session = session_l[0]
+                
+                # histogramming
+                counts, t_vals = myutils.times2bins(
+                    np.asarray(subdf.adj_time), f_samp=F_SAMP, 
+                    t_start=t_start, t_stop=t_stop, bins=n_bins,
+                    return_t=True)
+        
+                # count trials
+                n_trials = trial_counter(session=session, block=block_name, 
+                    sound=sound_name, include_trials=include_trials)
+                if n_trials < len(np.unique(subdf.trial)):
+                    raise ValueError("counted more trials than exist")
+        
+                # Add in the keyed info (session etc), plus 
+                # n_counts, n_trials, and bin
+                this_frame = [list(key) + 
+                    [sound_name, block_name, count, n_trials, t_val] 
+                    for count, t_val in zip(counts, t_vals)]
+                
+                # append to growing list
+                rec_l += this_frame
+    
+    # convert to new data frame, using same keyed columns plus our new ones
+    cols = split_on + ['sound', 'block', 'counts', 'trials', 'time']
+    newdf = pandas.DataFrame(rec_l, columns=cols)
+    return newdf
 
 
 def bin_flat_spike_data(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75, 
@@ -655,12 +704,29 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         PB_counts = pdata['counts'][sound_name]['PB'].dropna(axis=1).values.astype(np.int)
         PB_trials = pdata['trials'][sound_name]['PB'].dropna(axis=1).values.astype(np.int)
         
+        assert(LB_counts.shape == LB_trials.shape)
+        assert(PB_counts.shape == PB_trials.shape)
+        assert(PB_counts.shape == LB_trials.shape)
+        
         # get time vector and check for consistency
         # technically could be in arbitrary order, in which case will error
         times = pdata['counts'][sound_name]['LB'].index.values.astype(np.float)
         assert (times == pdata['trials'][sound_name]['LB'].index.values).all()
         assert (times == pdata['counts'][sound_name]['PB'].index.values).all()
         assert (times == pdata['trials'][sound_name]['PB'].index.values).all()
+        
+        # remove columns with no trials
+        bad_cols1 = np.array([np.all(t == 0) for t in LB_trials.transpose()])
+        bad_cols2 = np.array([np.all(t == 0) for t in PB_trials.transpose()])
+        bad_cols = bad_cols1 | bad_cols2
+        print "dropping %d sessions with insufficient trials" % np.sum(bad_cols)
+        LB_trials = LB_trials[:, ~bad_cols]
+        LB_counts = LB_counts[:, ~bad_cols]
+        PB_trials = PB_trials[:, ~bad_cols]
+        PB_counts = PB_counts[:, ~bad_cols]        
+        
+        assert LB_counts.shape[1] != 0
+        assert PB_counts.shape[1] != 0
         
         # Create axis for this plot and plot means with errorbars
         ax = f.add_subplot(2, 2, n + 1)
@@ -670,7 +736,12 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         myutils.plot_mean_trace(ax=ax, x=times, 
             data=PB_counts / PB_trials.astype(np.float), 
             label='PB', color='r', axis=1, errorbar=True)
-        
+
+        assert(LB_counts.shape == LB_trials.shape)
+        assert(PB_counts.shape == PB_trials.shape)
+        assert(PB_counts.shape == LB_trials.shape)
+
+
         if plot_difference:
             myutils.plot_mean_trace(ax=ax, x=times,
                 data=(
