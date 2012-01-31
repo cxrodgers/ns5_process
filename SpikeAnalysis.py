@@ -256,9 +256,54 @@ class SpikeServer:
         
         mask = myutils.pick_mask(tdf, **kwargs)        
         return np.asarray(tdf.index[mask], dtype=np.int)
+    
+    def get_binned_spikes_by_trial(self, split_on, split_on_filter=None,
+        f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
+        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13))
+        replace_stim_numbers_with_names(fsd)
+        
+        g = fsd.groupby(split_on)
+        
+        df = pandas.DataFrame()
+        for key, val in g:
+            if split_on_filter is not None and key not in split_on_filter:                
+                continue
+                
+        
+            for sound_name in ['lehi', 'rihi', 'lelo', 'rilo']:
+                for block_name in ['LB', 'PB']:
+                    # subframe
+                    subdf = val[(val.sound == sound_name) & 
+                        (val.block == block_name)]
+                    
+                    # get session name
+                    session_l = np.unique(np.asarray(subdf.session))
+                    assert len(session_l) == 1
+                    session = session_l[0]
+
+                    trial_list = self.list_trials_by_type(session=session,
+                        sound=sound_name, block=block_name)
+            
+                    counts, times = myutils.times2bins(
+                        fold(subdf, trial_list),
+                        f_samp=f_samp, t_start=t_start, t_stop=t_stop, bins=bins, 
+                        return_t=True)
+                    
+                    
+                    this_frame = [list(key) + [sound_name, block_name, trial] 
+                        + list(count)
+                        for count, trial in zip(counts, trial_list)]
+                    
+                    df = df.append(pandas.DataFrame(this_frame,
+                        columns=(split_on + ['sound', 'block', 'trial'] +
+                        ['bin%d' % n for n in range(counts.shape[1])])),
+                        ignore_index=True)
+            
+        return df
 
 def bin_flat_spike_data2(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75, 
-    t_start=-.25, t_stop=.5, split_on=None, include_trials='hits'):
+    t_start=-.25, t_stop=.5, split_on=None, include_trials='hits',
+    split_on_filter=None):
     """Bins in time over trials, splitting on split_on"""
     
     if split_on is None:
@@ -267,6 +312,9 @@ def bin_flat_spike_data2(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
     # iterate over the groups and bin each one
     rec_l = []    
     for key, df in fsd.groupby(split_on):
+        if split_on_filter is not None and key not in split_on_filter:
+            continue
+        
         for sound_name in ['lehi', 'rihi', 'lelo', 'rilo']:
             for block_name in ['LB', 'PB']:
                 # subframe
