@@ -45,7 +45,7 @@ def std_error(data, axis=None):
     else:
         N = np.asarray(data).shape[axis]
     
-    return np.std(data, axis) / np.sqrt(N)
+    return np.std(np.asarray(data), axis) / np.sqrt(N)
 
 def printnow(s):
     """Write string to stdout and flush immediately"""
@@ -57,6 +57,8 @@ def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs)
     if ax is None:
         f = plt.figure()
         ax = f.add_subplot(1, 1, 1)
+    
+    data = np.asarray(data)
     
     if np.min(data.shape) == 1:
         data = data.flatten()
@@ -70,7 +72,7 @@ def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs)
         single_trace = False
         
         if x is None:
-            x = range(data.shape[axis])
+            x = range(len(np.mean(data, axis=axis)))
     
     if single_trace:
         ax.plot(x, data, **kwargs)
