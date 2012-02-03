@@ -289,7 +289,7 @@ class STRF_experiment:
 class Spectrogrammer:
     """Turns a waveform into a spectrogram"""
     def __init__(self, NFFT=256, downsample_ratio=5, new_bin_width_sec=None,
-        max_freq=40e3, min_freq=5e3, Fs=200e3):
+        max_freq=40e3, min_freq=5e3, Fs=200e3, normalization=1.0):
         """Initialize object to turn waveforms to spectrograms.
         
         Stores parameter choices, so you can batch analyze waveforms using
@@ -328,6 +328,7 @@ class Spectrogrammer:
         # For now use NFFT of 256 to get appropriately wide freq bands, then
         # downsample in time
         Pxx, freqs, t = mlab.specgram(waveform, NFFT=self.NFFT, Fs=self.Fs)
+        Pxx = Pxx * np.tile(freqs ** self.normalization, (1, Pxx.shape[1]))
 
         # strip out unused frequencies
         Pxx = Pxx[(freqs < self.max_freq) & (freqs > self.min_freq), :]
