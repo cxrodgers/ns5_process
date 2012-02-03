@@ -334,7 +334,7 @@ def bin_flat_spike_data2(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
                 # count trials
                 n_trials = trial_counter(session=session, block=block_name, 
                     sound=sound_name, include_trials=include_trials)
-                if n_trials < len(np.unique(subdf.trial)):
+                if n_trials < len(np.unique(np.asarray(subdf.trial))):
                     raise ValueError("counted more trials than exist")
         
                 # Add in the keyed info (session etc), plus 
@@ -399,7 +399,7 @@ def bin_flat_spike_data(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
         n_trials = None
         if trial_counter is None:
             print "warnign: no trial info provided, using length"
-            n_trials = len(np.unique(df.trial))
+            n_trials = len(np.unique(np.asarray(df.trial)))
         else:
             try:
                 block_name = np.unique(np.asarray(df.block))
@@ -407,16 +407,16 @@ def bin_flat_spike_data(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
                 session = np.unique(np.asarray(df.session))
             except AttributeError:
                 print "warning: cannot get sound/block, using length"
-                n_trials = len(np.unique(df.trial))            
+                n_trials = len(np.unique(np.asarray(df.trial)))
         if n_trials is None:
             if len(block_name) > 1 or len(sound_name) > 1 or len(session) > 1:
                 print "warning: non-unique sound/block/session, using length"
-                n_trials = len(np.unique(df.trial))
+                n_trials = len(np.unique(np.asarray(df.trial)))
             else:
                 n_trials = trial_counter(session=session, block=block_name, 
                     sound=sound_name)
         
-        if n_trials < len(np.unique(df.trial)):
+        if n_trials < len(np.unique(np.asarray(df.trial))):
             raise ValueError("counted more trials than exist")
         
         # Add in the keyed info (session etc), plus n_counts, n_trials, and bin
@@ -507,7 +507,7 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
             
             # error check
             n_empty_trials = sum([len(s) == 0 for s in folded_spikes])
-            assert (n_empty_trials + len(np.unique(x.trial))) == len(trial_list)
+            assert (n_empty_trials + len(np.unique(np.asarray(x.trial)))) == len(trial_list)
             
             old_xlim = ax.get_xlim()
             if block_name == 'LB':
@@ -686,6 +686,48 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
             n_incl)
     
     return mag_d, p_d, names, t
+
+def count_spikes_in_slice(fsd, t_start, t_stop, split_on, split_on_filter, 
+    trial_counter, pivot_by_sound=True, F_SAMP=30000., include_trials='hits'):
+    """Wrapper around bin_spikes which just returns specified bin"""
+    # Bin data
+    bsd = bin_flat_spike_data2(fsd, split_on=split_on, t_start=t_start,
+        t_stop=t_stop, n_bins=1, F_SAMP=F_SAMP,
+        trial_counter=trial_counter, split_on_filter=split_on_filter)
+
+    # Extract count
+    bsd['resp'] = bsd.counts / (t_stop - t_start) / bsd.trials
+        
+    if pivot_by_sound:
+        bsd = bsd.pivot_table(rows=['session', 'unit'], 
+            cols=['sound', 'block'], values='resp')
+    
+    return bsd
+
+def get_unit_filter(ratname=None):
+    data_dir = '/media/TBLABDATA/20111208_frame_data/'
+    
+    if ratname is None:
+        rlist = ['CR17B', 'CR13A', 'CR12B']
+    else:
+        rlist = [ratname]
+    
+    SUs = pandas.DataFrame()
+    for r in rlist:        
+        SUs = SUs.append(pandas.load(os.path.join(data_dir, '%s_SUs' % r)))
+
+    unit_filter = SUs.to_dict()['not_poor_units']
+    for key in unit_filter:
+        unit_filter[key] = myutils.list_intersection(unit_filter[key],
+            SUs.ix[key]['auditory_units'])
+    
+    unit_filter2 = []
+    for session, session_SUs in unit_filter.items():
+        for unit in session_SUs:
+            unit_filter2.append((session, unit))
+    
+    return unit_filter2
+
 
 def fold(x, trial_list):
     if len(x) == 0:
