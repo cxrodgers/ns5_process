@@ -1,6 +1,94 @@
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import mlab
+import matplotlib
+
+def only_one(l):
+    ll = np.unique(np.asarray(l))
+    assert len(ll) == 1, "values are not unique"
+    return ll[0]
+
+class Spectrogrammer:
+    """Turns a waveform into a spectrogram"""
+    def __init__(self, NFFT=256, downsample_ratio=5, new_bin_width_sec=None,
+        max_freq=40e3, min_freq=5e3, Fs=200e3, noverlap=None, normalization=1.0,
+        detrend=matplotlib.pylab.detrend_mean):
+        """Initialize object to turn waveforms to spectrograms.
+        
+        Stores parameter choices, so you can batch analyze waveforms using
+        the `transform` method.
+        
+        If you specify new_bin_width_sec, this chooses the closest integer 
+        downsample_ratio and that parameter is actually saved and used.
+        
+        TODO: catch other kwargs and pass to specgram.
+        """
+        
+        # figure out downsample_ratio
+        if new_bin_width_sec is not None:
+            self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT))
+        else:
+            self.downsample_ratio = int(downsample_ratio)
+        assert self.downsample_ratio > 0
+        
+        # store other defaults
+        self.NFFT = NFFT
+        self.max_freq = max_freq
+        self.min_freq = min_freq
+        self.Fs = Fs
+        self.noverlap = noverlap
+        if self.noverlap is None:
+            self.noverlap = NFFT / 2
+        
+        self.normalization = normalization
+        self.detrend = detrend
+
+    
+    def transform(self, waveform):
+        """Converts a waveform to a suitable spectrogram.
+        
+        Removes high and low frequencies, rebins in time (via median)
+        to reduce data size. Returned times are the midpoints of the new bins.
+        
+        Returns:  Pxx, freqs, t    
+        Pxx is an array of dB power of the shape (len(freqs), len(t)).
+        It will be real but may contain -infs due to log10
+        """
+        # For now use NFFT of 256 to get appropriately wide freq bands, then
+        # downsample in time
+        Pxx, freqs, t = mlab.specgram(waveform, NFFT=self.NFFT, 
+            noverlap=self.noverlap, Fs=self.Fs, detrend=self.detrend)
+        Pxx = Pxx * np.tile(freqs[:, np.newaxis] ** self.normalization, 
+            (1, Pxx.shape[1]))
+
+        # strip out unused frequencies
+        Pxx = Pxx[(freqs < self.max_freq) & (freqs > self.min_freq), :]
+        freqs = freqs[(freqs < self.max_freq) & (freqs > self.min_freq)]
+
+        # Rebin in size "downsample_ratio". If last bin is not full, discard.
+        Pxx_rebinned = []
+        t_rebinned = []
+        for n in range(0, len(t) - self.downsample_ratio + 1, 
+            self.downsample_ratio):
+            Pxx_rebinned.append(
+                np.median(Pxx[:, n:n+self.downsample_ratio], axis=1).flatten())
+            t_rebinned.append(
+                np.mean(t[n:n+self.downsample_ratio]))
+
+        # Convert to arrays
+        Pxx_rebinned_a = np.transpose(np.array(Pxx_rebinned))
+        t_rebinned_a = np.array(t_rebinned)
+
+        # log it and deal with infs
+        Pxx_rebinned_a_log = -np.inf * np.ones_like(Pxx_rebinned_a)
+        Pxx_rebinned_a_log[np.nonzero(Pxx_rebinned_a)] = \
+            10 * np.log10(Pxx_rebinned_a[np.nonzero(Pxx_rebinned_a)])
+
+
+        self.freqs = freqs
+        self.t = t_rebinned_a
+        return Pxx_rebinned_a_log, freqs, t_rebinned_a
 
 def my_imshow(C, x=None, y=None, ax=None):
     if ax is None:
