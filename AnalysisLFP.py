@@ -303,12 +303,19 @@ def plot_lfp_grouped_by_sound(ssl, plot_difference=True, p_adj_meth=None,
         ax.set_xlim((t_start, t_stop))
     plt.show()
 
-def get_tetrode_filter(ratname):
+def get_tetrode_filter(ratname=None):
     fn_d = {
         'CR12B': '/media/STELLATE/20111208_CR12B_allsessions_sorted/data_params_CR12B.csv',
         'CR17B': '/media/STELLATE/20110907_CR17B_allsessions_sorted/data_params_CR17B.csv',
         'CR13A': '/media/STELLATE/20110816_CR13A_allsessions_sorted/data_params_CR13A.csv'
         }    
+    
+    if ratname is None:
+        l = []
+        for r in fn_d.keys():
+            l += get_tetrode_filter(r)        
+        return l
+
     dp = mlab.csv2rec(fn_d[ratname])
     tetrode_filter = []
     for row in dp:
