@@ -323,7 +323,7 @@ def get_tetrode_filter(ratname=None):
             continue
         for t in myutils.parse_space_sep(row['auditory_tetrodes']):
             tetrode_filter.append((row['session_name'], t))    
-    return tetrode_filter
+    return sorted(tetrode_filter)
 
 def get_subdir_list(ratname):
     fn_d = {
