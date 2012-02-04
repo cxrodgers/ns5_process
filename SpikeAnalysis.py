@@ -197,6 +197,7 @@ class SpikeServer:
             assert np.any(session_mask), "can't find session %s" % session
         
         # iterate through sessions
+        df_list = []
         iter_obj = zip(self.session_names[session_mask],
             self.sdf_list[session_mask], self.tdf_list[session_mask])
         for session_name, sdf_fn, tdf_fn in iter_obj:
@@ -205,7 +206,7 @@ class SpikeServer:
             found_units = np.unique(np.asarray(sdf.unit))
         
             # here is where unit filtering goes
-            if unit_filter is not None:
+            if unit_filter is not None and session_name in unit_filter:
                 units_to_keep = unit_filter[session_name]
                 if np.any(~np.in1d(units_to_keep, found_units)):
                     print "warning: could not find all requested units in " + \
@@ -233,9 +234,11 @@ class SpikeServer:
             # add in stimulus number
             sdf = sdf.join(tdf.stim_number, on='trial')
             
-            flat_spike_data = flat_spike_data.append(sdf, ignore_index=True)
+            df_list.append(sdf)
+            #flat_spike_data = flat_spike_data.append(sdf, ignore_index=True)
         
-        return flat_spike_data
+        
+        return pandas.concat(df_list, ignore_index=True)
     
     def count_trials_by_type(self, session=None, include_trials='hits', 
         **kwargs):
@@ -289,7 +292,6 @@ class SpikeServer:
                         f_samp=f_samp, t_start=t_start, t_stop=t_stop, bins=bins, 
                         return_t=True)
                     
-                    
                     this_frame = [list(key) + [sound_name, block_name, trial] 
                         + list(count)
                         for count, trial in zip(counts, trial_list)]
@@ -300,6 +302,56 @@ class SpikeServer:
                         ignore_index=True)
             
         return df
+
+    def get_binned_spikes_by_trial2(self, split_on, split_on_filter=None,
+        f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
+        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13))
+        replace_stim_numbers_with_names(fsd)
+        
+        g = fsd.groupby(split_on)
+        
+        df = pandas.DataFrame()
+        for key, val in g:
+            if split_on_filter is not None and key not in split_on_filter:                
+                continue
+                
+        
+            for sound_name in ['lehi', 'rihi', 'lelo', 'rilo']:
+                for block_name in ['LB', 'PB']:
+                    # subframe
+                    subdf = val[(val.sound == sound_name) & 
+                        (val.block == block_name)]
+                    
+                    # get session name
+                    session_l = np.unique(np.asarray(subdf.session))
+                    assert len(session_l) == 1
+                    session = session_l[0]
+
+                    trial_list = self.list_trials_by_type(session=session,
+                        sound=sound_name, block=block_name)
+            
+                    counts, times = myutils.times2bins(
+                        fold(subdf, trial_list),
+                        f_samp=f_samp, t_start=t_start, t_stop=t_stop, bins=bins, 
+                        return_t=True)
+                    
+                    this_frame = [list(key) + [sound_name, block_name, trial, 
+                        count] for count, trial in zip(counts, trial_list)]
+                    df = df.append(pandas.DataFrame(this_frame,
+                        columns=(split_on + ['sound', 'block', 'trial', 'binned'])),
+                        ignore_index=True)
+                    
+                    #~ this_frame = [list(key) + [sound_name, block_name, trial] 
+                        #~ + list(count)
+                        #~ for count, trial in zip(counts, trial_list)]
+                    
+                    #~ df = df.append(pandas.DataFrame(this_frame,
+                        #~ columns=(split_on + ['sound', 'block', 'trial'] +
+                        #~ ['bin%d' % n for n in range(counts.shape[1])])),
+                        #~ ignore_index=True)
+            
+        return df
+
 
 def bin_flat_spike_data2(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75, 
     t_start=-.25, t_stop=.5, split_on=None, include_trials='hits',
@@ -583,16 +635,20 @@ def masked_heatmaps_by_sound(mag_d, p_d, t, fig=None, p_thresh=.05,
         except IndexError:
             ax = fig.add_subplot(2, 2, n + 1)
         
-        to_plot = mag_d[sound_name]
+        to_plot = mag_d[sound_name].copy()
         to_plot[p_d[sound_name] > p_thresh] = np.nan
         to_plot[np.isnan(p_d[sound_name])] = np.nan
         
-        cm = max([cm, np.abs(to_plot[~np.isnan(to_plot)].flatten()).max()])
+        try:
+            cm = max([cm, np.abs(to_plot[~np.isnan(to_plot)].flatten()).max()])
+        except ValueError:
+            cm = 0.0
         
         myutils.my_imshow(to_plot, ax=ax, x=t)
         ax.set_title(sound_name)
     
     for ax in fig.axes:
+        plt.axes(ax)
         if clim is None:
             plt.clim((-cm, cm))
         else:
@@ -726,7 +782,7 @@ def get_unit_filter(ratname=None):
         for unit in session_SUs:
             unit_filter2.append((session, unit))
     
-    return unit_filter2
+    return sorted(unit_filter2)
 
 
 def fold(x, trial_list):
@@ -748,7 +804,7 @@ def fold(x, trial_list):
     
     # error check
     n_empty_trials = sum([len(s) == 0 for s in folded_spikes])
-    assert (n_empty_trials + len(np.unique(x.trial))) == len(trial_list)    
+    assert (n_empty_trials + len(np.unique(np.asarray(x.trial)))) == len(trial_list)    
     
     return folded_spikes
 
