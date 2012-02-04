@@ -2,12 +2,57 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import mlab
+import scipy.stats
 import matplotlib
 
 def only_one(l):
     ll = np.unique(np.asarray(l))
     assert len(ll) == 1, "values are not unique"
     return ll[0]
+
+def plot_with_trend_line(x, y, xname='X', yname='Y'):
+    plt.figure()
+    plt.plot(x, y, '.')
+    #p = scipy.polyfit(x.flatten(), y.flatten(), deg=1)    
+    m, b, rval, pval, stderr = \
+        scipy.stats.stats.linregress(x.flatten(), y.flatten())
+    plt.plot([x.min(), x.max()], m * np.array([x.min(), x.max()]) + b, 'k:')
+    plt.legend(['Trend r=%0.3f p=%0.3f' % (rval, pval)], loc='best')
+    plt.xlabel(xname)
+    plt.ylabel(yname)
+    plt.show()
+
+
+def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, **kwargs):
+    """Y should have 4 columns in it, one for each sound."""
+    if hasattr(Y, 'index'):
+        YY = Y[['rihi', 'lehi', 'lelo', 'rilo']].values.transpose()
+    else:
+        YY = Y.transpose()
+    
+    if YY.ndim == 1:
+        YY = YY[:, np.newaxis]
+
+    if normalize:
+        YY = np.transpose([row / row.mean() for row in YY.transpose()])
+
+    YY[YY < 0.0] = 0.0
+    if take_sqrt:
+        YY = np.sqrt(YY)
+    
+    
+
+    YYY = np.concatenate([YY, YY[0:1, :]])
+
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(111, polar=True)
+
+    ax.plot(np.array([45, 135, 225, 315, 405])*np.pi/180.0, YYY, **kwargs)
+
+
+def prefidx(A, B):
+    return (A - B) / (A + B)
 
 class Spectrogrammer:
     """Turns a waveform into a spectrogram"""
