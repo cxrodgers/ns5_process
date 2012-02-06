@@ -27,6 +27,26 @@ import bcontrol
 import myutils
 import matplotlib.pyplot as plt
 import scipy.stats
+import rpy2.robjects as robjects
+r = robjects.r
+
+
+def r_poisson_test(count1, count2, trials1=1, trials2=1):
+    if trials1 == 0 or trials2 == 0:
+        return np.nan
+    r_call = "poisson.test(c(%d,%d), c(%d,%d))$p.value" % (
+        count1, count2, trials1, trials2)
+    p = r(r_call)[0]
+    return p
+
+def r_poisson_test_array(count1, count2, trials1, trials2):
+    return np.array([r_poisson_test(c1, c2, v1, v2) 
+        for c1, c2, v1, v2 in zip(
+        np.array(count1).flatten(), 
+        np.array(count2).flatten(), 
+        np.array(trials1).flatten(),
+        np.array(trials2).flatten())]).reshape(count1.shape)
+
 
 def get_stim_idxs_and_names():
     """Returns list of sound names and indexes.
@@ -187,6 +207,9 @@ class SpikeServer:
         for stim_number, df in fsd.groupby(['stim_number']):
             figure(); hist(np.asarray(df.adj_time))
         """
+        if hasattr(self, '_fsd'):
+            return self._fsd
+        
         flat_spike_data = pandas.DataFrame()
         
         # which sessions to get?
@@ -237,8 +260,8 @@ class SpikeServer:
             df_list.append(sdf)
             #flat_spike_data = flat_spike_data.append(sdf, ignore_index=True)
         
-        
-        return pandas.concat(df_list, ignore_index=True)
+        self._fsd = pandas.concat(df_list, ignore_index=True)
+        return self._fsd
     
     def count_trials_by_type(self, session=None, include_trials='hits', 
         **kwargs):
@@ -267,7 +290,8 @@ class SpikeServer:
         
         g = fsd.groupby(split_on)
         
-        df = pandas.DataFrame()
+        #df = pandas.DataFrame()
+        dfs = []
         for key, val in g:
             if split_on_filter is not None and key not in split_on_filter:                
                 continue
@@ -296,12 +320,12 @@ class SpikeServer:
                         + list(count)
                         for count, trial in zip(counts, trial_list)]
                     
-                    df = df.append(pandas.DataFrame(this_frame,
+                    dfs.append(pandas.DataFrame(this_frame,
                         columns=(split_on + ['sound', 'block', 'trial'] +
-                        ['bin%d' % n for n in range(counts.shape[1])])),
-                        ignore_index=True)
+                        ['bin%d' % n for n in range(counts.shape[1])])))#,
+                    #    ignore_index=True)
             
-        return df
+        return pandas.concat(dfs, ignore_index=True)
 
     def get_binned_spikes_by_trial2(self, split_on, split_on_filter=None,
         f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
@@ -488,6 +512,9 @@ def replace_stim_numbers_with_names(df, strip_old_column=True):
     
     Changes df in place.
     """
+    if 'sound' in df.columns:
+        return
+    
     sound_names, groups = get_stim_idxs_and_names()
     fmt = '|S%d' % max([len(s) for s in sound_names])
     name_col = np.array(['']*len(df), dtype=fmt)
@@ -571,7 +598,7 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
             ax.set_xlim((-.25, .5))
 
 def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None,
-    mag_meth='diff'):
+    mag_meth='diff', fillval=None):
     """Compare two frames across replicates.
     
     bspikes1.shape = (N_features, N_trials1)
@@ -589,6 +616,16 @@ def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None,
             (np.mean(bspikes1, axis=1) - np.mean(bspikes2, axis=1)) /
             (np.mean(bspikes1, axis=1) + np.mean(bspikes2, axis=1)))
     
+    if fillval is None:
+        fillval = np.nan
+    
+    is1d = False
+    if bspikes1.ndim == 1:
+        assert bspikes2.ndim == 1
+        bspikes1 = bspikes1[None, :]
+        bspikes2 = bspikes2[None, :]
+        is1d = True
+    
     if meth == 'ttest':        
         p = scipy.stats.ttest_ind(bspikes1, bspikes2, axis=1)[1]
     elif meth == 'sqrt_ttest':
@@ -598,9 +635,11 @@ def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None,
         p_l = []
         for row1, row2 in zip(bspikes1, bspikes2):
             if ~np.any(row1) and ~np.any(row2):
-                p_l.append(np.nan)
+                p_l.append(fillval)
+            elif np.all(np.sort(row1) == np.sort(row2)):
+                p_l.append(fillval)
             else:
-                p_l.append(scipy.stats.mannwhitneyu(row1, row2)[1])
+                p_l.append(2 * scipy.stats.mannwhitneyu(row1, row2)[1])
         p = np.array(p_l)
     else:
         raise ValueError("%s not accepted method" % meth)
@@ -608,7 +647,10 @@ def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None,
     if p_adj_meth is not None:
         p = myutils.r_adj_pval(p, p_adj_meth)
     
-    return mag, p
+    if is1d:
+        return mag, p[0]
+    else:
+        return mag, p
     
 
 def plot_effect_size_by_sound(fdf, fig=None, p_thresh=.05, **kwargs):
