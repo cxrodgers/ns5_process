@@ -10,16 +10,18 @@ def only_one(l):
     assert len(ll) == 1, "values are not unique"
     return ll[0]
 
-def plot_with_trend_line(x, y, xname='X', yname='Y'):
-    plt.figure()
-    plt.plot(x, y, '.')
+def plot_with_trend_line(x, y, xname='X', yname='Y', ax=None):
+    if ax is None:    
+        f = plt.figure()
+        ax = f.add_subplot(111)
+    ax.plot(x, y, '.')
     #p = scipy.polyfit(x.flatten(), y.flatten(), deg=1)    
     m, b, rval, pval, stderr = \
         scipy.stats.stats.linregress(x.flatten(), y.flatten())
-    plt.plot([x.min(), x.max()], m * np.array([x.min(), x.max()]) + b, 'k:')
+    ax.plot([x.min(), x.max()], m * np.array([x.min(), x.max()]) + b, 'k:')
     plt.legend(['Trend r=%0.3f p=%0.3f' % (rval, pval)], loc='best')
-    plt.xlabel(xname)
-    plt.ylabel(yname)
+    ax.set_xlabel(xname)
+    ax.set_ylabel(yname)
     plt.show()
 
 
@@ -135,6 +137,16 @@ class Spectrogrammer:
         self.t = t_rebinned_a
         return Pxx_rebinned_a_log, freqs, t_rebinned_a
 
+def set_fonts_big(undo=False):
+    if not undo:
+        matplotlib.rcParams['font.size'] = 16.0
+        matplotlib.rcParams['xtick.labelsize'] = 'medium'
+        matplotlib.rcParams['ytick.labelsize'] = 'medium'
+    else:
+        matplotlib.rcParams['font.size'] = 10.0
+        matplotlib.rcParams['xtick.labelsize'] = 'small'
+        matplotlib.rcParams['ytick.labelsize'] = 'small'
+
 def my_imshow(C, x=None, y=None, ax=None):
     if ax is None:
         f = plt.figure()
@@ -215,7 +227,24 @@ def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs)
                 yerr=std_error(data, axis=axis), **kwargs)
         else:
             ax.plot(np.mean(data, axis=axis), **kwargs)
-    
+
+def plot_asterisks(pvals, ax, x=None, y=0, yd=1, levels=None):
+    pvals = np.asarray(pvals)
+    if levels is None:
+        levels = [.05, .01, .001, .0001]
+    if x is None:
+        x = range(len(pvals))
+    x = np.asarray(x)
+
+    already_marked = np.zeros(len(pvals), dtype=np.bool)
+    for n, l in enumerate(levels):
+        msk = (pvals < l)# & ~already_marked
+        if np.any(msk):
+            ax.plot(x[np.where(msk)[0]], n*yd + y * np.ones_like(np.where(msk)[0]),
+                marker='*', color='k', ls='None')
+        #already_marked = already_marked | msk
+    plt.show()
+
 def times2bins(times, f_samp=None, t_start=None, t_stop=None, bins=10,
     return_t=False):
     
@@ -312,6 +341,22 @@ def plot_rasters(obj, ax=None, full_range=1.0, y_offset=0.0, plot_kwargs=None):
             n / float(len(folded_spike_times)) * full_range,
             **plot_kwargs)
 
+def histogram_pvals(eff, p, bins=20, thresh=.05, ax=None):
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(111)
+    
+    if np.sum(p > thresh) == 0:
+        ax.hist(eff[p<=thresh], bins=bins, histtype='barstacked', color='r')    
+    elif np.sum(p < thresh) == 0:
+        ax.hist(eff[p>thresh], bins=bins, histtype='barstacked', color='k')            
+    else:
+        ax.hist([eff[p>thresh], eff[p<=thresh]], bins=bins, 
+            histtype='barstacked', color=['k', 'r'], rwidth=1.0)    
+    plt.show()
+
+def sort_df_by_col(a, col):
+    return a.ix[a.index[np.argsort(np.asarray(a[col]))]]
 
 def pick_mask(df, **kwargs):
     """Returns mask of df, s.t df[mask][key] == val for key, val in kwargs
