@@ -2,6 +2,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import mlab
+import matplotlib.pylab
 import scipy.stats
 import matplotlib
 
@@ -11,6 +12,10 @@ def only_one(l):
     return ll[0]
 
 def plot_with_trend_line(x, y, xname='X', yname='Y', ax=None):
+    dropna = np.isnan(x) | np.isnan(y)
+    x = x[~dropna]
+    y = y[~dropna]
+    
     if ax is None:    
         f = plt.figure()
         ax = f.add_subplot(111)
