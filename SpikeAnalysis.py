@@ -284,8 +284,27 @@ class SpikeServer:
         return np.asarray(tdf.index[mask], dtype=np.int)
     
     def get_binned_spikes_by_trial(self, split_on, split_on_filter=None,
-        f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
-        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13))
+        f_samp=30e3, t_start=-.25, t_stop=.5, bins=75, include_trials='hits'):
+        """Returns binned data separately for each trial.
+        
+        There is a variable number of columns bin%d, depending on the number
+        you request.
+        
+        Format:
+        <class 'pandas.core.frame.DataFrame'>
+        Int64Index: 23202 entries, 0 to 23201
+        Data columns:
+        session    23202  non-null values
+        tetrode    23202  non-null values
+        sound      23202  non-null values
+        block      23202  non-null values
+        trial      23202  non-null values
+        bin0       23202  non-null values
+        dtypes: int64(3), object(3)
+        """
+
+        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13),
+            include_trials=include_trials)
         replace_stim_numbers_with_names(fsd)
         
         g = fsd.groupby(split_on)
@@ -305,11 +324,16 @@ class SpikeServer:
                     
                     # get session name
                     session_l = np.unique(np.asarray(subdf.session))
-                    assert len(session_l) == 1
-                    session = session_l[0]
+                    if len(session_l) == 0:
+                        continue
+                    elif len(session_l) > 1:
+                        raise "Non-unique sessions, somehow"
+                    else:
+                        session = session_l[0]
 
                     trial_list = self.list_trials_by_type(session=session,
-                        sound=sound_name, block=block_name)
+                        sound=sound_name, block=block_name, 
+                        include_trials=include_trials)
             
                     counts, times = myutils.times2bins(
                         fold(subdf, trial_list),
@@ -329,6 +353,8 @@ class SpikeServer:
 
     def get_binned_spikes_by_trial2(self, split_on, split_on_filter=None,
         f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
+        """Looks like the same as get_binned_spiked_by_trial but
+        with less efficient concatenation"""
         fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13))
         replace_stim_numbers_with_names(fsd)
         
@@ -851,7 +877,8 @@ def fold(x, trial_list):
     return folded_spikes
 
 def plot_psths_by_sound(df, plot_difference=True, split_on=None,
-    mark_significance=False, plot_errorbars=True, p_adj_meth=None):
+    mark_significance=False, plot_errorbars=True, p_adj_meth=None, 
+    plot_all=False):
     """Plots PSTHs for each sound, for a single unit or average across multiple.
     
     df : DataFrame containing binned data with following columns
@@ -918,12 +945,18 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         
         # Create axis for this plot and plot means with errorbars
         ax = f.add_subplot(2, 2, n + 1)
-        myutils.plot_mean_trace(ax=ax, x=times, 
-            data=LB_counts / LB_trials.astype(np.float), 
-            label='LB', color='b', axis=1, errorbar=True)
-        myutils.plot_mean_trace(ax=ax, x=times, 
-            data=PB_counts / PB_trials.astype(np.float), 
-            label='PB', color='r', axis=1, errorbar=True)
+        if plot_all:
+            ax.plot(times, LB_counts / LB_trials.astype(np.float),
+                label='LB', color='b')
+            ax.plot(times, PB_counts / PB_trials.astype(np.float),
+                label='PB', color='r')
+        else:
+            myutils.plot_mean_trace(ax=ax, x=times, 
+                data=LB_counts / LB_trials.astype(np.float), 
+                label='LB', color='b', axis=1, errorbar=True)
+            myutils.plot_mean_trace(ax=ax, x=times, 
+                data=PB_counts / PB_trials.astype(np.float), 
+                label='PB', color='r', axis=1, errorbar=True)
 
         assert(LB_counts.shape == LB_trials.shape)
         assert(PB_counts.shape == PB_trials.shape)
