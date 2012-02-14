@@ -152,7 +152,7 @@ def set_fonts_big(undo=False):
         matplotlib.rcParams['xtick.labelsize'] = 'small'
         matplotlib.rcParams['ytick.labelsize'] = 'small'
 
-def my_imshow(C, x=None, y=None, ax=None):
+def my_imshow(C, x=None, y=None, ax=None, cmap=None):
     if ax is None:
         f = plt.figure()
         ax = f.add_subplot(111)
@@ -162,9 +162,14 @@ def my_imshow(C, x=None, y=None, ax=None):
     if y is None:
         y = range(C.shape[0])
     extent = x[0], x[-1], y[0], y[-1]
-    plt.imshow(np.flipud(C), interpolation='nearest', extent=extent)
+    plt.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
     ax.axis('auto')
     plt.show()
+
+def iziprows(df):
+   series = [df[col] for col in df.columns]
+   series.insert(0, df.index)
+   return itertools.izip(*series)
 
 def list_intersection(l1, l2):
     return list(set.intersection(set(l1), set(l2)))
@@ -374,3 +379,35 @@ def pick_mask(df, **kwargs):
 
 def pick_count(df, **kwargs):
     return np.sum(pick_mask(df, **kwargs))
+
+
+def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, **kwargs):
+    """Y should have 4 columns in it, one for each sound."""
+    if hasattr(Y, 'index'):
+        YY = Y[['rihi', 'lehi', 'lelo', 'rilo']].values.transpose()
+    else:
+        YY = Y.transpose()
+    
+    if YY.ndim == 1:
+        YY = YY[:, np.newaxis]
+
+    if normalize:
+        YY = np.transpose([row / row.mean() for row in YY.transpose()])
+
+    YY[YY < 0.0] = 0.0
+    if take_sqrt:
+        YY = np.sqrt(YY)
+    
+    
+
+    YYY = np.concatenate([YY, YY[0:1, :]])
+
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(111, polar=True)
+
+    ax.plot(np.array([45, 135, 225, 315, 405])*np.pi/180.0, YYY, **kwargs)
+    
+    
+    plt.xticks(np.array([45, 135, 225, 315, 405])*np.pi/180.0,
+        ['RIGHT+HIGH', 'LEFT+HIGH', 'LEFT+LOW', 'RIGHT+LOW'])
