@@ -6,6 +6,10 @@ import matplotlib.pylab
 import scipy.stats
 import matplotlib
 
+
+longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
+    'rihi': 'RIGHT+HIGH'}
+
 def only_one(l):
     ll = np.unique(np.asarray(l))
     assert len(ll) == 1, "values are not unique"
