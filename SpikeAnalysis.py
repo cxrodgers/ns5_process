@@ -284,8 +284,27 @@ class SpikeServer:
         return np.asarray(tdf.index[mask], dtype=np.int)
     
     def get_binned_spikes_by_trial(self, split_on, split_on_filter=None,
-        f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
-        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13))
+        f_samp=30e3, t_start=-.25, t_stop=.5, bins=75, include_trials='hits'):
+        """Returns binned data separately for each trial.
+        
+        There is a variable number of columns bin%d, depending on the number
+        you request.
+        
+        Format:
+        <class 'pandas.core.frame.DataFrame'>
+        Int64Index: 23202 entries, 0 to 23201
+        Data columns:
+        session    23202  non-null values
+        tetrode    23202  non-null values
+        sound      23202  non-null values
+        block      23202  non-null values
+        trial      23202  non-null values
+        bin0       23202  non-null values
+        dtypes: int64(3), object(3)
+        """
+
+        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13),
+            include_trials=include_trials)
         replace_stim_numbers_with_names(fsd)
         
         g = fsd.groupby(split_on)
@@ -305,11 +324,16 @@ class SpikeServer:
                     
                     # get session name
                     session_l = np.unique(np.asarray(subdf.session))
-                    assert len(session_l) == 1
-                    session = session_l[0]
+                    if len(session_l) == 0:
+                        continue
+                    elif len(session_l) > 1:
+                        raise "Non-unique sessions, somehow"
+                    else:
+                        session = session_l[0]
 
                     trial_list = self.list_trials_by_type(session=session,
-                        sound=sound_name, block=block_name)
+                        sound=sound_name, block=block_name, 
+                        include_trials=include_trials)
             
                     counts, times = myutils.times2bins(
                         fold(subdf, trial_list),
@@ -329,6 +353,8 @@ class SpikeServer:
 
     def get_binned_spikes_by_trial2(self, split_on, split_on_filter=None,
         f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
+        """Looks like the same as get_binned_spiked_by_trial but
+        with less efficient concatenation"""
         fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13))
         replace_stim_numbers_with_names(fsd)
         
@@ -540,17 +566,70 @@ def create_unique_neural_id(df, split_on='unit', column='nid'):
         df[column][idxs] = n
 
 
-def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
-    """Plots PSTHs by sound from flat frame, to allow rasters.
+def plot_rasters_and_psth(fsd, ss, fig=None, ymax=0.5, xlim=None,
+    only_rasters=False, split_on=None, split_on_filter=None,
+    plot_difference=False, ms=4, n_bins=75, t_start=-.25, t_stop=.5,
+    include_trials='hits'):
+    """Plots rasters of a specific unit by sound, and optionally the PSTH.
     
-    
+    A wrapper around plot_psths_by_sound_from_flat, bin_flat_spike_data2,
+    and plot_psths_by_sound.
     """
+    # Filter out single desired unit
+    if split_on is not None:
+        mask = np.ones(len(fsd), dtype=np.bool)
+        for col, val in zip(split_on, split_on_filter):
+            mask = mask & (fsd[col] == val)        
+        fsd = fsd.ix[mask]
+    
+    # Create figure and optionally plot psth
+    if fig is None:
+        if only_rasters:
+            fig = plt.figure()
+        else:
+            # Plot PSTHs, so first bin
+            bsd = bin_flat_spike_data2(fsd, 
+                trial_counter=ss.count_trials_by_type, 
+                split_on=split_on, split_on_filter=None,
+                include_trials=include_trials, n_bins=n_bins, 
+                t_start=t_start, t_stop=t_stop)
+            
+            # Now plot and grab figure handle
+            plot_psths_by_sound(bsd, split_on=split_on, 
+                plot_difference=plot_difference)
+            fig = plt.gcf()
+    
+    plot_psths_by_sound_from_flat(fsd, trial_lister=ss.list_trials_by_type,
+        fig=fig, ymax=ymax, xlim=xlim, ms=ms)
+    
+    yl2 = max([ax.get_ylim()[1] for ax in fig.axes])
+    
+    for ax in fig.axes:
+        ax.plot(xlim, [0, 0], 'k-')
+        ax.set_ylim((-ymax, yl2))
+    plt.show()
+
+def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0,
+    xlim=None, ms=4):
+    """Plots rasters of a specific unit by sound, and optionally the PSTH.
+    
+    fdf : flat data frame, from SpikeSorter.read_flat_*
+        You must first filter out the unit you want.
+    also_plot_average : if True, will first plot the PSTH by calling
+        plot_psths_by_sound, then will plot rasters into same figure.
+    
+    LB spikes are blue, PB spikes are red.
+    """
+    if xlim is None:
+        xlim = (-.25, .5)
+    
     # get session name
     session_l = np.unique(np.asarray(fdf.session))
     if len(session_l) != 1:
         print "error: must be exactly one session!"
         1/0
     session = session_l[0]
+    
     
     if fig is None:
         fig = plt.figure()
@@ -563,6 +642,7 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
             ax = fig.axes[n]
         except IndexError:
             ax = fig.add_subplot(2, 2, n + 1)
+            ax.set_title(sound_name)
         
         # iterate over blocks
         for block_name in ['LB', 'PB']:
@@ -590,12 +670,12 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0):
             
             old_xlim = ax.get_xlim()
             if block_name == 'LB':
-                myutils.plot_rasters(folded_spikes, ax=ax, full_range=0.25,
-                    y_offset=-.5, plot_kwargs={'color': 'b'})
+                myutils.plot_rasters(folded_spikes, ax=ax, full_range=ymax/2.,
+                    y_offset=-ymax, plot_kwargs={'color': 'b', 'ms': ms})
             if block_name == 'PB':
-                myutils.plot_rasters(folded_spikes, ax=ax, y_offset=-0.25,
-                    full_range=0.25, plot_kwargs={'color': 'r'})
-            ax.set_xlim((-.25, .5))
+                myutils.plot_rasters(folded_spikes, ax=ax, y_offset=-ymax/2.,
+                    full_range=ymax/2., plot_kwargs={'color': 'r', 'ms': ms})
+            ax.set_xlim(xlim)
 
 def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None,
     mag_meth='diff', fillval=None):
@@ -851,7 +931,8 @@ def fold(x, trial_list):
     return folded_spikes
 
 def plot_psths_by_sound(df, plot_difference=True, split_on=None,
-    mark_significance=False, plot_errorbars=True, p_adj_meth=None):
+    mark_significance=False, plot_errorbars=True, p_adj_meth=None, 
+    plot_all=False):
     """Plots PSTHs for each sound, for a single unit or average across multiple.
     
     df : DataFrame containing binned data with following columns
@@ -918,12 +999,18 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         
         # Create axis for this plot and plot means with errorbars
         ax = f.add_subplot(2, 2, n + 1)
-        myutils.plot_mean_trace(ax=ax, x=times, 
-            data=LB_counts / LB_trials.astype(np.float), 
-            label='LB', color='b', axis=1, errorbar=True)
-        myutils.plot_mean_trace(ax=ax, x=times, 
-            data=PB_counts / PB_trials.astype(np.float), 
-            label='PB', color='r', axis=1, errorbar=True)
+        if plot_all:
+            ax.plot(times, LB_counts / LB_trials.astype(np.float),
+                label='LB', color='b')
+            ax.plot(times, PB_counts / PB_trials.astype(np.float),
+                label='PB', color='r')
+        else:
+            myutils.plot_mean_trace(ax=ax, x=times, 
+                data=LB_counts / LB_trials.astype(np.float), 
+                label='LB', color='b', axis=1, errorbar=True)
+            myutils.plot_mean_trace(ax=ax, x=times, 
+                data=PB_counts / PB_trials.astype(np.float), 
+                label='PB', color='r', axis=1, errorbar=True)
 
         assert(LB_counts.shape == LB_trials.shape)
         assert(PB_counts.shape == PB_trials.shape)
@@ -954,8 +1041,8 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
             plt.plot(times[pp], np.zeros_like(pp), 'ko',
                 markerfacecolor='w')
         
-        ax.set_title(sound_name)
-        plt.legend()
+        ax.set_title(myutils.longname[sound_name])
+        plt.legend(loc='best')
 
     plt.show()    
     return f
