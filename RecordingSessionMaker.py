@@ -496,7 +496,7 @@ def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         f = plt.figure(figsize=(16,12))
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
-            if sn not in sn2trials:
+            if sn not in sn2trials or len(sn2trials[sn]) == 0:
                 continue
             ax = f.add_subplot(3, 4, sn)
             psth = sp.get_psth(tetrode=[tetnum], trial=sn2trials[sn], 
@@ -634,8 +634,7 @@ def query_events(rs, event_name='Timestamp'):
     return event_list
 
 # Function to load audio data from raw file and detect onsets
-def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50,
-    pre_first=0, post_last=0, verbose=False, trigger_channel=None):
+def add_timestamps_to_session(rs, drop_first_N_timestamps=0, **kwargs):
     """Given a RecordingSession, makes TIMESTAMPS file.
     
     I'm a thin wrapper over `calculate_timestamps` that knows how to get
@@ -653,6 +652,15 @@ def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50
         * Should be integer, not list
         * manual threshhold should be specified, use something like 15e3,
           not dB like other case
+    
+    All keyword arguments (except drop_first_N_timestamps) are passed
+    to calculate_timestamps, so see documentation there.
+        manual_threshhold=None, audio_channels=None, 
+        minimum_duration_ms=50, pre_first=0, post_last=0, debug_mode=False, 
+        verbose=False, trigger_channel=None
+    
+    drop_first_N_timestamps : after calculation of timestamps, drop
+    the first N of them before writing to disk.
     """
     # Check whether we need to run
     if os.path.exists(os.path.join(rs.full_path, 
@@ -664,10 +672,12 @@ def add_timestamps_to_session(rs, manual_threshhold=None, minimum_duration_ms=50
     audio_channels = rs.read_analog_channel_ids()
     
     # Calculate timestamps
-    t_on, t_off = calculate_timestamps(filename, manual_threshhold, audio_channels,
-        minimum_duration_ms, pre_first, post_last, verbose=verbose,
-        trigger_channel=trigger_channel)
-      
+    t_on, t_off = calculate_timestamps(filename, **kwargs)
+    
+    if drop_first_N_timestamps > 0:
+        t_on = t_on[drop_first_N_timestamps:]
+        t_off = t_off[drop_first_N_timestamps:]
+
     # Tell RecordingSession about them
     rs.add_timestamps(t_on)
         
