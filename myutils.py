@@ -208,7 +208,7 @@ def std_error(data, axis=None):
 
 def printnow(s):
     """Write string to stdout and flush immediately"""
-    sys.stdout.write(s + "\n")
+    sys.stdout.write(str(s) + "\n")
     sys.stdout.flush()
 
 def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs):
