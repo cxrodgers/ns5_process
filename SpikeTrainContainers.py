@@ -289,9 +289,10 @@ class PSTH(object):
         
             if self.range is None:
                 # Autoset range using trial times
-                self.range = [
-                    np.min(self.t_starts - self.t_centers),
-                    np.max(self.t_stops - self.t_centers)]
+                if len(self.t_centers) > 0:
+                    self.range = [
+                        np.min(self.t_starts - self.t_centers),
+                        np.max(self.t_stops - self.t_centers)]
             
             if self.n_trials is None:
                 self.n_trials = len(self.t_starts)
