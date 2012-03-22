@@ -127,7 +127,8 @@ def integrate_sdf_and_tdf(sdf, tdf, F_SAMP=30e3, n_bins=75, t_start=-.25,
 
 class SpikeServer:
     def __init__(self, base_dir, filename_filter=None, 
-        SU_list_filename=None):
+        SU_list_filename=None, f_samp=30e3, t_start=-.25, t_stop=.5,
+        bins=75):
         """Expects base_dir to be a directory containing files like:
         
         session_name1_spikes
@@ -141,6 +142,10 @@ class SpikeServer:
         self.base_dir = base_dir
         self.filename_filter = filename_filter
         self.refresh_files()
+        self.f_samp = f_samp
+        self.t_start = t_start
+        self.t_stop = t_stop
+        self.bins = bins
     
     def refresh_files(self):
         """Rechecks filenames from disk for spike and trial files"""
@@ -177,11 +182,21 @@ class SpikeServer:
         unit_filter=None, stim_number_filter=None):
         """Returns flat data frame of spike times from specified trials.
         
+        Also memoizes the result as self._fsd.
+        
         unit_filter: dict session_name -> array of unit numbers to keep.
         stim_number_filter : list of stimulus numbers to keep
         
         TODO: implement tetrode filter, currently it's assumed that bad
         tetrdoes have already been stripped from underlyng files.
+        
+        Filtering:
+        * Specify session to load only from one session, or all to load all
+        * Specify unit_filter as a dict session: [list of units] to keep
+          only those units. Sessions not in the unit filter are skipped.
+        
+        TODO: make this filtering parameter a dataframe. So a list of
+        session, tetrode/unit records.
         
         Returns DataFrame in this format:        
         <class 'pandas.core.frame.DataFrame'>
@@ -224,12 +239,15 @@ class SpikeServer:
         iter_obj = zip(self.session_names[session_mask],
             self.sdf_list[session_mask], self.tdf_list[session_mask])
         for session_name, sdf_fn, tdf_fn in iter_obj:
+            if unit_filter is not None and session_name not in unit_filter:
+                continue
+            
             sdf = pandas.load(sdf_fn)
             tdf = pandas.load(tdf_fn)
             found_units = np.unique(np.asarray(sdf.unit))
         
             # here is where unit filtering goes
-            if unit_filter is not None and session_name in unit_filter:
+            if unit_filter is not None:
                 units_to_keep = unit_filter[session_name]
                 if np.any(~np.in1d(units_to_keep, found_units)):
                     print "warning: could not find all requested units in " + \
@@ -241,6 +259,8 @@ class SpikeServer:
                 tdf = tdf[(tdf.outcome == 1) & (tdf.nonrandom == 0)]
             elif include_trials == 'non-hits':
                 tdf = tdf[(tdf.outcome != 1) & (tdf.nonrandom == 0)]
+            elif include_trials == 'all random':
+                tdf = tdf[tdf.nonrandom == 0]
             else:
                 raise "only hits supported for now"
             
@@ -275,13 +295,44 @@ class SpikeServer:
             tdf = tdf[(tdf.outcome == 1) & (tdf.nonrandom == 0)]
         elif include_trials == 'non-hits':
             tdf = tdf[(tdf.outcome != 1) & (tdf.nonrandom == 0)]
+        elif include_trials == 'all random':
+            tdf = tdf[tdf.nonrandom == 0]
         else:
-            raise "only hits supported for now"
+            raise "only hits, non-hits, and all random supported for now"
 
         replace_stim_numbers_with_names(tdf)
         
         mask = myutils.pick_mask(tdf, **kwargs)        
         return np.asarray(tdf.index[mask], dtype=np.int)
+    
+    def pick_trials(self, **kwargs):
+        """Chooses sessions*trials based on filter.
+        
+        First loads all trials from all sessions.
+        Then, for each kwarg, chooses trials that match kwarg.
+        
+        Unless you override, nonrandom == [0] and outcome == [1]
+        
+        Example:
+        pick_trials(session=['session1'], outcome=['hit'], stim_number=[3,5])
+        
+        This returns a masked version of all_trials including only the matches.
+        The index is ['session', 'trial']
+        """
+        if 'outcome' not in kwargs:
+            kwargs['outcome'] = [1]
+        if 'nonrandom' not in kwargs:
+            kwargs['nonrandom'] = [0]
+        
+        # uses memoized property self.all_trials
+        at = self.all_trials.reset_index()
+        mask = np.ones(len(at), dtype=bool)
+        for key, vals in kwargs.items():
+            mask &= at[key].isin(vals)
+        
+        
+        return at[mask].set_index(['session', 'trial'])
+        
     
     def get_binned_spikes_by_trial(self, split_on, split_on_filter=None,
         f_samp=30e3, t_start=-.25, t_stop=.5, bins=75, include_trials='hits'):
@@ -351,62 +402,161 @@ class SpikeServer:
             
         return pandas.concat(dfs, ignore_index=True)
 
-    def get_binned_spikes_by_trial2(self, split_on, split_on_filter=None,
-        f_samp=30e3, t_start=-.25, t_stop=.5, bins=75):
-        """Looks like the same as get_binned_spiked_by_trial but
-        with less efficient concatenation"""
-        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13))
-        replace_stim_numbers_with_names(fsd)
+    def get_binned_spikes3(self, spike_filter=None, trial_filter=None):
+        """Generic binning function operating on self._fsd
         
-        g = fsd.groupby(split_on)
+        spike_filter : dataframe describing how to split fsd
+            The columns are the hierarchy to split on:
+                eg ['session', 'unit']
+            The items are the ones to include.
+            If no items, then everything is included.
+            If None, then bin over everything except 'adj_time' or 'spike_time'
+            
+            Here we delineate every combination because it's not separable
+            over session and unit (usually).
         
-        df = pandas.DataFrame()
-        for key, val in g:
-            if split_on_filter is not None and key not in split_on_filter:                
-                continue
+        trial_filter :
+            How to do this filtering?
+            For instance: hits only, stim_numbers 1-12, expressed as dicts
+            In this case I wouldn't want to enumerate every combination
+            because I can just take intersection over stim numbers and outcome.
+            
+            Although note we might want to combine errors and wrongports,
+            for instance.
+            
+            It's implicit that we want to do this for each session in
+            spike_filter.
+        
+        TODO
+            We can use this to bin each trial separately if we allow
+            'trial' as a splitter over trial_filter. Basically just need
+            to call a reset_index on self.all_trials
+        
+        
+
+        First the spikes are grouped over the columns in spike_filter.
+        For each group, the trials are grouped over the columns in trial_filter.
+        This cross-result is histogrammed.
+        All results are concatenated and returned.
+
+        The actual histogramming is done by myutils.times2bins using
+        self.f_samp, t_start, t_stop, bins
+        
+        
+        """
+        input = self._fsd
+        
+        # default, use all columns and include all data
+        if spike_filter is None:
+            col_list = input.columns.tolist()
+            remove_cols = ['adj_time', 'spike_time']
+            for col in remove_cols:
+                if col in col_list:
+                    col_list.remove(col)
+            spike_filter = pandas.DataFrame(columns=col_list)
+        
+        # Choose data from `input` by defining the following variables:
+        #   `keylist` : a list of keys to include, each separately binned
+        #   `grouped_data` : a dict from each key in keylist, to the data
+        #   `keynames` : what to call each entry of the key in the result
+        if len(spike_filter) == 0:
+            # use all data
+            keynames = spike_filter.columns.tolist()
+            keylist = [tuple([myutils.only_one(input[col])
+                for col in keynames])]
+            val = input
+            grouped_data = {keylist[0]: val}            
+        elif len(spike_filter) == 1:
+            # Optimized for the case of selecting a single unit
+            d = {}
+            for col in spike_filter:
+                d[col] = spike_filter[col][0]            
+            mask = myutils.pick_mask(input, **d)
+            
+            keylist = spike_filter.to_records(index=False) # length 1
+            keynames = spike_filter.columns.tolist()        
+            grouped_data = {keylist[0] : input.ix[mask]}
+        else:
+            # standard case
+            g = input.groupby(spike_filter.columns.tolist())
+            grouped_data = g.groups
+            keylist = spike_filter.to_records(index=False)
+            keynames = spike_filter.columns.tolist()
+        
+        # Now group the trials
+        g2 = self.all_trials.groupby(trial_filter.columns.tolist())
+        
+        
+        # Now iterate through the keys in keylist and the corresponding values
+        # in grouped_data.
+        rec_l = []    
+        for key in keylist:
+            # Take the data from this group
+            subdf = grouped_data[key]
+            
+            for g2k, g2v in g2:
+                # count trials of this type from this session
+                session = myutils.only_one(subdf.session)
+                n_trials = len(g2v.ix[session])
+
+                # Join the spikes on the columns of trial filter
+                subsubdf = subdf.join(g2v[trial_filter.columns], 
+                    on=['session', 'trial'], how='inner', rsuffix='rrr')
                 
+                # check for already-joined columns
+                for col in trial_filter.columns:
+                    if col+'rrr' in subsubdf.columns:
+                        assert (subsubdf[col] == subsubdf[col+'rrr']).all()
+                        subsubdf.pop(col + 'rrr')
+            
+                # histogramming
+                counts, t_vals = myutils.times2bins(
+                    np.asarray(subsubdf.adj_time), return_t=True, 
+                    f_samp=self.f_samp, t_start=self.t_start,
+                    t_stop=self.t_stop, bins=self.bins)
+                
+                # Add in the keyed info (session etc), plus 
+                # n_counts, n_trials, and bin
+                frame_label = list(key) + list(np.array([g2k]).flatten())
+                this_frame = [frame_label +
+                    [count, n_trials, t_val, bin] 
+                    for bin, (count, t_val) in enumerate(zip(counts, t_vals))]
+                
+                # append to growing list
+                rec_l += this_frame
         
-            for sound_name in ['lehi', 'rihi', 'lelo', 'rilo']:
-                for block_name in ['LB', 'PB']:
-                    # subframe
-                    subdf = val[(val.sound == sound_name) & 
-                        (val.block == block_name)]
-                    
-                    # get session name
-                    session_l = np.unique(np.asarray(subdf.session))
-                    assert len(session_l) == 1
-                    session = session_l[0]
-
-                    trial_list = self.list_trials_by_type(session=session,
-                        sound=sound_name, block=block_name)
-            
-                    counts, times = myutils.times2bins(
-                        fold(subdf, trial_list),
-                        f_samp=f_samp, t_start=t_start, t_stop=t_stop, bins=bins, 
-                        return_t=True)
-                    
-                    this_frame = [list(key) + [sound_name, block_name, trial, 
-                        count] for count, trial in zip(counts, trial_list)]
-                    df = df.append(pandas.DataFrame(this_frame,
-                        columns=(split_on + ['sound', 'block', 'trial', 'binned'])),
-                        ignore_index=True)
-                    
-                    #~ this_frame = [list(key) + [sound_name, block_name, trial] 
-                        #~ + list(count)
-                        #~ for count, trial in zip(counts, trial_list)]
-                    
-                    #~ df = df.append(pandas.DataFrame(this_frame,
-                        #~ columns=(split_on + ['sound', 'block', 'trial'] +
-                        #~ ['bin%d' % n for n in range(counts.shape[1])])),
-                        #~ ignore_index=True)
-            
-        return df
-
+        # convert to new data frame, using same keyed columns plus our new ones
+        cols = keynames + trial_filter.columns.tolist() + [
+            'counts', 'trials', 'time', 'bin']
+        newdf = pandas.DataFrame(rec_l, columns=cols)
+        return newdf        
+    
+    
+    def read_all_trials(self):
+        return pandas.concat(dict([(session_name, pandas.load(tdf)) 
+            for session_name, tdf in zip(self.session_names, self.tdf_list)]))
+    
+    @property
+    def all_trials(self):
+        try:
+            return self._all_trials
+        except AttributeError:
+            self._all_trials = self.read_all_trials()
+            self._all_trials.index.names = ['session', 'trial']
+            return self._all_trials
 
 def bin_flat_spike_data2(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75, 
     t_start=-.25, t_stop=.5, split_on=None, include_trials='hits',
     split_on_filter=None):
-    """Bins in time over trials, splitting on split_on"""
+    """Bins in time over trials, splitting on split_on.
+    
+    fsd : a flat array of spike times, with replaced stimulus names
+    split_on : REQUIRED, how to split fsd, eg ['session', 'unit']
+    split_on_filter : list of keys to be included, after splitting
+        if None, then everything is included
+    
+    It will be separately binned over sound.
+    """
     
     if split_on is None:
         split_on = []
@@ -436,8 +586,11 @@ def bin_flat_spike_data2(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
                 # count trials
                 n_trials = trial_counter(session=session, block=block_name, 
                     sound=sound_name, include_trials=include_trials)
-                if n_trials < len(np.unique(np.asarray(subdf.trial))):
-                    raise ValueError("counted more trials than exist")
+                
+                # comment this out, because user might request subset of
+                # original trial set
+                #if n_trials < len(np.unique(np.asarray(subdf.trial))):
+                #    raise ValueError("counted more trials than exist")
         
                 # Add in the keyed info (session etc), plus 
                 # n_counts, n_trials, and bin
@@ -572,6 +725,9 @@ def plot_rasters_and_psth(fsd, ss, fig=None, ymax=0.5, xlim=None,
     include_trials='hits'):
     """Plots rasters of a specific unit by sound, and optionally the PSTH.
     
+    Easiest is to pass the whole flat spike data, then specify
+    split_on and split_on_filter (as just one unit).
+    
     A wrapper around plot_psths_by_sound_from_flat, bin_flat_spike_data2,
     and plot_psths_by_sound.
     """
@@ -605,7 +761,7 @@ def plot_rasters_and_psth(fsd, ss, fig=None, ymax=0.5, xlim=None,
     yl2 = max([ax.get_ylim()[1] for ax in fig.axes])
     
     for ax in fig.axes:
-        ax.plot(xlim, [0, 0], 'k-')
+        ax.plot(ax.get_xlim(), [0, 0], 'k-')
         ax.set_ylim((-ymax, yl2))
     plt.show()
 
@@ -666,7 +822,9 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0,
             
             # error check
             n_empty_trials = sum([len(s) == 0 for s in folded_spikes])
-            assert (n_empty_trials + len(np.unique(np.asarray(x.trial)))) == len(trial_list)
+            # comment this out, because might be requesting subset of
+            # original trial set
+            #assert (n_empty_trials + len(np.unique(np.asarray(x.trial)))) == len(trial_list)
             
             old_xlim = ax.get_xlim()
             if block_name == 'LB':
@@ -743,7 +901,7 @@ def plot_effect_size_by_sound(fdf, fig=None, p_thresh=.05, **kwargs):
     return mag_d, p_d, names, t
 
 def masked_heatmaps_by_sound(mag_d, p_d, t, fig=None, p_thresh=.05,
-    clim=None):
+    clim=None, cmap=None):
     """Plot mag_d heatmap, masked by p_d, for each stimulus."""    
     cm = 0.0
     
@@ -766,7 +924,7 @@ def masked_heatmaps_by_sound(mag_d, p_d, t, fig=None, p_thresh=.05,
         except ValueError:
             cm = 0.0
         
-        myutils.my_imshow(to_plot, ax=ax, x=t)
+        myutils.my_imshow(to_plot, ax=ax, x=t, cmap=cmap)
         ax.set_title(sound_name)
     
     for ax in fig.axes:
