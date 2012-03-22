@@ -156,11 +156,15 @@ class KK_loader(object):
         """
         self._data_dir = data_dir
 
-    def execute(self):
+    def execute(self, group_multiplier=None):
         """Loads spike times and unit info from KlustaKwik files.
         
         Stores resulting spike trains in self.spiketrains, a dict keyed
         by tetrode number.
+        
+        group_multiplier : if not None, then the ID of each unit will be
+            added to its group number times this value. Eg tetrode 1 will
+            have unit numbers 100-199
         """
         # Search data directory for KlustaKwik files. This sets
         # self._clufiles and self._fetfiles.
@@ -174,6 +178,9 @@ class KK_loader(object):
             clufile = self._clufiles[ntet]            
             spks = self._load_spike_times(fetfile)
             uids = self._load_unit_id(clufile)
+            
+            if group_multiplier:
+                uids = uids + group_multiplier * ntet
             
             # Initialize a new container for the loaded spike times and IDs
             self.spiketrains[ntet] = MultipleUnitSpikeTrain(spks, uids)
@@ -218,6 +225,7 @@ class KK_loader(object):
         nbFeatures = int(f.readline().strip())
         
         # I think the number of features is supposed to include the time
+        # This is a hack in case someone followed opposite convention
         if nbFeatures == 0:
             nbFeatures = 1
         
