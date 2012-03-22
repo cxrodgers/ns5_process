@@ -22,6 +22,7 @@ import shutil
 import glob
 import os.path
 import ns5
+import time
 import numpy as np
 import TrialSlicer
 try:
@@ -33,6 +34,8 @@ import matplotlib.mlab as mlab
 import KlustaKwikIO
 import scipy.signal
 import SpikeTrainContainers
+from myutils import printnow
+import myutils
 
 # Globals
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
@@ -177,6 +180,7 @@ class RecordingSession:
             print "warning: no ns5 file in %s" % self.full_path
         
         self.session = None
+        self.group_multiplier = None
     
     def get_db_filename(self):
         return os.path.join(self.full_path, self.session_name + '.db')
@@ -376,6 +380,7 @@ class RecordingSession:
         # Convert to OE object
         block2 = OE.io.io.hierachicalNeoToOe(block)
         block2.name = RAW_BLOCK_NAME
+        del block
 
         # Add events at TIMESTAMPS
         t = self.read_timestamps()
@@ -390,11 +395,11 @@ class RecordingSession:
 
         # Save to database
         block2.save(session=session)
-        
-        return block2
+        session.expunge_all()
+        #return block2
     
     def generate_spike_block(self, CAR=True, smooth_spikes=False, 
-        filterer=None):
+        filterer=None, force=False):
         """Filters the data for spike extraction.
         
         CAR: If True, subtract the common-average of every channel.
@@ -404,16 +409,27 @@ class RecordingSession:
             FiltererForSpikes. If you specify, then smooth_spikes is ignored,
             because filterer will take care of that.
         
-        If spike block already exists, will return without doing anything.
+        If spike block already exists, will return without doing anything,
+        unless you specify force=True, in which case the existing spike block
+        will be overwritten.
+        
         """
         # Open connection to the database
         #self.open_db()
         session = self.get_OE_session()
         
         # Check that I haven't already run
-        if self.get_spike_block() is not None:
-            print "spike filtering already done!"
-            return
+        sb = self.get_spike_block()
+        if sb is not None:
+            if force:
+                # delete existing block
+                print "deleting existing spike block"
+                session.delete(sb)
+                session.commit()
+                session.expunge_all()
+            else:
+                print "spike filtering already done!"
+                return
         
         # Find the raw data block
         raw_block = self.get_raw_data_block()
@@ -692,7 +708,7 @@ class RecordingSession:
             return (np.mean(np.array(Pxx_list_db), axis=0), freqs)
 
     def run_spikesorter(self, save_to_db=True, detection_kwargs=None,
-        feature_kwargs=None, cluster_kwargs=None):
+        feature_kwargs=None, cluster_kwargs=None, save_to_klusters=None):
         """Sorts all groups in the database.
         
         Figures out which groups exist. Then calls another method to
@@ -708,6 +724,12 @@ class RecordingSession:
         
         detection_kwargs : similar, but defaults are different, see
             run_spikesorter_on_group
+        
+        save_to_klusters: if None, do nothing
+            if True, will store Klusters output in a subdirectory with
+            a name from self.next_klusters_dir()
+            otherwise, whatever you pass will be used as :basename:
+            in spikesorter.save_to_klusters()
         """
         session = self.get_OE_session()
         
@@ -715,15 +737,55 @@ class RecordingSession:
         group_list = list(np.unique([rp.group for rp in 
             session.query(OE.RecordingPoint).all()]))
         if None in group_list: group_list.remove(None)
-        
-        # spike sort
+
+        # Optionally, choose directory to save klusters output
+        if save_to_klusters is True:
+            newdir = self.next_klusters_dir()
+            os.mkdir(newdir)
+            save_to_klusters = os.path.join(newdir, self.session_name)
+
+        # spike sort each group
         for group in group_list:
-            spikesorter = self.run_spikesorter_on_group(group, save_to_db,
+            self.run_spikesorter_on_group(group, save_to_db,
                 detection_kwargs=detection_kwargs,
-                feature_kwargs=feature_kwargs, cluster_kwargs=cluster_kwargs)
+                feature_kwargs=feature_kwargs, cluster_kwargs=cluster_kwargs,
+                save_to_klusters=save_to_klusters)
+    
+    def next_klusters_dir(self):
+        """Returns full path to next available subdirectory like 'klusters%d'"""
+        n = 0
+        subdir = os.path.join(self.full_path, 'klusters%d' % n)    
+        while os.path.exists(subdir) and os.path.isdir(subdir):
+            n += 1
+            subdir = os.path.join(self.full_path, 'klusters%d' % n)    
+        return os.path.join(self.full_path, 'klusters%d' % n)
+
+    def last_klusters_dir(self):
+        """Returns full path to last existing subdirectory like 'klusters%d'
+        
+        If no such subdirectory exists, returns None.
+        
+        Note
+        ----
+        Start checking at klusters0 and gives up whenever the first missing
+        directory is found. Thus if you have gaps in your subdirectories, it
+        will give up at the first gap.
+        """
+        n = 0
+        subdir = os.path.join(self.full_path, 'klusters%d' % n)    
+        while os.path.exists(subdir) and os.path.isdir(subdir):
+            n += 1
+            subdir = os.path.join(self.full_path, 'klusters%d' % n)    
+        
+        if n == 0:
+            # No such subdirectory
+            return None
+        else:
+            return os.path.join(self.full_path, 'klusters%d' % (n-1))
     
     def run_spikesorter_on_group(self, group, save_to_db=True, 
-        detection_kwargs=None, feature_kwargs=None, cluster_kwargs=None):
+        detection_kwargs=None, feature_kwargs=None, cluster_kwargs=None,
+        save_to_klusters=None):
         """Run spike sorting on one group and return spikesorter object.
         
         Useful for playing around with the returned data.
@@ -750,7 +812,12 @@ class RecordingSession:
             'consistent_across_segments' : True,
             'consistent_across_channels' : False,
             'correct_times' : True         
+        
+        save_to_klusters : if None, do not save klusters output.
+            Otherwise, should be a fully specified basename for
+            spikesorter.save_to_klusters
         """
+        printnow('running spikesorter on group %d' % group)
         # Default keyword arguments dict
         # Override OE algorithms defaults here, if desired.
         if feature_kwargs is None:
@@ -783,16 +850,24 @@ class RecordingSession:
             session=session, recordingPointList=rp_list)
 
         # Call detection algorithm with the specified kwargs
+        printnow('detection')
         spikesorter.computeDetectionEnhanced(\
             OE.detection.EnhancedMedianThreshold, 
             **detection_kwargs_to_use)     
         
+        printnow('extraction')
         spikesorter.computeExtraction(OE.extraction.WaveformExtractor)        
+        printnow('featuring')
         spikesorter.computeFeatures(OE.feature.PCA, **feature_kwargs)
+        printnow('clustering')
         spikesorter.computeClustering(OE.clustering.KMean, **cluster_kwargs)
         
         if save_to_db:
+            printnow('saving to db')
             spikesorter.save_to_db()        
+        
+        if save_to_klusters:
+            spikesorter.save_to_klusters(basename=save_to_klusters)
     
         return spikesorter
 
@@ -810,7 +885,7 @@ class RecordingSession:
     def get_spiketrains_raw(self):
         """Reads neural data from directory and returns as spiketrains"""
         kkl = KlustaKwikIO.KK_loader(self.full_path)
-        kkl.execute()
+        kkl.execute(group_multiplier=self.group_multiplier)
         return kkl.spiketrains        
     
     def get_spiketrains_centered(self, window='only hard'):
@@ -961,7 +1036,7 @@ class RecordingSession:
 
     
     def get_spike_picker(self, skip_trial_numbering=False,
-        check_against_trial_slicer=True):
+        check_against_trial_slicer=True, override_path=None):
         """Returns a SpikePicker object for spike time analysis.
         
         skip_trial_numbering : if True, attempt to assign trial numbers
@@ -970,9 +1045,30 @@ class RecordingSession:
         
         check_against_trial_slicer : if True, reslice trials and confirm
             that this matches the times of each segment. The original
-            ns5 file must be available.        
+            ns5 file must be available.     
+
+        override_path : if True, load spiketrains from directory specified.
+            This is useful if you want to recluster, but keep everything
+            else the same. First checks for a subdirectory within RS;
+            if this does not exist, loads full directory.
         """
-        sts = self.get_spiketrains_raw()
+        # Load spiketrains
+        if override_path:
+            # Check for subdirectory first, then full path
+            subdir = os.path.join(self.full_path, override_path)
+            if not (os.path.exists(subdir) and os.path.isdir(subdir)):
+                subdir = override_path
+            if not (os.path.exists(subdir) and os.path.isdir(subdir)):
+                raise "specified path %s does not exist" % override_path
+
+            kkl = KlustaKwikIO.KK_loader(subdir)
+            kkl.execute(group_multiplier=self.group_multiplier)
+            sts = kkl.spiketrains    
+        else:
+            # Use defaults
+            sts = self.get_spiketrains_raw()
+        
+        # Convert to spike picker
         fs = self.get_sampling_rate()
         sp = SpikeTrainContainers.SpikePicker(sts, f_samp=fs)
         
@@ -1010,15 +1106,61 @@ class RecordingSession:
         
         # reslice and error check
         if check_against_trial_slicer:
-            t_starts2, t_stops2 = self.calculate_trial_boundaries()
-            assert np.all(np.asarray(t_starts) == np.asarray(t_starts2))
-            assert np.all(np.asarray(t_stops) == np.asarray(t_stops2))
+            skip_assert = False
+            try:
+                t_starts2, t_stops2 = self.calculate_trial_boundaries()
+            except IOError:
+                print "warning: you requested trial checking but can't load ns5"
+                skip_assert = True
+            if not skip_assert:
+                assert np.all(np.asarray(t_starts) == np.asarray(t_starts2))
+                assert np.all(np.asarray(t_stops) == np.asarray(t_stops2))
         
         # assign trial number to each spike
         t_centers = self.read_timestamps()
         sp.assign_trial_numbers(t_nums, t_starts, t_stops, t_centers)
         
         return sp
+
+    def run_klustakwik(self, subdir=None, processes=4, n_features=8):
+        """Run KlustaKwik on spike subdirectory.
+        
+        subdir : if None, then the last subdirectory like 'klusters%d' will
+        be used. Otherwise, specify the subdirectory name manually. Whatever
+        you pass will be joined to self.full_path
+        """
+        import multiprocessing, errno
+        # Choose directory to run klustakwik
+        if not subdir:
+            subdir = self.last_klusters_dir()
+        else:
+            subdir = os.path.join(self.full_path, subdir)
+        
+        p = multiprocessing.Pool(processes)
+        
+        # Find groups to run on
+        fetfilenames = sorted(glob.glob(os.path.join(subdir, '*.fet.*')))
+        #fetfilenames = [os.path.split(fn)[1] for fn in fetfilenames]
+        fetfilenumbers = [int(fn.split('.')[-1]) for fn in fetfilenames]
+        basename = myutils.unique_or_error(
+            [os.path.splitext(os.path.splitext(fn)[0])[0] 
+                for fn in fetfilenames])
+        
+        for groupnumber in fetfilenumbers:
+            p.apply_async(run_klustakwik_on_group, 
+                (n_features, basename, groupnumber))
+        p.close()
+        
+        # some funky code to make it work with ipython ctrl+c
+        notintr = False
+        while not notintr:
+            try:
+                p.join()
+                notintr = True
+            except OSError, ose:
+                if ose.errno != errno.EINTR:
+                    raise ose
+        
 
     # Not sure the next 3 will ever be used for anything
     #~ def convert_neuron_name_to_neuron_id(self, neuron_name_list):
@@ -1058,7 +1200,23 @@ class RecordingSession:
             #~ else:
                 #~ nn_list.append(int(m.group(1)))
         #~ return nn_list
-    
+
+
+def run_klustakwik_on_group(n_features, basename, groupnumber,
+    min_clusters=3, max_clusters=14):
+    """Calls KlustaKwik on parameters"""
+    feature_string = '1'*n_features + '0'
+    #time.sleep(5)
+    syscall = ' '.join([
+        "KlustaKwik %s %d" % (basename, groupnumber),
+        "-UseFeatures %s" % feature_string,
+        "-MinClusters %d" % min_clusters,
+        "-MaxClusters %d" % max_clusters,
+        "-Screen 0"])
+    printnow(syscall)
+    os.system(syscall)
+    printnow("group %d done" % groupnumber)
+
 
 class RS_CR12B(RecordingSession):
     def __init__(self, *args, **kwargs):
