@@ -5,6 +5,8 @@ import matplotlib.mlab as mlab
 import wave
 import struct
 import matplotlib.pyplot as plt
+from myutils import Spectrogrammer
+import myutils
 
 def my_imshow(C, x=None, y=None, ax=None):
     if x is None:
@@ -93,6 +95,8 @@ class STRF_experiment:
     """Class that holds links to stimulus and response files"""
     stim_file_label = 'stim'
     spike_file_label = 'spike'
+    stim_file_regex = r'stim(\d+)\.wav'
+    spike_file_regex = r'spike(\d+)'
     
     def __init__(self, stim_dir=None, spike_dir=None):
         """Initialize object to hold stimulus and response data.
@@ -113,7 +117,7 @@ class STRF_experiment:
         self.wave_file_list = None
         self.spike_file_list = None
 
-    def transform_all_stimuli(self):
+    def transform_all_stimuli(self, assert_sampling_rate=None, truncate=None):
         """Calculates spectrograms of each stimulus
         
         Saves in attributes `specgm_list`, `t_list`, and `freqs_list`.
@@ -137,15 +141,22 @@ class STRF_experiment:
         
         # load and transform each file
         for wave_file in self.wave_file_list:
-            waveform = self.load_waveform_from_wave_file(wave_file)
+            waveform, fs = self.load_waveform_from_wave_file(wave_file)
+            if assert_sampling_rate:
+                assert fs == assert_sampling_rate
+            
             specgm, freqs, t = self.waveform_transformer.transform(waveform)
+            if truncate:
+                inds = (t > truncate)
+                t = t[~inds]
+                specgm = specgm[:, ~inds]
             self.specgm_list.append(specgm)
             self.t_list.append(t)
             self.freqs_list.append(freqs)
                 
         # Store unique values of t and freqs (if possible)
         if len(self.t_list) > 0 and np.all(
-            [tt == self.t_list[0] for tt in self.t_list]):
+            [np.all(tt == self.t_list[0]) for tt in self.t_list]):
             self.t = self.t_list[0]
         if len(self.freqs_list) > 0 and np.all(
             [ff == self.freqs_list[0] for ff in self.freqs_list]):
@@ -154,10 +165,11 @@ class STRF_experiment:
     def load_waveform_from_wave_file(self, filename, dtype=np.float):
         """Opens wave file and reads, assuming signed shorts"""
         wr = wave.Wave_read(filename)
+        fs = wr.getframerate()
         sig = np.array(struct.unpack('%dh' % wr.getnframes(), 
             wr.readframes(wr.getnframes())), dtype=dtype)
         wr.close()
-        return sig        
+        return sig, fs
     
     def _set_list_of_files(self):
         """Reads stimulus and response filenames from disk, if necessary.
@@ -185,9 +197,9 @@ class STRF_experiment:
             for wave_file, spike_file in zip(self.wave_file_list, 
                 self.spike_file_list):
                 # extract numbers on end of wave and spike files
-                wave_num = glob.re.search(self.stim_file_label + r'(\d+)\.wav',
+                wave_num = glob.re.search(self.stim_file_regex,
                     wave_file).groups()[0]
-                spike_num = glob.re.search(self.spike_file_label + r'(\d+)$',
+                spike_num = glob.re.search(self.spike_file_regex,
                     spike_file).groups()[0]
                 
                 # test string equality (3 != 003)
@@ -246,7 +258,8 @@ class STRF_experiment:
         """
         pass
     
-    def get_concatenated_response_matrix(self, dtype=np.int):    
+    def get_concatenated_response_matrix(self, dtype=np.float, 
+        sampling_rate=1000., truncate=None):    
         """Loads spike files from disk, returns concatenated responses.
         
         You must run transform_all_stimuli first, or otherwise set self.t_list,
@@ -261,22 +274,31 @@ class STRF_experiment:
         concatenated_psths = []
         for respfile, bin_centers in zip(self.spike_file_list, self.t_list):
             # store responses
-            try:
-                # flatten() handles the case of only one value
-                st = np.loadtxt(respfile).flatten()
-            except IOError:
-                # this handles the case of no data
-                st = np.array([])
-            
-            # convert to sec
-            st = st / 1000.0
+            #~ try:
+                #~ # flatten() handles the case of only one value
+                #~ st = np.loadtxt(respfile).flatten()
+            #~ except IOError:
+                #~ # this handles the case of no data
+                #~ st = np.array([])
+            #~ st = st / 1000.0
+            s = file(respfile).readlines()
+            st = []
+            for line in s:
+                tmp = myutils.parse_space_sep(line, dtype=np.float)
+                tmp = np.asarray(tmp) / sampling_rate
+                if truncate:
+                    tmp = tmp[tmp <= truncate]
+                st.append(tmp)
             
             # convert bin centers to bin edges
             bin_edges = bin_centers[:-1] + 0.5 * np.diff(bin_centers)
             bin_edges = np.concatenate([[-np.inf], bin_edges, [np.inf]])
             
             # now histogram
-            counts, bin_edges2 = np.histogram(st, bin_edges)
+            counts = []
+            for line in st:
+                counts.append(np.histogram(line, bin_edges)[0])
+            counts = np.mean(counts, axis=0)
         
             # Append to growing list and check that size matches up trial-by-trial
             concatenated_psths.append(counts)
@@ -286,74 +308,75 @@ class STRF_experiment:
         return np.concatenate(concatenated_psths).astype(dtype)[np.newaxis,:]
 
 
-class Spectrogrammer:
-    """Turns a waveform into a spectrogram"""
-    def __init__(self, NFFT=256, downsample_ratio=5, new_bin_width_sec=None,
-        max_freq=40e3, min_freq=5e3, Fs=200e3, normalization=1.0):
-        """Initialize object to turn waveforms to spectrograms.
+#~ class Spectrogrammer:
+    #~ """Turns a waveform into a spectrogram"""
+    #~ def __init__(self, NFFT=256, downsample_ratio=5, new_bin_width_sec=None,
+        #~ max_freq=40e3, min_freq=5e3, Fs=200e3, normalization=1.0):
+        #~ """Initialize object to turn waveforms to spectrograms.
         
-        Stores parameter choices, so you can batch analyze waveforms using
-        the `transform` method.
+        #~ Stores parameter choices, so you can batch analyze waveforms using
+        #~ the `transform` method.
         
-        If you specify new_bin_width_sec, this chooses the closest integer 
-        downsample_ratio and that parameter is actually saved and used.
+        #~ If you specify new_bin_width_sec, this chooses the closest integer 
+        #~ downsample_ratio and that parameter is actually saved and used.
         
-        TODO: catch other kwargs and pass to specgram.
-        """
+        #~ TODO: catch other kwargs and pass to specgram.
+        #~ """
         
-        # figure out downsample_ratio
-        if new_bin_width_sec is not None:
-            self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT))
-        else:
-            self.downsample_ratio = int(downsample_ratio)
-        assert self.downsample_ratio > 0
+        #~ # figure out downsample_ratio
+        #~ if new_bin_width_sec is not None:
+            #~ self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT))
+        #~ else:
+            #~ self.downsample_ratio = int(downsample_ratio)
+        #~ assert self.downsample_ratio > 0
         
-        # store other defaults
-        self.NFFT = NFFT
-        self.max_freq = max_freq
-        self.min_freq = min_freq
-        self.Fs = Fs
+        #~ # store other defaults
+        #~ self.NFFT = NFFT
+        #~ self.max_freq = max_freq
+        #~ self.min_freq = min_freq
+        #~ self.Fs = Fs
+        #~ self.normalization = normalization
 
     
-    def transform(self, waveform):
-        """Converts a waveform to a suitable spectrogram.
+    #~ def transform(self, waveform):
+        #~ """Converts a waveform to a suitable spectrogram.
         
-        Removes high and low frequencies, rebins in time (via median)
-        to reduce data size. Returned times are the midpoints of the new bins.
+        #~ Removes high and low frequencies, rebins in time (via median)
+        #~ to reduce data size. Returned times are the midpoints of the new bins.
         
-        Returns:  Pxx, freqs, t    
-        Pxx is an array of dB power of the shape (len(freqs), len(t)).
-        It will be real but may contain -infs due to log10
-        """
-        # For now use NFFT of 256 to get appropriately wide freq bands, then
-        # downsample in time
-        Pxx, freqs, t = mlab.specgram(waveform, NFFT=self.NFFT, Fs=self.Fs)
-        Pxx = Pxx * np.tile(freqs ** self.normalization, (1, Pxx.shape[1]))
+        #~ Returns:  Pxx, freqs, t    
+        #~ Pxx is an array of dB power of the shape (len(freqs), len(t)).
+        #~ It will be real but may contain -infs due to log10
+        #~ """
+        #~ # For now use NFFT of 256 to get appropriately wide freq bands, then
+        #~ # downsample in time
+        #~ Pxx, freqs, t = mlab.specgram(waveform, NFFT=self.NFFT, Fs=self.Fs)
+        #~ Pxx = Pxx * np.tile(freqs ** self.normalization, (1, Pxx.shape[1]))
 
-        # strip out unused frequencies
-        Pxx = Pxx[(freqs < self.max_freq) & (freqs > self.min_freq), :]
-        freqs = freqs[(freqs < self.max_freq) & (freqs > self.min_freq)]
+        #~ # strip out unused frequencies
+        #~ Pxx = Pxx[(freqs < self.max_freq) & (freqs > self.min_freq), :]
+        #~ freqs = freqs[(freqs < self.max_freq) & (freqs > self.min_freq)]
 
-        # Rebin in size "downsample_ratio". If last bin is not full, discard.
-        Pxx_rebinned = []
-        t_rebinned = []
-        for n in range(0, len(t) - self.downsample_ratio + 1, 
-            self.downsample_ratio):
-            Pxx_rebinned.append(
-                np.median(Pxx[:, n:n+self.downsample_ratio], axis=1).flatten())
-            t_rebinned.append(
-                np.mean(t[n:n+self.downsample_ratio]))
+        #~ # Rebin in size "downsample_ratio". If last bin is not full, discard.
+        #~ Pxx_rebinned = []
+        #~ t_rebinned = []
+        #~ for n in range(0, len(t) - self.downsample_ratio + 1, 
+            #~ self.downsample_ratio):
+            #~ Pxx_rebinned.append(
+                #~ np.median(Pxx[:, n:n+self.downsample_ratio], axis=1).flatten())
+            #~ t_rebinned.append(
+                #~ np.mean(t[n:n+self.downsample_ratio]))
 
-        # Convert to arrays
-        Pxx_rebinned_a = np.transpose(np.array(Pxx_rebinned))
-        t_rebinned_a = np.array(t_rebinned)
+        #~ # Convert to arrays
+        #~ Pxx_rebinned_a = np.transpose(np.array(Pxx_rebinned))
+        #~ t_rebinned_a = np.array(t_rebinned)
 
-        # log it and deal with infs
-        Pxx_rebinned_a_log = -np.inf * np.ones_like(Pxx_rebinned_a)
-        Pxx_rebinned_a_log[np.nonzero(Pxx_rebinned_a)] = \
-            10 * np.log10(Pxx_rebinned_a[np.nonzero(Pxx_rebinned_a)])
+        #~ # log it and deal with infs
+        #~ Pxx_rebinned_a_log = -np.inf * np.ones_like(Pxx_rebinned_a)
+        #~ Pxx_rebinned_a_log[np.nonzero(Pxx_rebinned_a)] = \
+            #~ 10 * np.log10(Pxx_rebinned_a[np.nonzero(Pxx_rebinned_a)])
 
-        return Pxx_rebinned_a_log, freqs, t_rebinned_a
+        #~ return Pxx_rebinned_a_log, freqs, t_rebinned_a
 
 def clean_up_stimulus(whole_stimulus, silence_value='min_row', z_score=True):
     """Replaces non-finite values with silence_value, and z-scores by row.
@@ -441,7 +464,10 @@ class DirectFitter:
         self.Y = Y
         self.XTX = None # pre-calculate this one
         
-        assert self.X.shape[0] > self.X.shape[1]
+        if self.X.shape[0] != self.Y.shape[0]:
+            raise ValueError("n_timepoints (dim0) is not the same!")
+        if self.X.shape[1] > self.X.shape[1]:
+            print "warning: more features than timepoints, possibly transposed"
     
     def STA(self):
         """Returns spike-triggered average of stimulus X and response Y.
