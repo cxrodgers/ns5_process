@@ -10,7 +10,23 @@ import matplotlib
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
 
+
+class UniqueError(Exception):
+    pass
+
+def unique_or_error(a):
+    """Asserts that `a` contains only one unique value and returns it"""    
+    u = np.unique(np.asarray(a))
+    if len(u) == 0:
+        raise UniqueError("no values found")
+    if len(u) > 1:
+        raise UniqueError("%d values found, should be one" % len(u))
+    else:
+        return u[0]
+
 def only_one(l):
+    """this will be redefined to error unless `l` is length one"""
+    print "warning: use `unique_or_error`"
     ll = np.unique(np.asarray(l))
     assert len(ll) == 1, "values are not unique"
     return ll[0]
@@ -86,7 +102,11 @@ class Spectrogrammer:
             self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT))
         else:
             self.downsample_ratio = int(downsample_ratio)
-        assert self.downsample_ratio > 0
+        
+        if self.downsample_ratio == 0:
+            print "requested temporal resolution too high, using maximum"
+            self.downsample_ratio = 1
+            
         
         # store other defaults
         self.NFFT = NFFT
@@ -182,13 +202,13 @@ def list_union(l1, l2):
     return list(set.union(set(l1), set(l2)))
 
 
-def parse_space_sep(s):
+def parse_space_sep(s, dtype=np.int):
     """Returns a list of integers from a space-separated string"""
     s2 = s.strip()
     if s2 == '':
         return []    
     else:
-        return [int(ss) for ss in s2.split()]
+        return [dtype(ss) for ss in s2.split()]
 
 def r_adj_pval(a, meth='BH'):
     import rpy2.robjects as robjects
