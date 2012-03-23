@@ -451,6 +451,8 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         f = plt.figure(figsize=(16,12))
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
+            if sn not in sn2trials:
+                continue
             ax = f.add_subplot(3, 4, sn)
             psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], 
                 binwidth=binwidth)
