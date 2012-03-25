@@ -194,7 +194,12 @@ class Bcontrol_Loader_By_Dir(object):
         if len(possible_pickles) == 1:
             # A pickle was found, load it
             f = file(possible_pickles[0], 'r')
-            data = pickle.load(f)
+            try:
+                data = pickle.load(f)
+            except AttributeError:
+                # not sure why this is the pickling error
+                print "bad pickle"
+                return (None, False)
             f.close()
         
         return (data, len(possible_pickles) == 1)

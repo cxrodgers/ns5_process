@@ -402,7 +402,8 @@ def plot_spike_rate_over_session(rs, savefig=None, skipNoScore=True):
 
 
 def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
-    skipNoScore=True, binwidth=.010, specify_unit_ids=None):
+    skipNoScore=True, binwidth=.010, specify_unit_ids=None,
+    check_against_trial_slicer=True, override_path=None):
     """Dump PSTHs of all SUs to disk, arranged by stimulus.
     
     This function handles arrangement into figure, but actual plotting
@@ -410,6 +411,12 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
     
     skipNoScore : if True, queries OE db for each unit id and only handles
         ones that have been assigned a score. will error if not found in db.
+    
+    specify_units_ids : plot only the requested units, this is mutually
+        exclusive with skipNoScore
+    
+    override_path, check_against_trial_slicer : see rs.get_spike_picker
+        Also, will save figures in override_path. Specify full path!
     """
     # Load trial info
     bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
@@ -418,13 +425,21 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
     sn2names = bcld.get_sn2names()
 
     # Load spike picker
-    sp = rs.get_spike_picker()
+    sp = rs.get_spike_picker(override_path=override_path,
+        check_against_trial_slicer=check_against_trial_slicer)
+    
+    if override_path:
+        figpath = override_path
+    else:
+        figpath = rs.full_path
     
     # Choose units to plot
     if skipNoScore:
         session = rs.get_OE_session()
         nl = session.query(OE.Neuron).filter(OE.Neuron.sortingScore != None).all()
         good_SU_list = [n.id for n in nl]
+    elif specify_unit_ids:
+        good_SU_list = np.asarray(specify_unit_ids)
     else:
         # Plot all
         good_SU_list = sp.units
@@ -436,6 +451,8 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         f = plt.figure(figsize=(16,12))
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
         for sn, name in sn2names.items(): 
+            if sn not in sn2trials:
+                continue
             ax = f.add_subplot(3, 4, sn)
             psth = sp.get_psth(unit=[unit], trial=sn2trials[sn], 
                 binwidth=binwidth)
@@ -449,19 +466,19 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         if savefig is None:
             plt.show()
         elif savefig is True:
-            filename = os.path.join(rs.full_path, rs.session_name + 
+            filename = os.path.join(figpath, rs.session_name + 
                 '_psth_by_stim_unit_%d.png' % unit)
             f.savefig(filename)
             plt.close(f)        
         else:
-            filename = os.path.join(rs.full_path, rs.session_name + 
+            filename = os.path.join(figpath, rs.session_name + 
                 ('_psth_by_stim_unit_%d_' % unit) + 
                 savefig + '.png')       
             f.savefig(filename)
             plt.close(f)            
 
 def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None, 
-    binwidth=.010):
+    binwidth=.010, override_path=None):
     """Dump PSTHs of all spikes from each tetrode to disk, by stimulus.
     
     Does not use clustering information even if it exists.
@@ -488,7 +505,7 @@ def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None,
 
     # Load spike picker
     #spt = rs.get_spike_picker()._p.dict_by('tetrode')
-    sp = rs.get_spike_picker()
+    sp = rs.get_spike_picker(override_path=override_path)
     
     
     for tetnum in sorted(sp.tetrodes):
