@@ -427,12 +427,6 @@ class SpikeServer:
             It's implicit that we want to do this for each session in
             spike_filter.
         
-        TODO
-            We can use this to bin each trial separately if we allow
-            'trial' as a splitter over trial_filter. Basically just need
-            to call a reset_index on self.all_trials
-        
-        
 
         First the spikes are grouped over the columns in spike_filter.
         For each group, the trials are grouped over the columns in trial_filter.
@@ -484,7 +478,9 @@ class SpikeServer:
             keynames = spike_filter.columns.tolist()
         
         # Now group the trials
-        g2 = self.all_trials.groupby(trial_filter.columns.tolist())
+        att = self.all_trials.reset_index().set_index(['session', 'trial'], drop=False)
+        g2 = att.groupby(trial_filter.columns.tolist())
+        #g2 = self.all_trials.groupby(trial_filter.columns.tolist())
         
         
         # Now iterate through the keys in keylist and the corresponding values
@@ -498,6 +494,10 @@ class SpikeServer:
                 # count trials of this type from this session
                 session = myutils.only_one(subdf.session)
                 n_trials = len(g2v.ix[session])
+                if n_trials == 0:
+                    # for example if a possible combination never actually
+                    # occurred
+                    continue
 
                 # Join the spikes on the columns of trial filter
                 subsubdf = subdf.join(g2v[trial_filter.columns], 
@@ -529,7 +529,9 @@ class SpikeServer:
         cols = keynames + trial_filter.columns.tolist() + [
             'counts', 'trials', 'time', 'bin']
         newdf = pandas.DataFrame(rec_l, columns=cols)
-        return newdf        
+        
+        # drop the combinations that never actually occurred (future trials)
+        return newdf
     
     
     def read_all_trials(self):
