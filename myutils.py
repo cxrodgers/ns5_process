@@ -5,10 +5,46 @@ from matplotlib import mlab
 import matplotlib.pylab
 import scipy.stats
 import matplotlib
+import wave
+import struct
 
 
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
+
+def load_waveform_from_wave_file(filename, dtype=np.float, rescale=False,
+    also_return_fs=False, never_flatten=False, mean_channel=False):
+    """Opens wave file and reads, assuming signed shorts.
+    
+    if rescale, returns floats between -1 and +1
+    if also_return_fs, returns (sig, f_samp); else returns sig
+    if never_flatten, then returns each channel its own row
+    if not never_flatten and only 1 channel, returns 1d array
+    if mean_channel, return channel mean (always 1d)
+    """
+    wr = wave.Wave_read(filename)
+    nch = wr.getnchannels()
+    nfr = wr.getnframes()
+    sig = np.array(struct.unpack('%dh' % (nfr*nch), wr.readframes(nfr)), 
+        dtype=dtype)
+    wr.close()
+    
+    # reshape into channels
+    sig = sig.reshape((nfr, nch)).transpose()
+    
+    if mean_channel:
+        sig = sig.mean(axis=0)
+    
+    if not never_flatten and nch == 1:
+        sig = sig.flatten()
+    
+    if rescale:
+        sig = sig / 2**15
+    
+    if also_return_fs:
+        return sig, wr.getframerate()
+    else:
+        return sig   
 
 def only_one(l):
     ll = np.unique(np.asarray(l))
