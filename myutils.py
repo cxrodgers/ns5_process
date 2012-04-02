@@ -11,6 +11,27 @@ longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
 
 
+def auroc(data1, data2, return_p=False):
+    """Return auROC and two-sided p-value (if requested)"""
+    try:
+        U, p = scipy.stats.mannwhitneyu(data1, data2)
+        p = p * 2
+    except ValueError:
+        print "some sort of error in MW"
+        print data1
+        print data2
+        if return_p:
+            return 0.5, 1.0
+        else:
+            return 0.5
+    AUC  = 1 - (U / (len(data1) * len(data2)))
+
+    if return_p:
+        return AUC, p
+    else:
+        return AUC
+    
+
 class UniqueError(Exception):
     pass
 
