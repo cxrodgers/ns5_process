@@ -13,7 +13,15 @@ class LBPB_constants(object):
                  9: u'le_hi_lc', 10: u'ri_hi_lc', 11: u'le_lo_lc', 12: u'ri_lo_lc'}            
         self.sn2name = sn2name
         self.name2sn = dict([(val, key) for key, val in sn2name.items()])
-            
+        
+        self.sn2shortname = \
+            {1: u'lo', 2: u'hi', 3: u'le', 4: u'ri',
+             5: u'lehi', 6: u'rihi', 7: u'lelo', 8: u'rilo',
+             9: u'lehi', 10: u'rihi', 11: u'lelo', 12: u'rilo'}      
+        self.sn2block = \
+            {1: u'P', 2: u'P', 3: u'L', 4: u'L',
+             5: u'PB', 6: u'PB', 7: u'PB', 8: u'PB',
+             9: u'LB', 10: u'LB', 11: u'LB', 12: u'LB'}                 
     
     def ordered_by_sound(self):
         sns = (5, 9, 6, 10, 7, 11, 8, 12)
