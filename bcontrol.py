@@ -143,12 +143,14 @@ class Bcontrol_Loader_By_Dir(object):
     load : Get data from directory
     get_sn2trials : returns a dict of stimulus numbers and trial numbers
     get_sn2name : returns a dict of stimulus numbers and name
+    dictify : store a sanitized version that replaces mat_struct object
+        with dicts
     
     Other useful information (TRIALS_INFO, SOUNDS_INFO, etc) is
     available in my dict `data` after loading.
     """
     def __init__(self, dirname, auto_validate=True, v2_behavior=False,
-        skip_trial_set=[]):
+        skip_trial_set=[], dictify=True):
         """Initialize loader, specifying directory containing info.
         
         For other parameters, see Bcontrol_Loader
@@ -160,6 +162,7 @@ class Bcontrol_Loader_By_Dir(object):
         # Build a Bcontrol_Loader with same parameters
         self._bcl = Bcontrol_Loader(auto_validate=auto_validate,
             v2_behavior=v2_behavior, skip_trial_set=skip_trial_set)
+        self.dictify = dictify
     
     def load(self):
         """Loads Bcontrol info into self.data.
@@ -213,9 +216,14 @@ class Bcontrol_Loader_By_Dir(object):
     
     def _pickle_data(self):
         """Pickles self._bcl.data for future use."""
+        if self.dictify:
+            to_pickle = dictify_mat_struct(self._bcl.data)
+        else:
+            to_pickle = self._bcl.data
+        
         fn_pickle = os.path.join(self.dirname, self._pickle_name)
         f = file(fn_pickle, 'w')
-        pickle.dump(self._bcl.data, f)
+        pickle.dump(to_pickle, f)
         f.close()
     
     def get_sn2trials(self, outcome='hit'):
@@ -591,3 +599,66 @@ class Bcontrol_Loader(object):
         assert(trial.states.right_reward.size == 0)
         if correct_side == 'left': assert(trial.pokes.R.size > 0)
         else: assert(trial.pokes.L.size > 0)
+
+
+
+# Helper fuctions to remove mat_struct ugliness
+def is_mat_struct(obj):
+    res = True
+    try:
+        obj.__dict__['_fieldnames']
+    except (AttributeError, KeyError):
+        res = False    
+    return res
+
+def dictify_mat_struct(mat_struct, flatten_0d=True, max_depth=-1):
+    """Recursively turn mat struct objects into simple dicts.
+    
+    flatten_0d: if a 0d array is encountered, simply store its item
+    
+    max_depth: stop if this recursion depth is exceeded.
+        if -1, no max depth
+    """
+    # Check recursion depth
+    if max_depth == 0:
+        raise ValueError("max depth exceeded!")
+
+    # If not a mat struct, simply return (or optionally flatten)
+    if not is_mat_struct(mat_struct):
+        if hasattr(mat_struct, 'ndim'):
+            # array-like
+            if flatten_0d and mat_struct.ndim == 0:
+                # flattened 0d array
+                return mat_struct.flatten()[0]
+            elif mat_struct.dtype != np.dtype('object'):
+                # simple arrays
+                return mat_struct
+            else:
+                # object arrays
+                return np.array([
+                    dictify_mat_struct(val, flatten_0d, max_depth=max_depth-1)
+                    for val in mat_struct], dtype=mat_struct.dtype)
+        elif hasattr(mat_struct, 'values') and hasattr(mat_struct, 'keys'):
+            # dict-like
+            return dict(
+                [(key, dictify_mat_struct(val, flatten_0d, max_depth=max_depth-1))
+                    for key, val in mat_struct.items()])
+        elif hasattr(mat_struct, '__len__'):
+            # list-like
+            return [dictify_mat_struct(val, flatten_0d, max_depth=max_depth-1) 
+                for val in mat_struct]
+        else:
+            # everything else
+            return mat_struct
+
+    # Create a new dict to store result
+    res = {}
+    
+    # Convert troublesome mat_struct to a dict, then recursively remove
+    # contained mat structs.
+    msd = mat_struct.__dict__
+    for key in msd['_fieldnames']:
+        res[key] = dictify_mat_struct(msd[key], flatten_0d, 
+            max_depth=max_depth-1)
+    
+    return res
