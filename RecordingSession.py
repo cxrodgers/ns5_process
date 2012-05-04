@@ -315,7 +315,7 @@ class RecordingSession:
         return np.array([tt[0] for tt in t])
     
     def calculate_trial_boundaries(self, soft_limits_sec=None,
-        hard_limits_sec=None):
+        hard_limits_sec=None, meth='end_of_previous'):
         """Reads timestamps and returns trial boundaries.
         
         For implementation, see TrialSlicer. This is just a thin wrapper
@@ -342,7 +342,7 @@ class RecordingSession:
             timestamps=t,
             soft_limits=soft_limits, 
             hard_limits=hard_limits, 
-            meth='end_of_previous', 
+            meth=meth, 
             data_range=(0, l.header.n_samples))
         
         return t_starts, t_stops
