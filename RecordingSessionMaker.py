@@ -675,6 +675,7 @@ def add_timestamps_to_session(rs, drop_first_N_timestamps=0, **kwargs):
         manual_threshhold=None, audio_channels=None, 
         minimum_duration_ms=50, pre_first=0, post_last=0, debug_mode=False, 
         verbose=False, trigger_channel=None
+    manual_threshhold should be in dB
     
     drop_first_N_timestamps : after calculation of timestamps, drop
     the first N of them before writing to disk.
@@ -712,7 +713,8 @@ def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None,
     Inputs
     ------
     filename : path to *.ns5 binary file
-    manual_threshhold, minimum_duration_ms : Passed to OnsetDetector    
+    manual_threshhold, minimum_duration_ms : Passed to OnsetDetector   
+        manual_threshhold should be in dB 
     audio_channels : the channel numbers to analyze for onsets. If None,
         I'll use the first channel, or the first two channels if available.    
     pre_first : audio data before this sample will be ignored; therefore,
