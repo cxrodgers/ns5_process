@@ -3,6 +3,8 @@ import os.path
 import scipy.io
 import glob
 import pickle
+import pandas
+
 
 class LBPB_constants(object):
     def __init__(self, sn2name=None):
@@ -662,3 +664,162 @@ def dictify_mat_struct(mat_struct, flatten_0d=True, max_depth=-1):
             max_depth=max_depth-1)
     
     return res
+
+def generate_event_list(peh, TRIALS_INFO=None, TI_start_idx=0, sort=True,
+    error_check_last_trial=5):
+    """Given a peh object (or list of objects), return list of events.
+    
+    error_check_last_trial : the trial after the last one in peh should
+    have OUTCOME equal to this. (5 means future trial). Otherwise a warning
+    will be printed. To disable, set to None.
+    
+    Returns DataFrame with coluns 'event' and time'
+    
+    """
+    # These will be used if trial and stim numbers are to be inserted
+    trialnumber = None
+    stimnumber = None
+    ti_idx = TI_start_idx
+    
+    # Check whether a full peh was passed of just one trial
+    if not hasattr(peh, 'keys'):
+        # must be a list of trials
+        res = []
+        for trial in peh:
+            # Get the info about this trial
+            if TRIALS_INFO is not None:
+                trialnumber = TRIALS_INFO.TRIAL_NUMBER[ti_idx]
+                stimnumber = TRIALS_INFO.STIM_NUMBER[ti_idx]
+                ti_idx += 1
+            
+            # append to growing list
+            res += generate_event_list_from_trial(trial, trialnumber, 
+                stimnumber)
+        
+        # error check that TRIALS_INFO is lined up right
+        if TRIALS_INFO is not None and error_check_last_trial is not None:
+            if TRIALS_INFO.OUTCOME[ti_idx] != error_check_last_trial:
+                print "warning: last trial in TRIALS_INFO not right"
+    else:
+        # must be a single trial
+        res = generate_event_list_from_trial(peh, trialnumber, stimnumber)
+    
+    # Return as record array
+    #df = pandas.DataFrame(data=res, columns=['event', 'time'])
+    df = np.rec.fromrecords(res, names=['event', 'time'])
+    if sort:
+        df = df[~np.isnan(df.time)]
+        df = df[np.argsort(df.time)]
+    return df
+
+def generate_event_list_from_trial(trial, trialnumber=None, stimnumber=None):
+    """Helper function to operate on a single trial.
+    
+    Converts states in dictified trial to a list of records.
+    First is event name, then event time.
+    States are parsed into events called: state_name_in and state_name_out
+    
+    If trialnumber:
+        a special state called 'trial_%d_in' will be added at 
+        'state_0'
+    If stimnumber:
+        a special state called 'play_stimulus_%d_in' will be added at 
+        'play_stimulus'
+    """
+    rec_l = []
+    states = trial['states']
+    for key, val in states.items():
+        if key == 'starting_state':
+            # field for starting state, error check
+            assert val == 'state_0'            
+        elif key == 'ending_state':
+            # field for ending state, error check
+            assert val == 'state_0'
+        elif len(val) == 0:
+            # This state did not occur
+            pass
+        elif val.ndim == 1:
+            # occurred once
+            assert len(val) == 2
+            rec_l.append((key+'_in', float(val[0])))
+            rec_l.append((key+'_out', float(val[1])))
+            if key == 'play_stimulus' and stimnumber is not None:
+                # Special processing to add stimulus number
+                key2 = 'play_stimulus_%d' % stimnumber
+                rec_l.append((key2+'_in', float(val[0])))
+                rec_l.append((key2+'_out', float(val[1])))                                       
+        else:
+            # occurred multiple times
+            # key == state_0 should always end up here
+            assert val.shape[1] == 2
+            if key == 'state_0' and trialnumber is not None:
+                # Special processing to add trial number
+                key2 = 'trial_%d' % trialnumber
+                rec_l.append((key2+'_in', float(val[0, 0])))
+                rec_l.append((key2+'_out', float(val[0, 1])))       
+            
+            for subval in val:
+                rec_l.append((key+'_in', float(subval[0])))
+                rec_l.append((key+'_out', float(subval[1])))
+    return rec_l
+
+def demung_trials_info(bcl, TRIALS_INFO=None, CONSTS=None, sound_name=None,
+    replace_consts=True, replace_stim_names=True, col2consts=None):
+    """Returns DataFrame version of TRIALS_INFO matrix
+    
+    Current version of this loader returns a munged version of
+    TRIALS_INFO with column names like ('CORRECT_SIDE', 'f1')
+    which confuses pandas.
+    
+    This method replaces munged names like 'f1' with good names
+    like 'correct_side'
+    
+    This will also replace
+
+    bcl : Bcontrol_Loader object, already loaded. 
+        If None, then provide TRIALS_INFO and CONSTS
+    replace_consts : if True, replaces integers with string constants
+    replace_stim_names : adds column 'stim_name' based on the 1-indexed
+        stimulus numbers in bcld, and values in SOUNDS_INFO
+    col2consts : a dict mapper from column name to contained constants
+        If None, a reasonable default is used
+    """
+    if bcl is not None:
+        TRIALS_INFO = bcl.data['TRIALS_INFO']
+        CONSTS = bcl.data['CONSTS']
+        sound_name = bcl.data['SOUNDS_INFO']['sound_name']
+
+    # Dict from column name to appropriate entries in CONSTS
+    if col2consts is None:
+        col2consts = {
+            'go_or_nogo': ('GO', 'NOGO', 'TWOAC'),
+            'outcome': ('HIT', 'SHORT_CPOKE', 'WRONG_PORT', 'ERROR', 
+                'FUTURE_TRIAL', 'CHOICE_TIME_UP', 'CURRENT_TRIAL'),
+            'correct_side': ('LEFT', 'RIGHT'),
+            }
+    
+    # Create DataFrame
+    df = pandas.DataFrame.from_records(TRIALS_INFO)
+    
+    # Rename columns nicely
+    rename_d = {}
+    for munged_name in df.columns:
+        good_name = TRIALS_INFO.dtype.fields[munged_name][2]
+        rename_d[munged_name] = good_name.lower()
+    df = df.rename(columns=rename_d)
+    
+    # Replace each integer in each column with appropriate string from CONSTS
+    if replace_consts:
+        for col, col_consts in col2consts.items():
+            newcol = np.empty(df[col].shape, dtype=np.object)
+            for col_const in col_consts:
+                #df[col][df[col] == CONSTS[col_const]] = col_const.lower()
+                newcol[df[col] == CONSTS[col_const]] = col_const.lower()
+            df[col] = newcol
+    
+    # Rename stimuli with appropriate names
+    if replace_stim_names:
+        newcol = np.array([sound_name[n-1] for n in df['stim_number']])
+        df['stim_name'] = newcol
+    
+    return df
