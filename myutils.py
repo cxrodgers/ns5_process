@@ -12,6 +12,52 @@ import struct
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
 
+def parse_bitstream(bitstream):
+    onethresh = .7 * 2**15
+    zerothresh = .3 * 2**15
+    wordlen = 190 # actually 160
+    bitlen = 10
+    certainty_thresh = 7 # of 10
+    wordconv = 2**np.arange(16, dtype=np.int)[::-1]
+
+    ones = np.where(bitstream > onethresh)[0]
+    zeros = np.where(bitstream < zerothresh)[0]
+
+    trigger_l = [ones[0]]
+    for idx in ones[1:]:
+        if idx > trigger_l[-1] + wordlen:
+            trigger_l.append(idx)
+    trial_start_times = np.asarray(trigger_l, dtype=np.int)
+
+    #~ plt.figure()
+    #~ for trial_start in trial_start_times:
+        #~ plt.plot(bitstream[trial_start:trial_start+wordlen])
+    #~ plt.show()
+
+    trial_numbers = []
+    for trial_start in trial_start_times:
+        word = []
+        for nbit in range(16):
+            bitstr = bitstream[trial_start + nbit*bitlen + range(bitlen)]
+            if np.sum(bitstr > onethresh) > certainty_thresh:
+                bitchoice = 1
+            elif np.sum(bitstr < zerothresh) > certainty_thresh:
+                bitchoice = 0
+            else:
+                bitchoice = -1
+            word.append(bitchoice)
+        if -1 in word:
+            1/0
+        val = np.sum(wordconv * np.array(word))
+        trial_numbers.append(val)
+    trial_numbers = np.asarray(trial_numbers, dtype=np.int)
+    
+    # Drop the high bit signal
+    trial_numbers = trial_numbers - 32768
+    
+    return trial_start_times, trial_numbers
+
+
 def load_waveform_from_wave_file(filename, dtype=np.float, rescale=False,
     also_return_fs=False, never_flatten=False, mean_channel=False):
     """Opens wave file and reads, assuming signed shorts.
