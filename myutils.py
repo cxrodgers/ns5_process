@@ -92,6 +92,46 @@ def load_waveform_from_wave_file(filename, dtype=np.float, rescale=False,
     else:
         return sig   
 
+def wav_write(filename, signal, dtype=np.int16, rescale=True, fs=8000):
+    """Write wave file to filename.
+    
+    If rescale:
+        Assume signal is between -1.0 and +1.0, and will multiply by maximum
+        of the requested datatype. Otherwise `signal` will be converted
+        to dtype as-is.
+    
+    If signal.ndim == 1:
+        writes mono
+    Elif signal.ndim == 2:
+        better be stereo with each row a channel
+    """
+    if signal.ndim == 1:
+        nchannels = 1
+    elif signal.ndim == 2:
+        nchannels = 2
+        signal = signal.transpose().flatten()
+    
+    assert signal.ndim == 1, "only mono supported for now"
+    assert dtype == np.int16, "only 16-bit supported for now"
+    
+    # rescale and convert signal
+    if rescale:
+        factor = np.iinfo(dtype).max
+        sig = np.rint(signal * factor).astype(dtype)
+    else:
+        sig = sig.astype(dtype)
+    
+    # pack (don't know how to make this work for general dtype
+    sig = struct.pack('%dh' % len(sig), *list(sig))
+    
+    # write to file
+    ww = wave.Wave_write(filename)
+    ww.setnchannels(nchannels)
+    ww.setsampwidth(np.iinfo(dtype).bits / 8)
+    ww.setframerate(fs)
+    ww.writeframes(sig)
+    ww.close()
+
 def auroc(data1, data2, return_p=False):
     """Return auROC and two-sided p-value (if requested)"""
     try:
@@ -381,8 +421,54 @@ def plot_asterisks(pvals, ax, x=None, y=0, yd=1, levels=None):
         #already_marked = already_marked | msk
     plt.show()
 
+def times2bins_int(times, f_samp=1.0, t_start=None, t_stop=None):
+    """Returns a 1-0 type spiketrain from list of times.
+    
+    Note the interface is different from times2bins, which is for
+    general histogramming. This function expects times in seconds, and uses
+    f_samp to convert to bins. The other function expects times in samples,
+    and uses f_samp to convert to seconds.
+    
+    If multiple spikes occur in same bin, you still get 1 ... not sure
+    this is right .... Essentially you're getting a boolean
+    
+    'times' : seconds
+    'f_samp' : sampling rate of returned spike train
+    """
+    f_samp = float(f_samp)
+    if t_stop is None:
+        t_stop = times.max() + 1/f_samp
+    if t_start is None:
+        t_start = times.min()
+    
+    # set up return variable
+    len_samples = np.rint(f_samp * (t_stop - t_start)).astype(np.int)
+    res = np.zeros(len_samples, dtype=np.int)
+    
+    # set up times as indexes
+    times = times - t_start
+    times_samples = np.rint(times * f_samp).astype(np.int)
+    times_samples = times_samples[~(
+        (times_samples < 0) | (times_samples >= len(res)))]
+    
+    # set res
+    res[times_samples] = 1
+    return res
+    
+    
+
 def times2bins(times, f_samp=None, t_start=None, t_stop=None, bins=10,
     return_t=False):
+    """Given event times and sampling rate, convert to histogram representation.
+    
+    If times is list-of-list-like, will return list-of-list-like result.
+    
+    f_samp : This is for the case where `times` is in samples and you want
+        a result in seconds. That is, times is divided by this value.
+    
+    Returns: res[, t_vals]
+    Will begin at t_start and continue to t_stop
+    """
     
     # dimensionality
     is2d = True
