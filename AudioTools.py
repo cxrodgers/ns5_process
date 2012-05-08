@@ -157,7 +157,13 @@ class OnsetDetector(object):
         if self.verbose:
             print "Finding threshhold crossings at %0.3f dB" % self.threshhold
             sys.stdout.flush()
-        
+        if self.plot_debugging_figures:
+            plt.figure()
+            plt.plot(smoothed_power_dB)
+            plt.plot([0, len(smoothed_power_dB)],
+                [self.threshhold, self.threshhold], 'r')
+            plt.show()
+ 
         return smoothed_power_dB > self.threshhold
     
     
