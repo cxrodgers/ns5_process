@@ -8,25 +8,54 @@ class HeaderInfo:
 class Loader(object):
     """Object to load data from binary ns5 files.
     
+    This object tries to:
+    1) Load data as quickly as possible
+    2) Not store any temporary variables
+    3) Allow easy access by Cyberkinetics channel number
+    
+    The problem is that the straightforward solutions to this problem have
+    some unintended side effects. As far as I can tell, you cannot specify
+    a stride when reading data from disk. Since the data is stored by sample
+    first, and then channel, this means that you have to load all the channels
+    at once for any given block of time. That means that reading one channel
+    is no faster than reading all of them.
+    
+    Memmaps allow a convenient access routine that possibly sidesteps this
+    issue, but I cannot verify that they are actually any faster, and in
+    my experience they create memory leaks. So no memmaps are used here.
+    
+    The other issue is indexing the channel(s) that you want from the 2d block
+    of data. I wanted to provide accessor methods that would return one
+    channel at a time but there's no way to do this without caching the
+    block or re-reading the data.
+
+    To that end the recommended method to use for all operations is
+    get_chunk_by_channel. This returns a dict {Cyberkinetics channel number:
+    1d array of data}. All channels are read. The dict values are views onto
+    the underlying blocks.
+
+    You can access one channel from this dict or iterate over all of them,
+    knowing that the expensive read operation only occurs once.
+
+    For backwards compatibility some other methods are provided that index
+    this dict for you. Note that you should **not** call these methods
+    repeatedly or you will re-read the entire dataset every time. For those
+    types of operations, iterate over the dict.
+    
+    All methods return the data as the underlying datatype (int16).
+
     Methods
-    -------
-    load_file : actually create links to file on disk
-    load_header : load header info and store in self.header
-    get_channel_as_array : Returns 1d numpy array of the entire recording
-        from requested channel.
+    ---
+    get_chunk_by_channel : returns dict {channel : 1d array}
+    get_chunk : returns 2d array of data (n_samples, n_channels). For
+        the identity of each channel, see self.header.Channel_ID
+    get_channel_as_array : Returns one channel from the dict
     get_analog_channel_as_array : Same as get_channel_as_array, but works
         on analog channels rather than neural channels.
     get_analog_channel_ids : Returns an array of analog channel numbers
         existing in the file.    
     get_neural_channel_ids : Returns an array of neural channel numbers
         existing in the file.
-    regenerate_memmap : Deletes and restores the underlying memmap, which
-        may free up memory.
-    
-    Issues
-    ------
-    Memory leaks may exist
-    Not sure that regenerate_memmap actually frees up any memory.
     """
     def __init__(self, filename=None):
         """Creates a new object to load data from the ns5 file you specify.
@@ -35,10 +64,6 @@ class Loader(object):
         Call load_file() to actually get data from the file.
         """
         self.filename = filename
-        
-        
-        
-        self._mm = None
         self.file_handle = None
 
     def load_file(self, filename=None):
@@ -71,9 +96,6 @@ class Loader(object):
         
         # Load header info into self.header
         self.load_header()
-        
-        # build an internal memmap linking to the data on disk
-        self.regenerate_memmap()
     
     def load_header(self, filename=None):
         """Reads ns5 file header and writes info to self.header"""
@@ -146,52 +168,92 @@ class Loader(object):
         self.file_handle.close()
 
     
-    def regenerate_memmap(self):
-        """Delete internal memmap and create a new one, to save memory."""
-        try:
-            del self._mm
-        except AttributeError: 
-            pass
+    def get_chunk(self, start=0, n_samples=None, stop=None):
+        """Returns a chunk of data with optional start and stop sample.
         
-        self._mm = np.memmap(\
-            self.filename, dtype='h', mode='r', 
-            offset=self.header.Header, 
-            shape=(self.header.n_samples, self.header.Channel_Count))
-    
-    def __del__(self):
-        # this deletion doesn't free memory, even though del l._mm does!
-        if '_mm' in self.__dict__: del self._mm
-        #else: print "gracefully skipping"
-    
-    def _get_channel(self, channel_number):
-        """Returns slice into internal memmap for requested channel"""
-        try:
-            mm_index = self.header.Channel_ID.index(channel_number)
-        except ValueError:
-            print "Channel number %d does not exist" % channel_number
-            return np.array([])
+        This is the underlying access method for all other accessors.
+        For a nicer interface, see `get_chunk_by_channel`.
         
-        self.regenerate_memmap()
-        return self._mm[:, mm_index]
-    
-    def get_channel_as_array(self, channel_number):
-        """Returns data from requested channel as a 1d numpy array."""
-        data = np.array(self._get_channel(channel_number))
-        self.regenerate_memmap()
-        return data
+        As far as I can tell there is no nice way around reading all of the
+        channels (without using memmaps, which I want to avoid). 
+        
+        start : index of first sample.
+        stop : like a normal Python stop index, one past the last sample.
+            If None, returns data up to the end.
+        n_samples : length of each returned channel. (In this case, `stop`
+            is ignored.)
+        
+        Only one of stop or n_samples should be provided.
 
-    def get_analog_channel_as_array(self, analog_chn):
+        Returns 2d numpy array (n_samples, n_channels) with the channels
+        in the same order as self.header.Channel_ID.
+        """
+        # where to start and stop
+        start = int(start)
+        i1 = self.header.Header + start * self.header.Channel_Count
+        if n_samples is None:
+            if stop is None:
+                stop = self.header.n_samples
+            stop = int(stop)
+            n_samples = stop - start
+            count = n_samples * self.header.Channel_Count
+        else:
+            n_samples = int(n_samples)
+        
+        # error check
+        if (start + n_samples) > self.header.n_samples:
+            print "warning: you have requested more than the available data"
+            start = 0
+            n_samples = self.header.n_samples
+        count = n_samples * self.header.Channel_Count
+        
+        
+        # open file seek to correct place
+        fi = file(self.filename)
+        fi.seek(i1, 0)
+        
+        
+        # load data and reshape
+        res = np.fromfile(file=fi, dtype=np.int16, count=count).reshape(
+            (n_samples, self.header.Channel_Count))
+        
+        return res
+    
+    def get_chunk_by_channel(self, start=0, n_samples=None, stop=None):
+        """Preferred accessor method for all operations.
+
+        start, n_samples, stop : see get_chunk
+        
+        Returns a dict {Blackrock channel number : 1d array of data}.
+        Construction of this dict requires minimal overhead, compared
+        to get_chunk, but provides a nicer interface.
+        """
+        raw = self.get_chunk(start, n_samples, stop)
+        res = {}
+        
+        for n, chn in enumerate(self.header.Channel_ID):
+            res[chn] = raw[:, n]
+        
+        return res
+    
+    def get_channel(self, channel, start=0, n_samples=None, stop=None):
+        if channel not in self.header.Channel_ID:
+            raise "channel %d not in data file" % channel
+        res = self.get_chunk_by_channel(start, n_samples, stop)
+        return res[channel]
+    
+    def get_channel_as_array(self, channel, **kwargs):
+        return self.get_channel(channel, kwargs)
+
+    def get_analog_channel_as_array(self, channel, start=0, 
+        n_samples=None, stop=None):
         """Returns data from requested analog channel as a numpy array.
         
         Simply adds 128 to the channel number to convert to ns5 number.
         This is just the way Cyberkinetics numbers its channels.
         """
-        return self.get_channel_as_array(analog_chn + 128)    
+        return self.get_channel_as_array(channel + 128, start, n_samples, stop)    
 
-    def get_audio_channel_numbers(self):
-        """Deprecated, use get_analog_channel_ids"""
-        return self.get_analog_channel_ids()
-    
     def get_analog_channel_ids(self):
         """Returns array of analog channel ids existing in the file.
         
@@ -200,6 +262,6 @@ class Loader(object):
         return np.array(filter(lambda x: (x > 128) and (x <= 144), 
             self.header.Channel_ID)) - 128
 
-    def get_neural_channel_numbers(self):
+    def get_neural_channel_ids(self):
         return np.array(filter(lambda x: x <= 128, self.header.Channel_ID))
 
