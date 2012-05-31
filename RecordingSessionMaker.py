@@ -739,7 +739,7 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
         # now use that behavioral data to account for difference between
         # trial start and onset
         if not skip_verification:
-            bcld.load(force=True)
+            bcld.load()
             peh = bcld.data['peh']
             btrial_starts = np.array([trial['states']['state_0'][0,1] 
                 for trial in bcld.data['peh']])
