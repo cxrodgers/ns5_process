@@ -12,7 +12,7 @@ import struct
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
 
-def parse_bitstream(bitstream):
+def parse_bitstream(bitstream, debug_mode=False):
     onethresh = .7 * 2**15
     zerothresh = .3 * 2**15
     wordlen = 190 # actually 160
@@ -23,16 +23,18 @@ def parse_bitstream(bitstream):
     ones = np.where(bitstream > onethresh)[0]
     zeros = np.where(bitstream < zerothresh)[0]
 
+
     trigger_l = [ones[0]]
     for idx in ones[1:]:
         if idx > trigger_l[-1] + wordlen:
             trigger_l.append(idx)
     trial_start_times = np.asarray(trigger_l, dtype=np.int)
 
-    #~ plt.figure()
-    #~ for trial_start in trial_start_times:
-        #~ plt.plot(bitstream[trial_start:trial_start+wordlen])
-    #~ plt.show()
+    if debug_mode:
+        plt.figure()
+        for trial_start in trial_start_times:
+            plt.plot(bitstream[trial_start:trial_start+wordlen])
+        plt.show()
 
     trial_numbers = []
     for trial_start in trial_start_times:
