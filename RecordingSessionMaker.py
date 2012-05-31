@@ -653,7 +653,8 @@ def query_events(rs, event_name='Timestamp'):
     return event_list
 
 # Function to load audio data from raw file and detect onsets
-def add_timestamps_to_session(rs, drop_first_N_timestamps=0, **kwargs):
+def add_timestamps_to_session(rs, drop_first_N_timestamps=0, 
+    meth='audio_onset', **kwargs):
     """Given a RecordingSession, makes TIMESTAMPS file.
     
     I'm a thin wrapper over `calculate_timestamps` that knows how to get
@@ -664,8 +665,22 @@ def add_timestamps_to_session(rs, drop_first_N_timestamps=0, **kwargs):
     
     I get the right channels and filenames from RecordingSession, then call
     `calculate_timestamps`, then tell the session what I've calculated.
-    
-    Returns onsets and offsets that were calculated, or empty lists if
+   
+    Return values depend on `meth`, but the first is always the onset times
+    in samples.
+   
+    Acceptable values for `meth`:
+        'audio_onset' : calls calculate_timestamps and either operates on
+            audio directly, or trigger channel if specified (see below).
+            This method reads audio channels from RS and passes them on.
+            In this case the returned values are:
+                onset_times, offset_times
+        'digital_trial_number' : calls calculate_timestamps_from_digital
+            and reads the digital trial numbers.
+            In this cas ethe returned values are:
+                onset_times, trial_numbers
+        In either case, kwargs is passed to those underlying methods, so
+        see those docstrings for details.
     
     If trigger channel
         * Should be integer, not list
@@ -680,7 +695,8 @@ def add_timestamps_to_session(rs, drop_first_N_timestamps=0, **kwargs):
     manual_threshhold should be in dB
     
     drop_first_N_timestamps : after calculation of timestamps, drop
-    the first N of them before writing to disk.
+    the first N of them before writing to disk. Another alternative is
+    the pre_first and post_last kwargs which can be specified in samples.
     """
     # Check whether we need to run
     if os.path.exists(os.path.join(rs.full_path, 
@@ -689,10 +705,16 @@ def add_timestamps_to_session(rs, drop_first_N_timestamps=0, **kwargs):
     
     # Get data from recording session
     filename = rs.get_ns5_filename()
-    audio_channels = rs.read_analog_channel_ids()
     
-    # Calculate timestamps
-    t_on, t_off = calculate_timestamps(filename, **kwargs)
+    if meth == 'audio_onset':
+        audio_channels = rs.read_analog_channel_ids()
+        t_on, t_off = calculate_timestamps(filename, 
+            audio_channels=audio_channels, **kwargs)
+    elif meth == 'digital_trial_number':
+        # Misnomer: t_off is actually t_num in this case
+        t_on, t_off = calculate_timestamps_from_digital(filename, **kwargs)
+    else:
+        raise "unsupported method %s" % meth
     
     if drop_first_N_timestamps > 0:
         t_on = t_on[drop_first_N_timestamps:]
@@ -787,6 +809,54 @@ def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None,
     
     return (od.detected_onsets + pre_first, od.detected_offsets + pre_first)
     
+
+def calculate_timestamps_from_digital(filename, trial_number_channel=16, 
+    pre_first=0, post_last=0, debug_mode=False, verbose=True):
+    """Calculates timestamps from a digital trial number signal
+    
+    filename : ns5 filename
+    trial_number_channel : analog input containing the digital signal
+    pre_first : data before this sample will be ignored; therefore,
+        the first onset will be at least this.
+    post_last : amount of data to ignore from the end. Uses normal indexing
+        rules: if positive, then this is the last sample to analyze;
+        if negative, then that many samples from the end will be ignored;
+        if zero, then all data will be included (default).
+    verbose : print detected trial numbers
+    debug_mode : parse_bitstream will plot words
+    
+    Returns: trial_start_times, trial_numbers
+    The first is the detected word onsets in samples from the beginning of
+    the file. The second is the integer value of each word.
+    """
+    import ns5
+    from myutils import parse_bitstream
+    
+    # Load ns5 file
+    l = ns5.Loader(filename=filename)
+    l.load_file()
+    
+    # Get signal and truncate as requested
+    trialnum_sig = l.get_analog_channel_as_array(16)
+    if post_last == 0:
+        # Do not truncate end
+        post_last = len(trialnum_sig)
+    trialnum_sig = trialnum_sig[pre_first:post_last]
+
+    # Parse
+    trial_start_times, trial_numbers = parse_bitstream(trialnum_sig,
+        debug_mode=debug_mode)
+    
+    # Some debugging stuff
+    if verbose:
+        print "found trials from %d to %d" % (trial_numbers[0], trial_numbers[-1])
+    if np.any((trial_numbers - trial_numbers[0]) != range(len(trial_numbers))):
+        print "warning: trial numbers not ordered correctly"
+    
+    # Account for truncation
+    trial_start_times = trial_start_times + pre_first
+    
+    return trial_start_times, trial_numbers
 
 
 # Functions to find and add bcontrol data to RecordingSession
