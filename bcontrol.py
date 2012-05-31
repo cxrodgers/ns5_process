@@ -145,8 +145,6 @@ class Bcontrol_Loader_By_Dir(object):
     load : Get data from directory
     get_sn2trials : returns a dict of stimulus numbers and trial numbers
     get_sn2name : returns a dict of stimulus numbers and name
-    dictify : store a sanitized version that replaces mat_struct object
-        with dicts
     
     Other useful information (TRIALS_INFO, SOUNDS_INFO, etc) is
     available in my dict `data` after loading.
@@ -155,6 +153,10 @@ class Bcontrol_Loader_By_Dir(object):
         skip_trial_set=[], dictify=True):
         """Initialize loader, specifying directory containing info.
         
+        dictify : store a sanitized version that replaces mat_struct object
+            with dicts. This is done here, not in the lower object, to avoid
+            rewriting code that depends on mat_struct.
+
         For other parameters, see Bcontrol_Loader
         """
         self.dirname = dirname
@@ -164,16 +166,23 @@ class Bcontrol_Loader_By_Dir(object):
         # Build a Bcontrol_Loader with same parameters
         self._bcl = Bcontrol_Loader(auto_validate=auto_validate,
             v2_behavior=v2_behavior, skip_trial_set=skip_trial_set)
+        
         self.dictify = dictify
     
-    def load(self):
+    def load(self, force=False):
         """Loads Bcontrol info into self.data.
         
         First checks to see if bdata pickle exists, in which case it loads
         that pickle. Otherwise, uses self._bcl to load data from matfile.
+        
+        If force is True, skips check for pickle.
         """
-        # Look for a pickle
-        data, pickle_found = self._check_for_pickle()
+        # Decide whether to run
+        if force:
+            pickle_found = False
+            data = None
+        else:
+            data, pickle_found = self._check_for_pickle()
         
         if pickle_found:
             self._bcl.data = data
@@ -181,6 +190,10 @@ class Bcontrol_Loader_By_Dir(object):
             filename = self._find_bcontrol_matfile()
             self._bcl.filename = filename
             self._bcl.load()
+            
+            if self.dictify:
+                self._bcl.data = dictify_mat_struct(self._bcl.data)
+
             
             # Pickle self._bcl.data
             self._pickle_data()
@@ -218,11 +231,7 @@ class Bcontrol_Loader_By_Dir(object):
     
     def _pickle_data(self):
         """Pickles self._bcl.data for future use."""
-        if self.dictify:
-            to_pickle = dictify_mat_struct(self._bcl.data)
-        else:
-            to_pickle = self._bcl.data
-        
+        to_pickle = self._bcl.data
         fn_pickle = os.path.join(self.dirname, self._pickle_name)
         f = file(fn_pickle, 'w')
         pickle.dump(to_pickle, f)
@@ -241,7 +250,7 @@ class Bcontrol_Loader_By_Dir(object):
 class Bcontrol_Loader(object):
     """Loads matlab BControl data and validates"""
     def __init__(self, filename=None, auto_validate=True, v2_behavior=False,
-        skip_trial_set=[]):
+        skip_trial_set=[], dictify=True):
         """Initialize loader, optionally specifying filename.
         
         If auto_validate is True, then the validation script will run
@@ -254,9 +263,6 @@ class Bcontrol_Loader(object):
         skip_trial_set : list. Wherever TRIALS_INFO['TRIAL_NUMBER'] is
         a member of skip_trial_set, that trial will be skipped in the
         validation process.
-        
-        TODO: trigger v2_behavior automatically (with warning) if
-        datasink does not exist
         """
         self.filename = filename
         self.auto_validate = auto_validate
