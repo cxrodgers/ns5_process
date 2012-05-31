@@ -653,15 +653,15 @@ def query_events(rs, event_name='Timestamp'):
     return event_list
 
 # Function to load audio data from raw file and detect onsets
-def add_timestamps_to_session(rs, drop_first_N_timestamps=0, 
-    meth='audio_onset', **kwargs):
+def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0, 
+    meth='audio_onset', verbose=False, **kwargs):
     """Given a RecordingSession, makes TIMESTAMPS file.
     
     I'm a thin wrapper over `calculate_timestamps` that knows how to get
     and put the data from RecordingSession objects.
     
     If the timestamps file already exists, then I return them but don't
-    re-calculate.
+    re-calculate. (Unless force=True, in which case I always run.)
     
     I get the right channels and filenames from RecordingSession, then call
     `calculate_timestamps`, then tell the session what I've calculated.
@@ -698,8 +698,11 @@ def add_timestamps_to_session(rs, drop_first_N_timestamps=0,
     the first N of them before writing to disk. Another alternative is
     the pre_first and post_last kwargs which can be specified in samples.
     """
+    # only for error checking the digital method
+    assumed_dilation = .99663 
+    
     # Check whether we need to run
-    if os.path.exists(os.path.join(rs.full_path, 
+    if not force and os.path.exists(os.path.join(rs.full_path, 
         RecordingSession.TIMESTAMPS_FILENAME)):
         return (rs.read_timestamps(), [])
     
@@ -707,23 +710,77 @@ def add_timestamps_to_session(rs, drop_first_N_timestamps=0,
     filename = rs.get_ns5_filename()
     
     if meth == 'audio_onset':
+        # Detect audio onsets
         audio_channels = rs.read_analog_channel_ids()
-        t_on, t_off = calculate_timestamps(filename, 
+        t_on, t_off = calculate_timestamps(filename, verbose=verbose,
             audio_channels=audio_channels, **kwargs)
+        
+        if drop_first_N_timestamps > 0:
+            t_on = t_on[drop_first_N_timestamps:]
+            t_off = t_off[drop_first_N_timestamps:]
+        
+        # Tell RecordingSession about them
+        rs.add_timestamps(t_on)
+        return (t_on, t_off)
+        
     elif meth == 'digital_trial_number':
-        # Misnomer: t_off is actually t_num in this case
-        t_on, t_off = calculate_timestamps_from_digital(filename, **kwargs)
+        # Parse the digital words
+        trial_start_times, trial_numbers = calculate_timestamps_from_digital(
+            filename, verbose=verbose, **kwargs)
+        
+        # if possible, load behavioral data
+        bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
+        skip_verification = False
+        try:
+            bcld._find_bcontrol_matfile()
+        except:
+            skip_verification = True
+        
+        # now use that behavioral data to account for difference between
+        # trial start and onset
+        if not skip_verification:
+            bcld.load(force=True)
+            peh = bcld.data['peh']
+            btrial_starts = np.array([trial['states']['state_0'][0,1] 
+                for trial in bcld.data['peh']])
+
+            # account for any missing trials
+            if trial_numbers[0] != 1:
+                vmsg = "%d trials occurred before recording started" % (
+                    trial_numbers[0] - 1)
+                btrial_starts = btrial_starts[(trial_numbers[0] - 1):]
+            if len(trial_numbers) > len(btrial_starts):
+                ndrop = len(trial_numbers) - len(btrial_starts)
+                vmsg = "%d trials occurred after last " % ndrop + \
+                    "saved behavioral trial, dropping"
+                trial_numbers = trial_numbers[:len(btrial_starts)]
+                trial_start_times = trial_start_times[:len(btrial_starts)]
+            elif len(btrial_starts) > len(trial_numbers):
+                ndrop = len(btrial_starts) - len(trial_numbers)
+                vmsg = "%d trials occurred after last trial in recording" % ndrop
+                btrial_starts = btrial_starts[:len(trial_numbers)]
+            
+            if verbose:
+                print vmsg
+
+            # check that time syncs up    
+            stretch_factors = np.diff(trial_start_times / rs.get_sampling_rate()) \
+                / np.diff(btrial_starts)
+            if np.max(np.abs(stretch_factors - assumed_dilation)) > .001:
+                print "warning: dilation is off, suspect sync error"
+        elif verbose:
+            print "cannot load bcontrol data, skipping verification"
+
+        # write to directory
+        if drop_first_N_timestamps > 0:
+            trial_start_times = trial_start_times[drop_first_N_timestamps:]
+            trial_numbers = trial_numbers[drop_first_N_timestamps:]
+
+        rs.add_timestamps(trial_start_times)
+        return trial_start_times, trial_numbers
+        
     else:
         raise "unsupported method %s" % meth
-    
-    if drop_first_N_timestamps > 0:
-        t_on = t_on[drop_first_N_timestamps:]
-        t_off = t_off[drop_first_N_timestamps:]
-
-    # Tell RecordingSession about them
-    rs.add_timestamps(t_on)
-        
-    return (t_on, t_off)
 
 
 def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None, 
