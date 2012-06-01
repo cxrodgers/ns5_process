@@ -500,6 +500,9 @@ def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         to this filename and then saved to the directory.
     t_start, t_stop : if both are not None, then the t limits of each
         axis will be changed to this.
+    
+    override_path : gets the spike picker from a different directory,
+        for instance if you have multiple klusters
     """
     # Load trial info
     bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
@@ -962,6 +965,64 @@ def add_bcontrol_data_to_session(bcontrol_folder, session, verbose=False,
     
     # Add to session
     session.add_file(bdata_filename)
+
+def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
+    trial_number_channel=16, verbose=False):
+    """Adds trial numbers to the Segment info field
+    
+    If you already know the behavioral numbers you can specify them as
+    an attribute. In this case the length of this attribute should match
+    the number of Segment in each Block. (That is, you must account for
+    missing trials yourself.)
+    
+    If known_trial_numbers is None, will attempt to load the trial numbers
+    from the digital trial number signal on channel `trial_number_channel`.
+    
+    If all else fails, will correlate the timestamps with the audio onsets
+    in the bcontrol file.
+    """    
+    session = rs.get_OE_session()
+    if known_trial_numbers is None:
+        chlist = rs.get_ns5_loader().get_analog_channel_ids()
+        run_classic = True
+        
+        if trial_number_channel in chlist:
+            if verbose:
+                printnow("trying to get trial numbers from digital signal")
+            # Try to get them from the digital signal
+            trial_times, known_trial_numbers = \
+                calculate_timestamps_from_digital(rs.get_ns5_filename(), 
+                trial_number_channel=trial_number_channel, verbose=verbose)
+
+            # Check that we found enough trial numbers
+            n_segments = len(
+                session.query(OE.Block).first().query(OE.Segment).all())
+            if len(known_trial_numbers) == n_segments:
+                run_classic = False
+            elif verbose:
+                printnow("detected trial numbers did not match # segments")
+        
+        if run_classic:
+            # Rewrite this block
+            # Strip out functionality from add_behavioral_trial_numbers
+            # and put it here, or at least have it return known_trial_numbers
+            if verbose:
+                printnow("falling back to classic detection")
+                add_behavioral_trial_numbers(rs)
+            return
+    
+    # Here we actually add the trial numbers to each segment
+    # We index into `known_trial_numbers` with the neural trial number
+    if verbose:
+        printnow("storing trial numbers")
+    block_list = session.query(OE.Block).all()
+    for block in block_list:
+        for seg in block._segments:
+            # Neural number of the trial
+            n_trial = int(re.search('Segment (\d+)', seg.name).group(1))            
+            seg.info = str(known_trial_numbers[n_trial])
+            #seg.save() # this resaves the whole deal!
+    session.commit()
 
 def add_behavioral_trial_numbers(rs, bskip=1, copy_corr_files=True):
     """Syncs trial numbers and adds behavioral to Segment info field.
