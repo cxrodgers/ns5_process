@@ -36,6 +36,7 @@ import scipy.signal
 import SpikeTrainContainers
 from myutils import printnow
 import myutils
+import datetime
 
 # Globals
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
@@ -349,7 +350,8 @@ class RecordingSession:
     
     
     def put_neural_data_into_db(self, soft_limits_sec=None, 
-        hard_limits_sec=None):
+        hard_limits_sec=None, verbose=False, force=False,
+        commit_chunk_size=1):
         """Loads neural data from ns5 file and puts into OE database.
         
         Slices around times provided in TIMESTAMPS. Also puts events in
@@ -357,8 +359,21 @@ class RecordingSession:
        
         Time limits will be loaded from disk unless provided.
         
+        force : if True and database exists, destroys database and then runs
+            as usual
+        
         Returns OE block.
         """
+        if verbose:
+            count_time = datetime.datetime.now()
+            printnow("putting raw data into database")
+        
+        # force run?
+        if force and os.path.exists(self.get_db_filename()):
+            if verbose:
+                printnow("deleting file %s" % self.get_db_filename())
+            os.remove(self.get_db_filename())
+        
         # Open database, get session
         #self.open_db()
         session = self.get_OE_session()
@@ -366,26 +381,56 @@ class RecordingSession:
         # See if operation already occurred
         block = self.get_raw_data_block()
         if block is not None:
+            if verbose:
+                printnow("raw block already exists, returning")
             return block      
         
         # Read time stamps and set limits in samples
         t_starts, t_stops = self.calculate_trial_boundaries()
         
-        # Load data from file and store all neural channels in block
-        blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())        
-        block = blr.read_block(full_range=FULL_RANGE_UV, t_starts=t_starts, 
-            t_stops=t_stops, chlist=(self.read_neural_channel_ids() + 
-            [ch+128 for ch in self.read_analog_channel_ids()]))
+        # Determine what channels to grab
+        chlist = self.read_neural_channel_ids() + \
+            [ch+128 for ch in self.read_analog_channel_ids()]
         
-        # Convert to OE object
-        block2 = OE.io.io.hierachicalNeoToOe(block)
-        block2.name = RAW_BLOCK_NAME
-        del block
+        # Create an OE block to store the data
+        block = OE.Block(fileOrigin = self.get_ns5_filename())
+        block.name = RAW_BLOCK_NAME
+        session.add(block)
+        session.commit()
+        
+        # Now create a reader for the filename
+        blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())     
+        
+        # Load one segment at a time to conserve memory
+        for n, (t_start, t_stop) in enumerate(zip(t_starts, t_stops)):
+            if verbose:
+                vmsg = "reading segment %d from %d to %d" % (n, t_start, t_stop)
+                printnow(vmsg)
+            # Reads time slice, converts to microvolts
+            seg = blr.read_segment(t_start=t_start, t_stop=t_stop, 
+                full_range=FULL_RANGE_UV, chlist=chlist)
+            seg.name = 'Segment %d' % n
+            seg.fileOrigin = self.get_ns5_filename()        
+            
+            # Convert to OE object and append to OE block
+            seg2 = OE.io.io.hierachicalNeoToOe(seg)        
+            block._segments.append(seg2)
+            
+            # Add to database
+            session.add(seg2)
+            
+            # Commit
+            # This is the time bottleneck
+            if np.mod(n, commit_chunk_size) == (commit_chunk_size - 1):
+                session.commit()
+        session.commit()
 
         # Add events at TIMESTAMPS
+        if verbose:
+            printnow("adding event timestamps")
         t = self.read_timestamps()
-        if len(t) == len(block2._segments):
-            for tt, seg in zip(t, block2._segments):
+        if len(t) == len(block._segments):
+            for tt, seg in zip(t, block._segments):
                 e = OE.Event(name='Timestamp', label='Timestamp')
                 e.time = (tt/self.get_sampling_rate())
                 #e.save()
@@ -394,9 +439,14 @@ class RecordingSession:
             print "warning: timestamps were dropped so I can't add events"
 
         # Save to database
-        block2.save(session=session)
+        if verbose:
+            printnow("final commit and expunge")
+        session.commit()
         session.expunge_all()
-        #return block2
+        
+        if verbose:
+            time_taken = datetime.datetime.now() - count_time
+            printnow("operation finished in %0.2f s" % time_taken.total_seconds())
     
     def generate_spike_block(self, CAR=True, smooth_spikes=False, 
         filterer=None, force=False):
@@ -806,12 +856,12 @@ class RecordingSession:
         be set to the default in this method, rather than the OE default.
         Here are the defaults for `detection_kwargs`:
             'sign' : '-', 
-            'median_thresh' : 3.5,
-            'left_sweep' : .001, 
-            'right_sweep' : .002,
+            'median_thresh' : 4.5,
+            'left_sweep' : 6/30000., 
+            'right_sweep' : 17/30000.,
             'consistent_across_segments' : True,
             'consistent_across_channels' : False,
-            'correct_times' : True         
+            'correct_times' : True       
         
         save_to_klusters : if None, do not save klusters output.
             Otherwise, should be a fully specified basename for
@@ -829,9 +879,9 @@ class RecordingSession:
         # New syntax for default detection kwargs
         detection_kwargs_to_use = {
             'sign' : '-', 
-            'median_thresh' : 3.5,
-            'left_sweep' : .001, 
-            'right_sweep' : .002,
+            'median_thresh' : 4.5,
+            'left_sweep' : 6/30000., 
+            'right_sweep' : 17/30000.,
             'consistent_across_segments' : True,
             'consistent_across_channels' : False,
             'correct_times' : True }
