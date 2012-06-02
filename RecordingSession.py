@@ -449,7 +449,7 @@ class RecordingSession:
             printnow("operation finished in %0.2f s" % time_taken.total_seconds())
     
     def generate_spike_block(self, CAR=True, smooth_spikes=False, 
-        filterer=None, force=False):
+        filterer=None, force=False, verbose=False):
         """Filters the data for spike extraction.
         
         CAR: If True, subtract the common-average of every channel.
@@ -473,18 +473,22 @@ class RecordingSession:
         if sb is not None:
             if force:
                 # delete existing block
-                print "deleting existing spike block"
+                if verbose:
+                    printnow("deleting existing spike block")
                 session.delete(sb)
                 session.commit()
                 session.expunge_all()
             else:
-                print "spike filtering already done!"
+                if verbose:
+                    printnow("spike filtering already done!")
                 return
         
         # Find the raw data block
         raw_block = self.get_raw_data_block()
         
         # Create a new block for referenced data, and save to db.
+        if verbose:
+            printnow("Creating spike block")
         spike_block = OE.Block(\
             name=SPIKE_BLOCK_NAME,
             info='Referenced and filtered neural data suitable for spike detection',
@@ -501,6 +505,8 @@ class RecordingSession:
         # Make RecordingPoint for each channel, linked to tetrode number with `group`
         # Also keep track of link between channel and RP with ch2rpid dict
         # TODO: check that this works with int channel, not float
+        if verbose:
+            printnow("Creating recording points")
         ch2rpid = dict()
         for tn, ch_list in enumerate(self.read_channel_groups()):
             for ch in ch_list:
@@ -512,12 +518,16 @@ class RecordingSession:
 
         # Copy old segments over to new block
         for old_seg in raw_block._segments:
+            if verbose:
+                printnow("creating segment")
             # Create a new segment in the new block with the same name
             new_seg = OE.Segment(name=old_seg.name, info=old_seg.info,
                 id_block=spike_block.id)
             new_seg.save(session=session)
 
             # Populate with filtered signals
+            if verbose:
+                printnow("populating segment")
             new_seg = self._create_spike_seg(old_seg, new_seg, CAR, session, ch2rpid)
 
 
