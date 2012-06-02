@@ -528,7 +528,8 @@ class RecordingSession:
             # Populate with filtered signals
             if verbose:
                 printnow("populating segment")
-            new_seg = self._create_spike_seg(old_seg, new_seg, CAR, session, ch2rpid)
+            new_seg = self._create_spike_seg(old_seg, new_seg, CAR, session, 
+                ch2rpid)
 
 
     def _create_spike_seg(self, old_seg, new_seg, CAR, session, ch2rpid):
@@ -573,7 +574,7 @@ class RecordingSession:
             sampling_rate=fixed_sampling_rate,
             t_start=siglist[0].t_start,
             id_segment=new_seg.id)
-        car_sig.save(session=session)
+        session.add(car_sig)
 
         # Put all the referenced signals in id_car_seg
         for sig in siglist:
@@ -594,10 +595,11 @@ class RecordingSession:
                 t_start=sig.t_start,
                 sampling_rate=sig.sampling_rate,
                 id_recordingpoint=ch2rpid[sig.channel])
-            new_sig.save()
+            session.add(new_sig)
         
         # Save
-        new_seg.save(session=session)
+        session.add(new_seg)
+        session.commit()
 
     
     def avg_over_list_of_events(self, event_list, chn, meth='avg', t_start=None, t_stop=None):
