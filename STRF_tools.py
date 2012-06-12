@@ -252,11 +252,8 @@ class STRF_experiment:
         return concatenated_specgram        
     
     def get_concatenated_stimulus_matrix(self):
-        """Returns a concatenated (non-reshaped) matrix of stimuli.
-        
-        I think this is just np.concatenate(self.specgm_list, axis=?)
-        """
-        pass
+        """Returns a concatenated (non-reshaped) matrix of stimuli."""
+        return np.concatenate(self.specgm_list, axis=1)
     
     def get_concatenated_response_matrix(self, dtype=np.float, 
         sampling_rate=1000., truncate=None):    
@@ -264,6 +261,10 @@ class STRF_experiment:
         
         You must run transform_all_stimuli first, or otherwise set self.t_list,
         so that I know how to bin the spikes.
+        
+        truncate : if a value, throw away all spikes greater than thi
+            if None, throw away all spikes beyond the end of the stimulus
+            for this response
         
         Returns in shape (1, N_timepoints)
         """        
@@ -288,6 +289,8 @@ class STRF_experiment:
                 tmp = np.asarray(tmp) / sampling_rate
                 if truncate:
                     tmp = tmp[tmp <= truncate]
+                else:
+                    tmp = tmp[tmp <= bin_centers.max()]
                 st.append(tmp)
             
             # convert bin centers to bin edges
@@ -305,6 +308,7 @@ class STRF_experiment:
             assert len(counts) == len(bin_centers)
         
         # Return a concatenated array of response from this recording
+        self.psth_list = concatenated_psths
         return np.concatenate(concatenated_psths).astype(dtype)[np.newaxis,:]
 
 
