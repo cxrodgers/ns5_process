@@ -9,11 +9,13 @@ import wave
 import struct
 import os.path
 import datetime
+import scipy.io
 
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
 
 class ToneLoader:
+    
     def __init__(self, filename=None):
         self.filename = filename
         self.data_dict = None
