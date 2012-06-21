@@ -659,7 +659,7 @@ def query_events(rs, event_name='Timestamp'):
 
 # Function to load audio data from raw file and detect onsets
 def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0, 
-    meth='audio_onset', verbose=False, **kwargs):
+    meth='audio_onset', verbose=False, save_trial_numbers=True, **kwargs):
     """Given a RecordingSession, makes TIMESTAMPS file.
     
     I'm a thin wrapper over `calculate_timestamps` that knows how to get
@@ -684,9 +684,14 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
             and reads the digital trial numbers.
             In this cas ethe returned values are:
                 onset_times, trial_numbers
+            
             If the bcontrol file exists, it will be loaded and the time
             difference between audio onset and trial start time will be 
             accounted for.
+            
+            If save_trial_numbers, will write them in a text file called
+            'TRIAL_NUMBERS' in the RS directory.
+            
         In either case, kwargs is passed to those underlying methods, so
         see those docstrings for details.
     
@@ -709,7 +714,15 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
     # Check whether we need to run
     if not force and os.path.exists(os.path.join(rs.full_path, 
         RecordingSession.TIMESTAMPS_FILENAME)):
-        return (rs.read_timestamps(), [])
+        
+        try:
+            known_trial_numbers = np.loadtxt(
+                os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                dtype=np.int)
+        except IOError:
+            known_trial_numbers = []
+        
+        return (rs.read_timestamps(), known_trial_numbers)
     
     # Get data from recording session
     filename = rs.get_ns5_filename()
@@ -734,6 +747,11 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
                 drop_first_N_timestamps=drop_first_N_timestamps, **kwargs)
 
         rs.add_timestamps(trial_start_times)
+        
+        if save_trial_numbers:
+            np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                numbers, fmt='%d')
+        
         return trial_start_times, trial_numbers
         
     else:
@@ -1010,13 +1028,26 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
     the number of Segment in each Block. (That is, you must account for
     missing trials yourself.)
     
-    If known_trial_numbers is None, will attempt to load the trial numbers
-    from the digital trial number signal on channel `trial_number_channel`.
+    If known_trial_numbers is None, will first look for a file called
+    TRIAL_NUMBERS in the rs direcotry containing the numbers. Then it will
+    attempt to load the trial numbers from the digital trial number signal 
+    on channel `trial_number_channel`.
     
     If all else fails, will correlate the timestamps with the audio onsets
     in the bcontrol file.
     """    
     session = rs.get_OE_session()
+    
+    # First try to load from plaintext
+    if known_trial_numbers is None:
+        try:
+            known_trial_numbers = np.loadtxt(
+                os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                dtype=np.int)
+        except IOError:
+            known_trial_numbers = None
+
+    # Alternate methods
     if known_trial_numbers is None:
         chlist = rs.get_ns5_loader().get_analog_channel_ids()
         run_classic = True
