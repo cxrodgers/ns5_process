@@ -11,6 +11,14 @@ import struct
 
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
+LBPB_short2long = longname
+LBPB_sns = list(range(1, 13))
+LBPB_stimnames = [
+    'lo_pc_go', 'hi_pc_no', 'le_lc_go', 'ri_lc_go',
+    'le_hi_pc', 'ri_hi_pc', 'le_lo_pc', 'ri_lo_pc',
+    'le_hi_lc', 'ri_hi_lc', 'le_lo_lc', 'ri_lo_lc']
+LBPB_sn2name = {k: v for k, v in zip(LBPB_sns, LBPB_stimnames)}
+
 
 def parse_bitstream(bitstream, debug_mode=False):
     onethresh = .7 * 2**15
