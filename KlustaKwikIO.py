@@ -270,8 +270,11 @@ class KK_loader(object):
                     cluster_ids[n] = 99
 
         # Simple error checking
-        assert(len(np.unique(cluster_ids)) == nbClusters)
-        assert(len(np.unique(cluster_names)) == nbClusters)
+        if len(np.unique(cluster_ids)) != nbClusters:
+            # sometimes klsutakwik doesn't produce a cluster 1
+            # but still counts it?
+            print "warning: number cluster ids doesn't match in %s" % clufilename
+        #assert(len(np.unique(cluster_names)) == nbClusters)
 
         return cluster_ids
 

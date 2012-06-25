@@ -36,6 +36,7 @@ import scipy.signal
 import SpikeTrainContainers
 from myutils import printnow
 import myutils
+import datetime
 
 # Globals
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
@@ -349,7 +350,8 @@ class RecordingSession:
     
     
     def put_neural_data_into_db(self, soft_limits_sec=None, 
-        hard_limits_sec=None):
+        hard_limits_sec=None, verbose=False, force=False,
+        commit_chunk_size=1):
         """Loads neural data from ns5 file and puts into OE database.
         
         Slices around times provided in TIMESTAMPS. Also puts events in
@@ -357,8 +359,21 @@ class RecordingSession:
        
         Time limits will be loaded from disk unless provided.
         
+        force : if True and database exists, destroys database and then runs
+            as usual
+        
         Returns OE block.
         """
+        if verbose:
+            count_time = datetime.datetime.now()
+            printnow("putting raw data into database")
+        
+        # force run?
+        if force and os.path.exists(self.get_db_filename()):
+            if verbose:
+                printnow("deleting file %s" % self.get_db_filename())
+            os.remove(self.get_db_filename())
+        
         # Open database, get session
         #self.open_db()
         session = self.get_OE_session()
@@ -366,26 +381,56 @@ class RecordingSession:
         # See if operation already occurred
         block = self.get_raw_data_block()
         if block is not None:
+            if verbose:
+                printnow("raw block already exists, returning")
             return block      
         
         # Read time stamps and set limits in samples
         t_starts, t_stops = self.calculate_trial_boundaries()
         
-        # Load data from file and store all neural channels in block
-        blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())        
-        block = blr.read_block(full_range=FULL_RANGE_UV, t_starts=t_starts, 
-            t_stops=t_stops, chlist=(self.read_neural_channel_ids() + 
-            [ch+128 for ch in self.read_analog_channel_ids()]))
+        # Determine what channels to grab
+        chlist = self.read_neural_channel_ids() + \
+            [ch+128 for ch in self.read_analog_channel_ids()]
         
-        # Convert to OE object
-        block2 = OE.io.io.hierachicalNeoToOe(block)
-        block2.name = RAW_BLOCK_NAME
-        del block
+        # Create an OE block to store the data
+        block = OE.Block(fileOrigin = self.get_ns5_filename())
+        block.name = RAW_BLOCK_NAME
+        session.add(block)
+        session.commit()
+        
+        # Now create a reader for the filename
+        blr = OE.neo.io.BlackrockIO(self.get_ns5_filename())     
+        
+        # Load one segment at a time to conserve memory
+        for n, (t_start, t_stop) in enumerate(zip(t_starts, t_stops)):
+            if verbose:
+                vmsg = "reading segment %d from %d to %d" % (n, t_start, t_stop)
+                printnow(vmsg)
+            # Reads time slice, converts to microvolts
+            seg = blr.read_segment(t_start=t_start, t_stop=t_stop, 
+                full_range=FULL_RANGE_UV, chlist=chlist)
+            seg.name = 'Segment %d' % n
+            seg.fileOrigin = self.get_ns5_filename()        
+            
+            # Convert to OE object and append to OE block
+            seg2 = OE.io.io.hierachicalNeoToOe(seg)        
+            block._segments.append(seg2)
+            
+            # Add to database
+            session.add(seg2)
+            
+            # Commit
+            # This is the time bottleneck
+            if np.mod(n, commit_chunk_size) == (commit_chunk_size - 1):
+                session.commit()
+        session.commit()
 
         # Add events at TIMESTAMPS
+        if verbose:
+            printnow("adding event timestamps")
         t = self.read_timestamps()
-        if len(t) == len(block2._segments):
-            for tt, seg in zip(t, block2._segments):
+        if len(t) == len(block._segments):
+            for tt, seg in zip(t, block._segments):
                 e = OE.Event(name='Timestamp', label='Timestamp')
                 e.time = (tt/self.get_sampling_rate())
                 #e.save()
@@ -394,12 +439,17 @@ class RecordingSession:
             print "warning: timestamps were dropped so I can't add events"
 
         # Save to database
-        block2.save(session=session)
+        if verbose:
+            printnow("final commit and expunge")
+        session.commit()
         session.expunge_all()
-        #return block2
+        
+        if verbose:
+            time_taken = datetime.datetime.now() - count_time
+            printnow("operation finished in %0.2f s" % time_taken.total_seconds())
     
     def generate_spike_block(self, CAR=True, smooth_spikes=False, 
-        filterer=None, force=False):
+        filterer=None, force=False, verbose=False):
         """Filters the data for spike extraction.
         
         CAR: If True, subtract the common-average of every channel.
@@ -423,18 +473,22 @@ class RecordingSession:
         if sb is not None:
             if force:
                 # delete existing block
-                print "deleting existing spike block"
+                if verbose:
+                    printnow("deleting existing spike block")
                 session.delete(sb)
                 session.commit()
                 session.expunge_all()
             else:
-                print "spike filtering already done!"
+                if verbose:
+                    printnow("spike filtering already done!")
                 return
         
         # Find the raw data block
         raw_block = self.get_raw_data_block()
         
         # Create a new block for referenced data, and save to db.
+        if verbose:
+            printnow("Creating spike block")
         spike_block = OE.Block(\
             name=SPIKE_BLOCK_NAME,
             info='Referenced and filtered neural data suitable for spike detection',
@@ -451,6 +505,8 @@ class RecordingSession:
         # Make RecordingPoint for each channel, linked to tetrode number with `group`
         # Also keep track of link between channel and RP with ch2rpid dict
         # TODO: check that this works with int channel, not float
+        if verbose:
+            printnow("Creating recording points")
         ch2rpid = dict()
         for tn, ch_list in enumerate(self.read_channel_groups()):
             for ch in ch_list:
@@ -461,6 +517,8 @@ class RecordingSession:
                 ch2rpid[ch] = rp_id
 
         # Copy old segments over to new block
+        if verbose:
+            printnow("populating segments ... this may take a while")
         for old_seg in raw_block._segments:
             # Create a new segment in the new block with the same name
             new_seg = OE.Segment(name=old_seg.name, info=old_seg.info,
@@ -468,7 +526,8 @@ class RecordingSession:
             new_seg.save(session=session)
 
             # Populate with filtered signals
-            new_seg = self._create_spike_seg(old_seg, new_seg, CAR, session, ch2rpid)
+            new_seg = self._create_spike_seg(old_seg, new_seg, CAR, session, 
+                ch2rpid)
 
 
     def _create_spike_seg(self, old_seg, new_seg, CAR, session, ch2rpid):
@@ -513,7 +572,7 @@ class RecordingSession:
             sampling_rate=fixed_sampling_rate,
             t_start=siglist[0].t_start,
             id_segment=new_seg.id)
-        car_sig.save(session=session)
+        session.add(car_sig)
 
         # Put all the referenced signals in id_car_seg
         for sig in siglist:
@@ -534,10 +593,11 @@ class RecordingSession:
                 t_start=sig.t_start,
                 sampling_rate=sig.sampling_rate,
                 id_recordingpoint=ch2rpid[sig.channel])
-            new_sig.save()
+            session.add(new_sig)
         
         # Save
-        new_seg.save(session=session)
+        session.add(new_seg)
+        session.commit()
 
     
     def avg_over_list_of_events(self, event_list, chn, meth='avg', t_start=None, t_stop=None):
@@ -806,12 +866,12 @@ class RecordingSession:
         be set to the default in this method, rather than the OE default.
         Here are the defaults for `detection_kwargs`:
             'sign' : '-', 
-            'median_thresh' : 3.5,
-            'left_sweep' : .001, 
-            'right_sweep' : .002,
+            'median_thresh' : 4.5,
+            'left_sweep' : 6/30000., 
+            'right_sweep' : 17/30000.,
             'consistent_across_segments' : True,
             'consistent_across_channels' : False,
-            'correct_times' : True         
+            'correct_times' : True       
         
         save_to_klusters : if None, do not save klusters output.
             Otherwise, should be a fully specified basename for
@@ -829,9 +889,9 @@ class RecordingSession:
         # New syntax for default detection kwargs
         detection_kwargs_to_use = {
             'sign' : '-', 
-            'median_thresh' : 3.5,
-            'left_sweep' : .001, 
-            'right_sweep' : .002,
+            'median_thresh' : 4.5,
+            'left_sweep' : 6/30000., 
+            'right_sweep' : 17/30000.,
             'consistent_across_segments' : True,
             'consistent_across_channels' : False,
             'correct_times' : True }
@@ -870,6 +930,117 @@ class RecordingSession:
             spikesorter.save_to_klusters(basename=save_to_klusters)
     
         return spikesorter
+
+    def prep_for_klusters(self, override_path=None, verbose=False, force=False):
+        """Prepare fet and spk files for processing with Klusters.
+        
+        override_path : Full path to where klusters file exists.
+            If None, use self.last_klusters_dir()
+        
+        Renames to be 1-based instead of 0-based
+        Creates xml file
+        """
+        
+        if override_path is None:
+            override_path = self.last_klusters_dir()
+        kdir = override_path
+        
+        # Determine whether files are 1-based or 0-based
+        fet0 = glob.glob(os.path.join(kdir, '*.fet.0'))
+        clu0 = glob.glob(os.path.join(kdir, '*.clu.0'))
+        
+        if len(fet0) == 1 and len(clu0) == 1:
+            renumber = True
+        elif len(fet0) == 0 and len(clu0) == 0:
+            renumber = False
+        else:
+            print "error: cannot renumber fet and clu files"
+            return
+        
+        if renumber:
+            # get file names and numbers
+            fns = sorted(os.listdir(kdir), reverse=True)
+            if 'backup' in fns: fns.remove('backup')
+            fnums = map(lambda fn: int(fn.split('.')[-1]), fns)
+
+            # Rename each one
+            for fn, fnum in zip(fns, fnums):
+                newfn = os.path.splitext(fn)[0] + '.%d' % (fnum + 1)
+                assert not os.path.exists(os.path.join(kdir, newfn))
+                
+                os.rename(os.path.join(kdir, fn), os.path.join(kdir, newfn))
+        
+        newxmlname = os.path.join(kdir, self.session_name + '.xml')
+        if not force and os.path.exists(newxmlname):
+            if verbose:
+                print "%s already exists" % newxmlname
+        else:
+            groups = self.read_channel_groups()
+            self.write_klusters_xml_file(newxmlname, groups)
+
+    def write_klusters_xml_file(self, filename, groups=None, nbits=16, 
+        voltage_range=20, amplification=1000, offset=2048, n_samples=24, 
+        peak_sample_index=11, n_features=8):
+        """Writes the xml file with sorting parameters that Klusters needs.
+        
+        This includes information about waveforms and features. These will be
+        associated with the fet and clu files in the same directory:
+        the first channel group is associated with *.fet.1 and *.clu.1, etc.
+        
+        groups : a list of lists. Each sublist is the channel numbers in
+            that group. eg [[1,2,3], [4,5,6,7]]
+        
+        Here I write the actual channel numbers but I'm not sure Klusters
+        actually uses them. It probably just needs to know how many channels
+        per group.
+        """
+        from lxml import etree
+
+        # Acquisition system parameters, including the binary specification
+        # for the spk files
+        p = etree.Element("parameters")
+        acs = etree.Element("acquisitionSystem")
+        p.append(acs)
+        el = etree.Element("nBits"); el.text = '16'
+        acs.append(el)
+        el = etree.Element("samplingRate")
+        el.text = str(int(self.get_sampling_rate()))
+        acs.append(el)
+        el = etree.Element("voltageRange"); el.text = str(voltage_range)
+        acs.append(el)
+        el = etree.Element("amplification"); el.text = str(amplification)
+        acs.append(el)
+        el = etree.Element("offset"); el.text = str(offset)
+        acs.append(el)
+        
+        # Channel groups
+        sd = etree.Element("spikeDetection")
+        cg = etree.Element("channelGroups")
+        for group in groups:
+            g = etree.Element("group")
+            c = etree.Element("channels")
+            for cnum in group:
+                cc = etree.Element("channel")
+                cc.text = str(cnum)
+                c.append(cc)
+            g.append(c)
+            cg.append(g)
+            
+            el = etree.Element("nSamples"); el.text = str(n_samples)
+            g.append(el)
+            el = etree.Element("peakSampleIndex")
+            el.text = str(peak_sample_index)
+            g.append(el)
+            el = etree.Element("nFeatures"); el.text = str(n_features)
+            g.append(el)
+        sd.append(cg)
+        p.append(sd)        
+        
+        # Output xml
+        fi = file(filename, 'w')
+        fi.write(etree.tostring(p, pretty_print=True))
+        fi.close()
+
 
     def spiketime_dump(self):
         # Dump in klustakwik format

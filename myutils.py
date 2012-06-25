@@ -7,7 +7,9 @@ import scipy.stats
 import matplotlib
 import wave
 import struct
-
+import os.path
+import datetime
+import scipy.io
 
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
@@ -18,6 +20,55 @@ LBPB_stimnames = [
     'le_hi_pc', 'ri_hi_pc', 'le_lo_pc', 'ri_lo_pc',
     'le_hi_lc', 'ri_hi_lc', 'le_lo_lc', 'ri_lo_lc']
 LBPB_sn2name = {k: v for k, v in zip(LBPB_sns, LBPB_stimnames)}
+
+
+class ToneLoader:
+    
+    def __init__(self, filename=None):
+        self.filename = filename
+        self.data_dict = None
+        
+        if self.filename is not None:
+            self._load()
+    
+    def _load(self):
+        self._parse_date()
+        self.data_dict = scipy.io.loadmat(self.filename)
+    
+    def _parse_date(self):
+        """Split filename on _ and set date field"""
+        split_fields = os.path.split(self.filename)[1].split('_')[1:]
+        split_fields[-1] = os.path.splitext(split_fields[-1])[0]
+        
+        # convert strings to integers, will crash here if parsing wrong
+        self.date_fields = map(int, split_fields)
+        
+        self.datetime = datetime.datetime(*self.date_fields)
+    
+    def aliased_tones(self, Fs=30e3, take_abs=True):
+        """Returns the tone frequencies as they would appear aliased"""
+        start = self.tones        
+        aliased = np.mod(start + Fs/2., Fs) - Fs/2.
+        
+        if take_abs:
+            return np.abs(aliased)
+        else:
+            return aliased
+    
+    @property
+    def tones(self):
+        if self.data_dict is None:
+            self._load()
+        return self.data_dict['tones'].flatten()
+    
+    @property
+    def attens(self):
+        if self.data_dict is None:
+            self._load()
+        return self.data_dict['attens'].flatten()
+    
+    def __repr__(self):
+        return "ToneLoader('%s')" % self.filename
 
 
 def parse_bitstream(bitstream, debug_mode=False):

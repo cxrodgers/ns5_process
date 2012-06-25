@@ -34,6 +34,8 @@ import SpikeTrainContainers
 import bcontrol
 import os.path
 import shutil
+from myutils import printnow, parse_bitstream
+
 
 # Functions to parse the way I name my ns5 files
 def make_filename(dirname=None, username='*', ratname='*', date='*', number='*'):
@@ -498,6 +500,9 @@ def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         to this filename and then saved to the directory.
     t_start, t_stop : if both are not None, then the t limits of each
         axis will be changed to this.
+    
+    override_path : gets the spike picker from a different directory,
+        for instance if you have multiple klusters
     """
     # Load trial info
     bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
@@ -654,7 +659,7 @@ def query_events(rs, event_name='Timestamp'):
 
 # Function to load audio data from raw file and detect onsets
 def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0, 
-    meth='audio_onset', verbose=False, **kwargs):
+    meth='audio_onset', verbose=False, save_trial_numbers=True, **kwargs):
     """Given a RecordingSession, makes TIMESTAMPS file.
     
     I'm a thin wrapper over `calculate_timestamps` that knows how to get
@@ -679,6 +684,14 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
             and reads the digital trial numbers.
             In this cas ethe returned values are:
                 onset_times, trial_numbers
+            
+            If the bcontrol file exists, it will be loaded and the time
+            difference between audio onset and trial start time will be 
+            accounted for.
+            
+            If save_trial_numbers, will write them in a text file called
+            'TRIAL_NUMBERS' in the RS directory.
+            
         In either case, kwargs is passed to those underlying methods, so
         see those docstrings for details.
     
@@ -698,13 +711,18 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
     the first N of them before writing to disk. Another alternative is
     the pre_first and post_last kwargs which can be specified in samples.
     """
-    # only for error checking the digital method
-    assumed_dilation = .99663 
-    
     # Check whether we need to run
     if not force and os.path.exists(os.path.join(rs.full_path, 
         RecordingSession.TIMESTAMPS_FILENAME)):
-        return (rs.read_timestamps(), [])
+        
+        try:
+            known_trial_numbers = np.loadtxt(
+                os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                dtype=np.int)
+        except IOError:
+            known_trial_numbers = []
+        
+        return (rs.read_timestamps(), known_trial_numbers)
     
     # Get data from recording session
     filename = rs.get_ns5_filename()
@@ -724,63 +742,128 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
         return (t_on, t_off)
         
     elif meth == 'digital_trial_number':
-        # Parse the digital words
-        trial_start_times, trial_numbers = calculate_timestamps_from_digital(
-            filename, verbose=verbose, **kwargs)
-        
-        # if possible, load behavioral data
-        bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
-        skip_verification = False
-        try:
-            bcld._find_bcontrol_matfile()
-        except:
-            skip_verification = True
-        
-        # now use that behavioral data to account for difference between
-        # trial start and onset
-        if not skip_verification:
-            bcld.load()
-            peh = bcld.data['peh']
-            btrial_starts = np.array([trial['states']['state_0'][0,1] 
-                for trial in bcld.data['peh']])
-
-            # account for any missing trials
-            if trial_numbers[0] != 1:
-                vmsg = "%d trials occurred before recording started" % (
-                    trial_numbers[0] - 1)
-                btrial_starts = btrial_starts[(trial_numbers[0] - 1):]
-            if len(trial_numbers) > len(btrial_starts):
-                ndrop = len(trial_numbers) - len(btrial_starts)
-                vmsg = "%d trials occurred after last " % ndrop + \
-                    "saved behavioral trial, dropping"
-                trial_numbers = trial_numbers[:len(btrial_starts)]
-                trial_start_times = trial_start_times[:len(btrial_starts)]
-            elif len(btrial_starts) > len(trial_numbers):
-                ndrop = len(btrial_starts) - len(trial_numbers)
-                vmsg = "%d trials occurred after last trial in recording" % ndrop
-                btrial_starts = btrial_starts[:len(trial_numbers)]
-            
-            if verbose:
-                print vmsg
-
-            # check that time syncs up    
-            stretch_factors = np.diff(trial_start_times / rs.get_sampling_rate()) \
-                / np.diff(btrial_starts)
-            if np.max(np.abs(stretch_factors - assumed_dilation)) > .001:
-                print "warning: dilation is off, suspect sync error"
-        elif verbose:
-            print "cannot load bcontrol data, skipping verification"
-
-        # write to directory
-        if drop_first_N_timestamps > 0:
-            trial_start_times = trial_start_times[drop_first_N_timestamps:]
-            trial_numbers = trial_numbers[drop_first_N_timestamps:]
+        trial_start_times, trial_numbers = \
+            calculate_timestamps_from_digital_and_sync(rs, verbose=verbose, 
+                drop_first_N_timestamps=drop_first_N_timestamps, **kwargs)
 
         rs.add_timestamps(trial_start_times)
+        
+        if save_trial_numbers:
+            np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                trial_numbers, fmt='%d')
+        
         return trial_start_times, trial_numbers
         
     else:
         raise "unsupported method %s" % meth
+
+def calculate_timestamps_from_digital_and_sync(rs, verbose=False, 
+    skip_verification=False, assumed_dilation=.99663, wordlen=160, 
+    drop_first_N_timestamps=0, **kwargs):
+    """Calculates timestamps from digital signal and syncs with behavior file.
+    
+    Wrapper around `calculate_timestamps_from_digital` which does basic
+    error checking on the parsed bitstream.
+    
+    This method additionally loads the bcontrol data and:
+    * accounts for time between trial start (digital signal) and stimulus onset
+    * drops timestamps that are not present in one or the other data source
+    
+    It also accounts for temporal dilation between these data sources.
+    
+    skip_verification : if True, doesn't attempt to load bcontrol data, just
+        returns the raw result of the parse. In this case you might as well
+        use `calculate_timestamps_from_digital`
+    assumed_dilation : this is the value you get when you divide times from
+        the neural recording computer, by times from the behavior recording
+        computer. This is verified to be true for the loaded data, and
+        then used to account for the time delay to onset.
+    wordlen : length of the digital word in samples, which is accounted for
+        in calculating stimulus onset
+    drop_first_N_timestamps : drops this many timestamps from the beginning
+    kwargs : passed to calculate_timestamps_from_digital (pre_first, post_last,
+        manual_threshold, etc)
+    
+    Returns trial_start_times, trial_numbers
+        trial_start_times is in samples and is the time of stimulus onset,
+        rather than the time of the digital pulse.
+    """
+    # Parse the digital words
+    filename = rs.get_ns5_filename()
+    trial_start_times, trial_numbers = calculate_timestamps_from_digital(
+        filename, verbose=verbose, **kwargs)
+    if len(trial_start_times) == 0:
+        if verbose:
+            print "no times found!"
+        return np.array([]), np.array([])
+    
+    # if possible, load behavioral data
+    bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
+    try:
+        bcld._find_bcontrol_matfile()
+    except:
+        skip_verification = True
+    
+    # now use that behavioral data to account for difference between
+    # trial start and onset
+    if not skip_verification:
+        if verbose:
+            printnow("Checking for missing trials and verifying dilation")
+        bcld.load()
+        peh = bcld.data['peh']
+        btrial_starts = np.array([trial['states']['state_0'][0,1] 
+            for trial in bcld.data['peh']])
+        bstim_onsets = np.array([trial['states']['play_stimulus'][0]
+            for trial in bcld.data['peh']])
+
+        # account for any missing trials
+        if trial_numbers[0] != 1:
+            vmsg = "%d trials occurred before recording started" % (
+                trial_numbers[0] - 1)
+            btrial_starts = btrial_starts[(trial_numbers[0] - 1):]
+            bstim_onsets = bstim_onsets[(trial_numbers[0] - 1):]
+        if len(trial_numbers) > len(btrial_starts):
+            ndrop = len(trial_numbers) - len(btrial_starts)
+            vmsg = "%d trials occurred after last " % ndrop + \
+                "saved behavioral trial, dropping"
+            trial_numbers = trial_numbers[:len(btrial_starts)]
+            trial_start_times = trial_start_times[:len(btrial_starts)]
+        elif len(btrial_starts) > len(trial_numbers):
+            ndrop = len(btrial_starts) - len(trial_numbers)
+            vmsg = "%d trials occurred after last trial in recording" % ndrop
+            btrial_starts = btrial_starts[:len(trial_numbers)]
+            bstim_onsets = bstim_onsets[:len(trial_numbers)]            
+        if verbose:
+            print vmsg
+
+        # check that time syncs up    
+        stretch_factors = np.diff(
+            trial_start_times / rs.get_sampling_rate()) \
+            / np.diff(btrial_starts)
+        if np.max(np.abs(stretch_factors - assumed_dilation)) > .001:
+            print "WARNING: dilation is off, suspect sync error"
+        
+        # now account for time to stimulus onset (including temporal dilation)
+        if verbose:
+            printnow("Converting digital timestamps into audio onsets")          
+        stimulus_latencies = bstim_onsets - btrial_starts
+        stimulus_latencies = stimulus_latencies * assumed_dilation
+        
+        # Convert to samples and add in the length of the digital word itself
+        stimulus_latencies = np.rint(
+            stimulus_latencies * rs.get_sampling_rate()).astype(np.int)
+        trial_start_times = trial_start_times + stimulus_latencies
+        trial_start_times = trial_start_times + wordlen
+        
+    elif verbose:
+        print "cannot load bcontrol data, skipping verification"
+
+    # write to directory
+    if drop_first_N_timestamps > 0:
+        trial_start_times = trial_start_times[drop_first_N_timestamps:]
+        trial_numbers = trial_numbers[drop_first_N_timestamps:]
+    
+    return trial_start_times, trial_numbers
 
 
 def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None, 
@@ -871,6 +954,11 @@ def calculate_timestamps_from_digital(filename, trial_number_channel=16,
     pre_first=0, post_last=0, debug_mode=False, verbose=True):
     """Calculates timestamps from a digital trial number signal
     
+    The underlying work is done by parse_bitstream.
+    This function loads the data from the specified channel and
+    does some simple error checking and verbosity, as well as dropping
+    trials from the start or end.
+    
     filename : ns5 filename
     trial_number_channel : analog input containing the digital signal
     pre_first : data before this sample will be ignored; therefore,
@@ -885,10 +973,7 @@ def calculate_timestamps_from_digital(filename, trial_number_channel=16,
     Returns: trial_start_times, trial_numbers
     The first is the detected word onsets in samples from the beginning of
     the file. The second is the integer value of each word.
-    """
-    import ns5
-    from myutils import parse_bitstream
-    
+    """  
     # Load ns5 file
     l = ns5.Loader(filename=filename)
     l.load_file()
@@ -933,6 +1018,76 @@ def add_bcontrol_data_to_session(bcontrol_folder, session, verbose=False,
     
     # Add to session
     session.add_file(bdata_filename)
+
+def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
+    trial_number_channel=16, verbose=False):
+    """Adds trial numbers to the Segment info field
+    
+    If you already know the behavioral numbers you can specify them as
+    an attribute. In this case the length of this attribute should match
+    the number of Segment in each Block. (That is, you must account for
+    missing trials yourself.)
+    
+    If known_trial_numbers is None, will first look for a file called
+    TRIAL_NUMBERS in the rs direcotry containing the numbers. Then it will
+    attempt to load the trial numbers from the digital trial number signal 
+    on channel `trial_number_channel`.
+    
+    If all else fails, will correlate the timestamps with the audio onsets
+    in the bcontrol file.
+    """    
+    session = rs.get_OE_session()
+    
+    # First try to load from plaintext
+    if known_trial_numbers is None:
+        try:
+            known_trial_numbers = np.loadtxt(
+                os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                dtype=np.int)
+        except IOError:
+            known_trial_numbers = None
+
+    # Alternate methods
+    if known_trial_numbers is None:
+        chlist = rs.get_ns5_loader().get_analog_channel_ids()
+        run_classic = True
+        
+        if trial_number_channel in chlist:
+            if verbose:
+                printnow("trying to get trial numbers from digital signal")
+            # Try to get them from the digital signal
+            trial_times, known_trial_numbers = \
+                calculate_timestamps_from_digital_and_sync(rs, verbose=verbose,
+                    trial_number_channel=trial_number_channel)
+
+            # Check that we found enough trial numbers
+            n_segments = len(session.query(OE.Block).first()._segments)
+            if len(known_trial_numbers) == n_segments:
+                run_classic = False
+            elif verbose:
+                printnow("detected trial numbers did not match # segments")
+        
+        if run_classic:
+            # Rewrite this block
+            # Strip out functionality from add_behavioral_trial_numbers
+            # and put it here, or at least have it return known_trial_numbers
+            if verbose:
+                printnow("falling back to classic detection")
+                add_behavioral_trial_numbers(rs)
+            return
+    
+    # Here we actually add the trial numbers to each segment
+    # We index into `known_trial_numbers` with the neural trial number
+    if verbose:
+        printnow("storing trial numbers")
+    block_list = session.query(OE.Block).all()
+    for block in block_list:
+        for seg in block._segments:
+            # Neural number of the trial
+            n_trial = int(re.search('Segment (\d+)', seg.name).group(1))            
+            seg.info = str(known_trial_numbers[n_trial])
+            #seg.save() # this resaves the whole deal!
+    session.commit()
 
 def add_behavioral_trial_numbers(rs, bskip=1, copy_corr_files=True):
     """Syncs trial numbers and adds behavioral to Segment info field.

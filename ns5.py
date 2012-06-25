@@ -190,7 +190,8 @@ class Loader(object):
         """
         # where to start and stop
         start = int(start)
-        i1 = self.header.Header + start * self.header.Channel_Count
+        i1 = self.header.Header + \
+            start * self.header.Channel_Count * self.header.sample_width
         if n_samples is None:
             if stop is None:
                 stop = self.header.n_samples
@@ -242,8 +243,8 @@ class Loader(object):
         res = self.get_chunk_by_channel(start, n_samples, stop)
         return res[channel]
     
-    def get_channel_as_array(self, channel, **kwargs):
-        return self.get_channel(channel, kwargs)
+    def get_channel_as_array(self, channel, start=0, n_samples=None, stop=None):
+        return self.get_channel(channel, start, n_samples, stop)
 
     def get_analog_channel_as_array(self, channel, start=0, 
         n_samples=None, stop=None):
@@ -252,7 +253,7 @@ class Loader(object):
         Simply adds 128 to the channel number to convert to ns5 number.
         This is just the way Cyberkinetics numbers its channels.
         """
-        return self.get_channel_as_array(channel + 128, start, n_samples, stop)    
+        return self.get_channel(channel + 128, start, n_samples, stop)    
 
     def get_analog_channel_ids(self):
         """Returns array of analog channel ids existing in the file.
