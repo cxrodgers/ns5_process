@@ -675,6 +675,12 @@ def generate_event_list(peh, TRIALS_INFO=None, TI_start_idx=0, sort=True,
     error_check_last_trial=5):
     """Given a peh object (or list of objects), return list of events.
     
+    TRIALS_INFO : provide this and useful information from it, such 
+        as stimulus number and trial number, will be inserted into the
+        event list. It should be the original TRIALS_INFO, not the demunged.
+    
+    TI_start_idx : The index (into TRIALS_INFO) of the first trial in peh.
+    
     error_check_last_trial : the trial after the last one in peh should
     have OUTCOME equal to this. (5 means future trial). Otherwise a warning
     will be printed. To disable, set to None.
