@@ -750,7 +750,7 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
         
         if save_trial_numbers:
             np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
-                numbers, fmt='%d')
+                trial_numbers, fmt='%d')
         
         return trial_start_times, trial_numbers
         
