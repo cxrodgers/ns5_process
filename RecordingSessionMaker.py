@@ -35,6 +35,7 @@ import bcontrol
 import os.path
 import shutil
 from myutils import printnow, parse_bitstream
+import pandas
 
 
 # Functions to parse the way I name my ns5 files
@@ -1088,6 +1089,142 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
             seg.info = str(known_trial_numbers[n_trial])
             #seg.save() # this resaves the whole deal!
     session.commit()
+
+def write_b2n_sync_file(rs, btimes=None, ntimes=None, peh=None,
+    known_trial_numbers=None, extra_peh_entries=0, force=False,
+    assumed_dilation=.99663):
+    """Write syncing file for converting from behavior time to neural time.
+    
+    All this does is sync the behavioral times to the neural times with a 
+    polynomial. The tricky part is accounting for missing trials.
+    
+    You can provide `btimes` and/or `ntimes` as is. (Specify in seconds)
+    
+    If you don't provide ntimes, it's exctracted from rs.read_timestamps()
+    If you don't provide btimes, then I need peh and known_trial_numbers, which
+    I can try to load from bcontrol file and from TRIAL_NUMBERS. In this case,
+    I account for Matlab numbering: an entry of 1 in TRIAL_NUMBERS corresponds
+    to peh[0]
+
+    extra_peh_entries : I guess there is a possibility that there are extra
+    peh states at the beginning, from before the trial numbering starts. In
+    this case, I will add extra_peh_entries to the index into peh ... but note
+    that this is not tested.
+    
+    assumed_dilation : asserts dilation is within .00005 of this, or errors.
+        If you don't want to check this, set to None.
+
+    Finally I write SYNC_B2N to the RS.
+    """
+    if not force and os.path.exists(os.path.join(rs.full_path, 'SYNC_B2N')):
+        return
+    
+    # Account for indexing TRIAL_NUMBERS into peh
+    peh_offset = -1 + extra_peh_entries 
+    
+    if btimes is None:
+        # Calculate btimes from peh and known_trial_numbers
+        if peh is None:
+            bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
+            bcld.load()
+            peh = bcld.data['peh']
+        
+        if known_trial_numbers is None:
+            # If it fails here, might be able to auto-guess the trials are
+            # lined up
+            known_trial_numbers = np.loadtxt(
+                os.path.join(rs.full_path, 'TRIAL_NUMBERS'), dtype=np.int)
+        
+        # Use peh and known_trial_numbers to extract btimes
+        btimes = []
+        for trial_number in known_trial_numbers:
+            trial = peh[trial_number + peh_offset]
+            btimes.append(trial['states']['play_stimulus'][0])
+        btimes = np.asarray(btimes)
+    
+    if ntimes is None:
+        ntimes = rs.read_timestamps() / rs.get_sampling_rate()
+    
+    # fit
+    b2n = np.polyfit(btimes, ntimes, deg=1)
+    
+    # error check
+    if assumed_dilation is not None:
+        if np.abs(b2n[0] - assumed_dilation) > .00005:
+            raise ValueError("Sync error: got dilation of %f" % b2n[0])
+        
+    np.savetxt(os.path.join(rs.full_path, 'SYNC_B2N'), b2n)
+
+def write_events_file(rs, known_trial_numbers=None, convert_to_ntime=True,
+    force=False):
+    """Write bcontrol events and trials_info as flat text file
+    
+    The bcontrol data is loaded from the bcontrol data file using
+    Bcontrol_Loader_By_Dir on the recording session, so it must exist there.
+    
+    Set convert_to_ntime to True to convert event times to neural timebase.
+    For this to work, the RS needs to have a SYNC_B2N file. 
+    
+    If SYNC_B2N does not exist:
+    I'll call write_b2n_sync_file to generate one. That method needs to know
+    when the neural onsets occurred and which trial each one was. I can
+    pass `known_trial_numbers` to it, or it can read TRIAL_NUMBERS from the RS.
+    
+    There is space in this method to deal with the possibility of peh
+    containing extra entries. For right now this will error out at 
+    generate_event_list (hopefully) or at the extraction of btimes.
+    
+    Finally, trials_info and events are written to the RS directory as
+        trials_info
+        events
+    """
+    if not force and os.path.exists(os.path.join(rs.full_path, 'events')):
+        return    
+    
+    # get events
+    bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
+    bcld.load()
+    peh = bcld.data['peh']
+    TI = bcontrol.demung_trials_info(bcld)
+    
+    # Generate event list ... why would TI_start_idx every be nonzero
+    # for purely behavioral stuff? Possibly if the trials were regenerated
+    # before starting the protocol ... error here and fix that edge case then.
+    # That is the purpose of `extra_peh_offset` in write_b2n_sync_file
+    rec_l = bcontrol.generate_event_list(peh, bcld.data['TRIALS_INFO'], 
+        TI_start_idx=0, 
+        error_check_last_trial=bcld.data['CONSTS']['FUTURE_TRIAL'])
+    events = pandas.DataFrame.from_records(rec_l)
+
+    # Optionally convert to neural time base
+    if convert_to_ntime:
+        # Load the sync file (generating if necessary)
+        fname = os.path.join(rs.full_path, 'SYNC_B2N')        
+        if not os.path.exists(fname):
+            write_b2n_sync_file(rs, known_trial_numbers=known_trial_numbers)        
+        sync_b2n = np.loadtxt(fname, dtype=np.float)
+        
+        # Apply the sync    
+        events['time'] = np.polyval(sync_b2n, events.time)
+
+    # Reindex TRIALS_INFO
+    TI.set_index('trial_number', inplace=True)
+    TI.index.name = 'trial_number'
+    
+    # Insert time ...
+    # This is commented out for now because there are two tricky parts
+    # 1) Deciding whether to use start time or stimulus time
+    # 2) Accounting for possibility of extra_peh_offset
+    # 3) Deciding how to calculate ... extract times from peh using
+    #    sync? Use TRIAL_NUMBERS and TIMESTAMPS?
+    #TI.insert(0, 'time', np.nan)
+    #TI['time'][bskip:bskip+len(ntimes)] = ntimes
+    
+    # Output to RS
+    events.to_csv(os.path.join(rs.full_path, 'events'), index=False, 
+        header=False, sep='\t')
+    TI.to_csv(os.path.join(rs.full_path, 'trials_info'), index=True, 
+        header=True)        
 
 def add_behavioral_trial_numbers(rs, bskip=1, copy_corr_files=True):
     """Syncs trial numbers and adds behavioral to Segment info field.
