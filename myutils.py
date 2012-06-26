@@ -22,6 +22,13 @@ LBPB_stimnames = [
 LBPB_sn2name = {k: v for k, v in zip(LBPB_sns, LBPB_stimnames)}
 
 
+def soundsc(waveform, fs=44100, normalize=True):
+    import scikits.audiolab as skab
+    waveform = np.asarray(waveform)
+    n = waveform.astype(np.float) / np.abs(waveform).max()
+    skab.play(n, fs)
+
+
 class ToneLoader:
     
     def __init__(self, filename=None):
