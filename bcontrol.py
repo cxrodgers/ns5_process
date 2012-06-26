@@ -226,7 +226,11 @@ class Bcontrol_Loader_By_Dir(object):
         """Returns filename to BControl matfile in self.dirname"""
         fn_bdata = glob.glob(os.path.join(self.dirname, 
             self._bcontrol_matfilename))
-        assert(len(fn_bdata) == 1)
+        if len(fn_bdata) == 0:
+            raise IOError("cannot find bcontrol file in %s" % self.dirname)
+        elif len(fn_bdata) > 1:
+            raise IOError("multiple bcontrol files in %s" % self.dirname)
+        #assert(len(fn_bdata) == 1)
         return fn_bdata[0]
     
     def _pickle_data(self):
