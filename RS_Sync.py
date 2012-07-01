@@ -1,3 +1,9 @@
+import numpy as np
+from ns5_process import bcontrol
+import kkpandas
+import os.path
+import collections
+
 class RS_Syncer:
     """Defines preferred interface for accessing trial numbers and times
     
@@ -60,7 +66,7 @@ class RS_Syncer:
         """
         try:
             self.btrial_numbers = np.loadtxt(
-                os.path.join(rs.full_path, 'TRIAL_NUMBERS'), dtype=np.int)
+                os.path.join(self.rs.full_path, 'TRIAL_NUMBERS'), dtype=np.int)
         except IOError:
             # Load from bcontrol in case syncing hasn't happened yet
             1/0
@@ -100,8 +106,8 @@ class RS_Syncer:
         Stores trialstart_nbase and trialstart_bbase
         """
         try:
-            trials_info = kkpandas.io.load_trials_info(rs.full_path)
-            events = kkpandas.io.load_events(rs.full_path)
+            trials_info = kkpandas.io.load_trials_info(self.rs.full_path)
+            events = kkpandas.io.load_events(self.rs.full_path)
         except IOError:
             # These haven't been dumped yet
             # Should load them from bcontrol file
