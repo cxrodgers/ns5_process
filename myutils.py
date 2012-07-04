@@ -10,6 +10,7 @@ import struct
 import os.path
 import datetime
 import scipy.io
+import scipy.signal
 
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
@@ -27,6 +28,25 @@ def soundsc(waveform, fs=44100, normalize=True):
     waveform = np.asarray(waveform)
     n = waveform.astype(np.float) / np.abs(waveform).max()
     skab.play(n, fs)
+
+
+class GaussianSmoother:
+    def __init__(self, filter_std=5, width=10, gain=1):
+        self.filter_std = float(filter_std)
+        self.width = float(width)
+        self.gain = float(gain)
+        
+        self.n = np.arange(filter_std * width, dtype=np.int)
+        self.b = np.exp( -(self.n.astype(np.float) ** 2) / (2 * filter_std**2) )
+        self.b = self.gain * self.b / np.sqrt((self.b ** 2).sum())
+        self.a = np.array([1])
+    
+    def execute(self, input_data, **filter_kwargs):
+        input_data = np.asarray(input_data)
+        res = scipy.signal.filtfilt(self.b, self.a, input_data, **filter_kwargs)
+        return res
+    
+
 
 
 class ToneLoader:
