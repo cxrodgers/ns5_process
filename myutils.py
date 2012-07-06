@@ -22,6 +22,9 @@ LBPB_stimnames = [
 LBPB_sn2name = {k: v for k, v in zip(LBPB_sns, LBPB_stimnames)}
 
 
+def invert_linear_poly(p):
+    return np.array([1, -p[1]]).astype(np.float) / p[0]
+
 def soundsc(waveform, fs=44100, normalize=True):
     import scikits.audiolab as skab
     waveform = np.asarray(waveform)
