@@ -1024,6 +1024,15 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
     trial_number_channel=16, verbose=False):
     """Adds trial numbers to the Segment info field
     
+    This is supposed to be a complete replacement for
+        add_behavioral_trial_numbers
+    because it includes new functionality for syncing with digital
+    trial number signal. There is a wrapper which will fall back to that
+    old method if necessary (ie, no digital signal available). In that case
+    it will also write out TRIAL_NUMBERS, which is the new standard for
+    converting from neural to behavioral trial number (replaces reading the
+    OE info field).
+    
     If you already know the behavioral numbers you can specify them as
     an attribute. In this case the length of this attribute should match
     the number of Segment in each Block. (That is, you must account for
@@ -1035,7 +1044,7 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
     on channel `trial_number_channel`.
     
     If all else fails, will correlate the timestamps with the audio onsets
-    in the bcontrol file.
+    in the bcontrol file. 
     """    
     session = rs.get_OE_session()
     
@@ -1069,12 +1078,25 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
                 printnow("detected trial numbers did not match # segments")
         
         if run_classic:
-            # Rewrite this block
-            # Strip out functionality from add_behavioral_trial_numbers
-            # and put it here, or at least have it return known_trial_numbers
+            # Wrapper around old sync methods
+            # Calls add_behavioral_trial_numbers to do the syncing and
+            # storing in OE.
+            # So we don't need to do the OE store as below
+            # However, we still need to save TRIAL_NUMBERS for compatibility
+            # with current code which depends on it
             if verbose:
                 printnow("falling back to classic detection")
-                add_behavioral_trial_numbers(rs)
+            add_behavioral_trial_numbers(rs)
+            
+            trialnumbers = []
+            block = rs.get_raw_data_block()
+            for n, seg in enumerate(block._segments):
+                assert seg.name == ('Segment %d' % n)
+                bnum = int(seg.info)
+                trialnumbers.append(bnum)
+            np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                trialnumbers, fmt='%d')
+            
             return
     
     # Here we actually add the trial numbers to each segment
