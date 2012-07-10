@@ -7,6 +7,98 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import sys
 
+
+def check_audio_alignment(rs=None, ns5_loader=None, timestamps=None, 
+    plot=True, analog_channels=None, dstart=-1000, dstop=8000,
+    smoothing_std=100, also_smooth=True, **plot_kwargs):
+    """Extracts audio waveforms, to check for sync error.
+    
+    rs : RecordingSession
+    ns5_loader, timestamps, analog_channels : extracted from rs if None
+    plot : if True, dispatches result (and plot_kwargs) to plot_audio_alignment
+    dstart, dstop : # of samples relative to timestamp
+    also_smooth : if True, also returns a smoothed version of the data
+        Uses a Gaussian of standard deviation equal to smoothing_std samples
+    
+    Returns:
+    dict { 'n' : samples_from_timestamp, 'raw' : data, 
+        'smoothed' : smoothed_data if also_smoth}
+    The shape of each is (n_channels, n_timestamps, n_samples)
+    """
+    if timestamps is None:
+        timestamps = rs.read_timestamps()
+    if ns5_loader is None:
+        ns5_loader = rs.get_ns5_loader()
+    if analog_channels is None:
+        analog_channels = np.asarray(rs.read_analog_channel_ids()) + 128
+
+    # Set up return values
+    res = {}
+    res['n'] = np.arange(dstart, dstop, dtype=np.int)
+
+    # Extract slices of audio channels
+    raw_slices = []
+    for timestamp in timestamps:
+        raw = ns5_loader.get_chunk_by_channel(start=timestamp + dstart,
+            stop=timestamp + dstop)
+        audio_slc = np.array([raw[ch] for ch in analog_channels],
+            dtype=np.float)
+        raw_slices.append(audio_slc)
+    res['raw'] = np.asarray(raw_slices).swapaxes(0, 1)
+    
+    if also_smooth:
+        # square and smooth the signal to make it easier to eyeball
+        gstd = smoothing_std # 3ms, will still get plenty of wiggles
+        glen = int(2.5 * gstd) # save time by truncation
+        
+        # Incatation such that b[0] == 1.0
+        b = scipy.signal.gaussian(glen * 2, gstd, sym=False)[glen:]
+        b = b / np.sum(b**2)
+
+        # Do the filtering
+        try:
+            res['smoothed'] = scipy.signal.filtfilt(b, [1], 
+                res['raw'] ** 2)
+        except:
+            print "warning: smoothing error"
+            also_smooth = False
+        
+    
+    if plot:
+        tight_plot_raw(res, analog_channels, **plot_kwargs)
+        wide_plot_smoothed(res, analog_channels, **plot_kwargs)
+    
+    return res
+
+def tight_plot_raw(res, analog_channels, start=-50, stop=50, **plot_kwargs):
+    # Tight plot of raw
+    for n, ch in enumerate(analog_channels):
+        ax = plot_audio_alignment(res['raw'][n], res['n'], 
+            **plot_kwargs)
+        ax.plot([0, 0], ax.get_ylim(), 'k')
+        ax.set_title('channel %d' % ch)
+        ax.set_xlim((start, stop))
+        plt.grid()
+
+def wide_plot_smoothed(res, analog_channels, **plot_kwargs):
+    # Wide plot of smoothed
+    for n, ch in enumerate(analog_channels):
+        ax = plot_audio_alignment(res['smoothed'][n], res['n'], 
+            **plot_kwargs)
+        ax.set_title('channel %d' % ch)
+        plt.grid()    
+
+def plot_audio_alignment(data, n=None, ax=None, **kwargs):
+    """Simple plotting function"""
+    if n is None:
+        n = np.arange(data.shape[1], dtype=np.int)
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(111)
+    ax.plot(n, data.transpose())
+    return ax
+
+
 class OnsetDetector(object):
     """Given a mono or stereo audio stream, detects sound onsets.
     
