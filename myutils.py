@@ -101,35 +101,72 @@ class ToneLoader:
         return "ToneLoader('%s')" % self.filename
 
 
-def parse_bitstream(bitstream, debug_mode=False):
-    onethresh = .7 * 2**15
-    zerothresh = .3 * 2**15
-    wordlen = 190 # actually 160
-    bitlen = 10
-    certainty_thresh = 7 # of 10
-    wordconv = 2**np.arange(16, dtype=np.int)[::-1]
+def parse_bitstream(bitstream, onethresh=.7 * 2**15, zerothresh=.3 * 2**15,
+    min_interword=190, bitlen=10, certainty_thresh=7, nbits=16, 
+    debug_mode=False):
+    """Parse digital words from an analog trace and return times + values.
+    
+    This is for asynchronous digital communication, meaning a digital word
+    is sent at unknown times. It is assumed that each word begins with a high
+    bit ("1") to indicate when parsing should begin. Thereafter bits are read
+    off in chunks of length `bitlen` and decoded to 1 or 0.
+    
+    Finally the `nbits` sequential bits are converted to an integer value
+    by assuming LSB last, and subtracting the start bit. Example:
+        1000000000000100 => 4
+    
+    Arguments
+    ---------
+    bitstream : analog trace
+    onethresh : minimum value to decode a one
+    zerothresh : maximum value to decode a zero
+    min_interword : reject threshold crossings that occur more closely spaced 
+        than this. Default is slightly longer than anticipated word duration 
+        to avoid edge cases. Minimal error checking is done so this will not
+        work for noisy signals -- spurious voltage transients could be decoded
+        as zeros and potentially mask subsequent words within `min_interword`.
+    bitlen : duration of each decoded bit, in samples
+    certainty_thresh : number of samples per decoded bit necessary to decode
+        it. That is, at least this many samples out of `bitlen` samples need
+        to be above onethresh XOR below zerothresh. An error occurs if this
+        threshold is not met.
+    nbits : number of decoded bits per word
+    debug_mode : plot traces of each word
+    
+    Returns times, numbers:
+        times : times in samples of ONSET of each word
+        numbers : value of each word
+    """
+    # Dot product the decoded bits with this to convert to integer
+    wordconv = 2**np.arange(nbits, dtype=np.int)[::-1]
 
+    # Threshold the signal
     ones = np.where(bitstream > onethresh)[0]
     zeros = np.where(bitstream < zerothresh)[0]
 
-
+    # Find when start bits occur, rejecting those within refractory period
     trigger_l = [ones[0]]
     for idx in ones[1:]:
-        if idx > trigger_l[-1] + wordlen:
+        if idx > trigger_l[-1] + min_interword:
             trigger_l.append(idx)
     trial_start_times = np.asarray(trigger_l, dtype=np.int)
 
+    # Plot if necessary
     if debug_mode:
         plt.figure()
         for trial_start in trial_start_times:
-            plt.plot(bitstream[trial_start:trial_start+wordlen])
+            plt.plot(bitstream[trial_start:trial_start+min_interword])
         plt.show()
 
+    # Decode bits from each word
     trial_numbers = []
     for trial_start in trial_start_times:
         word = []
-        for nbit in range(16):
+        # Extract one bit at a time
+        for nbit in range(nbits):
             bitstr = bitstream[trial_start + nbit*bitlen + range(bitlen)]
+            
+            # Decode as 1, 0, or unknown
             if np.sum(bitstr > onethresh) > certainty_thresh:
                 bitchoice = 1
             elif np.sum(bitstr < zerothresh) > certainty_thresh:
@@ -137,14 +174,18 @@ def parse_bitstream(bitstream, debug_mode=False):
             else:
                 bitchoice = -1
             word.append(bitchoice)
+        
+        # Fail if unknown bits occurred
         if -1 in word:
             1/0
+        
+        # Convert to integer
         val = np.sum(wordconv * np.array(word))
         trial_numbers.append(val)
     trial_numbers = np.asarray(trial_numbers, dtype=np.int)
     
     # Drop the high bit signal
-    trial_numbers = trial_numbers - 32768
+    trial_numbers = trial_numbers - (2**(nbits-1))
     
     return trial_start_times, trial_numbers
 
