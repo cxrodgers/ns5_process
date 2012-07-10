@@ -1423,3 +1423,47 @@ def guess_session_type(rs):
         return 'behaving'
     else:
         return 'WN100ms'
+
+def generate_speakercal_timestamps(bout_onsets, n_tones=200, inter_tone=6000,
+    tones_per_package=10, initial_offset=3359, package_offset=-165):
+    """Helper function to convert from onsets to tone times in speakercal.
+    
+    Given a list of speakercal run onset times, this calculates when the
+    tones were actually played within each run.
+    
+    All times are in samples.
+    bout_onsets : list of start times of each run, detected from digital
+        onset  
+    inter_tone : nominal time between tones
+    n_tones : number of tones per bout
+    tones_per_package : number of tones in each audio waveform in bcontrol
+    initial_offset : time between bout_onset and actual beginning of first
+        tone. The default is 3359, which includes the following:
+            3000 : wait state at beginning of trial
+            159 : time taken to send the digital word
+            200 : unknown
+    package_offset : There is an additional offset for each package, but not
+        within the package. I assume this is due to the miscalculation of
+        stimulus time within speakercal. The default is negative, reflecting
+        that each subsequent package occurs 165 samples EARLIER than expected.
+        Note that this value dwarfs what would be expected by the .99663
+        dilation (about 20 samples), and so therefore includes it.
+    """
+    
+    res = []
+    for bout_onset in bout_onsets:
+        # Length n_tones : offset introduced by the package
+        package_offsets = package_offset * np.array(
+            [n_tone / tones_per_package for n_tone in range(n_tones)])
+        
+        # Length n_tones : offset introduced by the ITI
+        tone_offsets = np.arange(n_tones, dtype=np.int) * inter_tone
+        
+        this_bout = np.rint(
+            bout_onset + initial_offset + package_offsets + tone_offsets).\
+            astype(np.int)
+        
+        res.append(this_bout)
+        
+    
+    return np.concatenate(res)
