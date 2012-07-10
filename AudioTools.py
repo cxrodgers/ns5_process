@@ -102,7 +102,7 @@ def wide_plot_smoothed(res, analog_channels, savefig=False, **plot_kwargs):
         if savefig:
             if savefig is True:
                 savefig = '.'
-            filename = os.path.join(savefig, './tight_plot_raw_%d.png' % ch)
+            filename = os.path.join(savefig, './wide_plot_smoothed_%d.png' % ch)
             f.savefig(filename)
             plt.close(f)
 
