@@ -6,7 +6,7 @@ import scipy.signal
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import sys
-
+import os.path
 
 def check_audio_alignment(rs=None, ns5_loader=None, timestamps=None, 
     plot=True, analog_channels=None, dstart=-1000, dstop=8000,
@@ -70,7 +70,8 @@ def check_audio_alignment(rs=None, ns5_loader=None, timestamps=None,
     
     return res
 
-def tight_plot_raw(res, analog_channels, start=-50, stop=50, **plot_kwargs):
+def tight_plot_raw(res, analog_channels, start=-50, stop=50, 
+    savefig=False, **plot_kwargs):
     # Tight plot of raw
     for n, ch in enumerate(analog_channels):
         ax = plot_audio_alignment(res['raw'][n], res['n'], 
@@ -79,14 +80,32 @@ def tight_plot_raw(res, analog_channels, start=-50, stop=50, **plot_kwargs):
         ax.set_title('channel %d' % ch)
         ax.set_xlim((start, stop))
         plt.grid()
+    
+        f = ax.get_figure()
+        if savefig:
+            if savefig is True:
+                savefig = '.'
+            filename = os.path.join(savefig, './tight_plot_raw_%d.png' % ch)
+            f.savefig(filename)
+            plt.close(f)
+    
 
-def wide_plot_smoothed(res, analog_channels, **plot_kwargs):
+def wide_plot_smoothed(res, analog_channels, savefig=False, **plot_kwargs):
     # Wide plot of smoothed
     for n, ch in enumerate(analog_channels):
         ax = plot_audio_alignment(res['smoothed'][n], res['n'], 
             **plot_kwargs)
         ax.set_title('channel %d' % ch)
         plt.grid()    
+
+        f = ax.get_figure()
+        if savefig:
+            if savefig is True:
+                savefig = '.'
+            filename = os.path.join(savefig, './tight_plot_raw_%d.png' % ch)
+            f.savefig(filename)
+            plt.close(f)
+
 
 def plot_audio_alignment(data, n=None, ax=None, **kwargs):
     """Simple plotting function"""
