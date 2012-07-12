@@ -98,7 +98,8 @@ class STRF_experiment:
     stim_file_regex = r'stim(\d+)\.wav'
     spike_file_regex = r'spike(\d+)'
     
-    def __init__(self, stim_dir=None, spike_dir=None):
+    def __init__(self, stim_dir=None, spike_dir=None, waveform_transformer=None,
+        waveform_loader=None):
         """Initialize object to hold stimulus and response data.
         
         stim_dir : directory holding files of name 'stim(\d+).wav', one
@@ -107,6 +108,13 @@ class STRF_experiment:
             one per trial, consisting of spike times separated by spaces
             in ms all on a single line, aligned to time zero the start of
             the corresponding wave file.
+        
+        waveform_transformer : defaults to Spectrogrammer()
+        
+        waveform_loader : defaults to self.load_waveform_from_wave_file
+            But you can set this to be something else if you do not have
+            wave files. It needs to be a function taking a filename as
+            argument and return (waveform, fs)
         """
         self.stim_dir = stim_dir
         self.spike_dir = spike_dir
@@ -116,9 +124,35 @@ class STRF_experiment:
         # list of files, to be set later automatically or by user
         self.wave_file_list = None
         self.spike_file_list = None
+        
+        # Waveform loaders and transformer objects
+        if waveform_transformer is None:
+            # Use a Spectrogrammer with reasonable default parameters
+            self.waveform_transformer = Spectrogrammer()
+        else:
+            self.waveform_transformer = waveform_transformer
+        
+        if waveform_loader is None:
+            self.waveform_loader = self.load_waveform_from_wave_file
+        else:
+            self.waveform_loader = waveform_loader
+
 
     def transform_all_stimuli(self, assert_sampling_rate=None, truncate=None):
         """Calculates spectrograms of each stimulus
+        
+        First loads using self.waveform_loader. Then transforms using
+        self.waveform_transformer.
+        
+        Finally stores in self.t_list, self.freqs_list, and self.specgm_list
+        
+        If the time base is consistent, will also assign self.t and self.freqs
+        to be the unique value for all stimuli. Otherwise these are left as
+        None.
+        
+        assert_sampling_rate : if not None, assert that I got this sampling
+            rate when loading the waveform
+        truncate : Drop all data after this time in seconds for all stimuli        
         
         Saves in attributes `specgm_list`, `t_list`, and `freqs_list`.
         Also attempts to store unique `t` and `freq` for all.
@@ -135,13 +169,10 @@ class STRF_experiment:
         self.t = None
         self.freqs = None
         
-        if self.waveform_transformer is None:
-            # Use a Spectrogrammer with reasonable default parameters
-            self.waveform_transformer = Spectrogrammer()
         
         # load and transform each file
         for wave_file in self.wave_file_list:
-            waveform, fs = self.load_waveform_from_wave_file(wave_file)
+            waveform, fs = self.waveform_loader(wave_file)
             if assert_sampling_rate:
                 assert fs == assert_sampling_rate
             
