@@ -5,6 +5,25 @@ import myutils
 import RecordingSessionMaker as rswrap
 import matplotlib.pyplot as plt
 import os
+import datetime
+import glob
+
+def gettime(filename):
+    return datetime.datetime.fromtimestamp(os.path.getmtime(filename))
+
+def before(l, target, N=None, include_zero=True):
+    """Returns N sorted indexes of entries in list that occur before target."""
+    la = np.asarray(l)
+    idxs = np.argsort(target - la)
+    if include_zero:
+        idxs2 = np.array(filter(lambda li: la[li] <= target, idxs))
+    else:
+        idxs2 = np.array(filter(lambda li: la[li] < target, idxs))
+    
+    if N is None:
+        N = len(idxs2)
+    
+    return idxs2[:N]
 
 def run_tones(rs=None, 
     output_dir='/media/dendrite',
@@ -16,9 +35,11 @@ def run_tones(rs=None,
     soft_time_limits=(-1.0, 1.0),
     hard_time_limits=(-.04, .15),
     do_add_bcontrol=True,
-    bcontrol_folder='/media/hippocampus/TRWINRIG_DATA/Data/chris/CR20B',
+    bcontrol_folder='/media/hippocampus/TRWINRIG_DATA/Data/SPEAKERCAL/',
     bcontrol_files=None,
+    n_tones=None,
     do_timestamps=True,
+    plot_spectrograms=True,
     break_at_spectrograms=False,
     force_put_neural_data=False,
     do_avg_plots=True,
@@ -27,11 +48,45 @@ def run_tones(rs=None,
     CAR=True,
     save_to_klusters=True,
     do_MUA_grand_plot=True,
-    do_run_klustakwik=True,
     group_multiplier=100,
     psth_time_limits=(None,None),
     do_tuning_curve=True,
     **kwargs):
+    """Daily run script for tones (tuning curve)
+    
+    rs : RS if it exists. If it doesn't, provide the following:
+        output_dir, all_channels_file, channel_groups_file, 
+        analog_channels_file, ns5_filename, remove_from_TC, soft_time_limits,
+        hard_time_limits
+    
+    do_add_bcontrol: if True, will find bcontrol files, extract information,
+        write "tones" and "attens" to directory. (If those files already exist,
+        then this block is skipped, so delete them if you want to force.)
+
+        You can specify explicitly, or else it will search.
+        
+        bcontrol_files : a list of bcontrol files that you've selected.
+        
+        bcontrol_folder : If bcontrol_files is None, then will look here
+            for them. Will try to guess from ns5 time which are appropriate.
+            It will keep grabbing files until it find at least `n_tones`
+            tones. If n_tones is None, uses the number of timestamps.
+
+        In either case, the mat files are copied into the directory, and then
+        the `tones` and `attens` files are written. Those files are used
+        for all subsequent analyses.
+    
+    plot_spectrograms: if True, will plot spectrograms of the audio stimulus
+        for every 200 tones, in order to check that the tones and attens 
+        are correctly lined up.
+        
+        break_at_spectrograms : if True, errors immediately after plotting
+        spectrograms, for debugging
+    
+    do_tuning_curve : if True, plots tuning curve
+    
+    Other parameters should be same as other Dailies.
+    """
     if len(kwargs) > 0:
         print "unexpected kwargs"
         print kwargs
@@ -70,39 +125,84 @@ def run_tones(rs=None,
         rs.add_timestamps(alltimes)
     
     # add bcontrol
-    if do_add_bcontrol:
+    tone_filename = os.path.join(rs.full_path, 'tones')
+    atten_filename = os.path.join(rs.full_path, 'attens')
+    if do_add_bcontrol and not os.path.exists(tone_filename) and not \
+        os.path.exists(atten_filename):
         printnow('adding bcontrol')
+        
+        # First find out how many tones there probably are
+        if n_tones is None:
+            n_tones = len(rs.read_timestamps())
+        
         if bcontrol_files is None:
-            # sort the bcontrol files by datetime
+            # Guess by ns5 filetime
+            ns5time = gettime(rs.get_ns5_filename())
+            
+            # This is the difference between clocks on the computers
             TR_NDAQ_offset = datetime.timedelta(minutes=7)
+            
+            # This is the minimum filetime that we can accept
+            mintime = ns5time + TR_NDAQ_offset - datetime.timedelta(seconds=
+                rs.get_ns5_loader().header.n_samples / rs.get_sampling_rate())
 
             # Find the bcontrol files that were saved during the recording
             allfiles = np.asarray(glob.glob(os.path.join(
                 bcontrol_folder, 'speakercal*.mat')))
             bcontrol_filetimes = map(gettime, allfiles)
-            idxs = before(bcontrol_filetimes, ns5time + TR_NDAQ_offset, N=None)
+            idxs = before(bcontrol_filetimes, ns5time + TR_NDAQ_offset)
+            
+            # Iterate through the found files until a sufficient number
+            # of tones have been found
+            n_found_tones = 0
+            search_idx = 0
+            found_files = []
+            while n_found_tones < n_tones:
+                # Find current file and update for next iteration
+                idx = idxs[search_idx]
+                search_idx += 1                
+                filename = allfiles[idx]
+                
+                # Break if mintime passed
+                if gettime(filename) < mintime:
+                    break
+                
+                # Load file
+                tl = myutils.ToneLoader(filename)
+                
+                # Skip if WN
+                if np.all(tl.tones == 0): continue
+                
+                # Update for next iteration
+                found_files.append(filename)
+                n_found_tones += len(tl.tones)
 
-            # Now put in forward order, and discard the most recent one which was
-            # not played during the recording
-            bcontrol_files = allfiles[idxs][:0:-1]
+            # Output debugging info
+            print "I found %d tones in %d files" % (
+                n_found_tones, len(found_files))
+            if n_found_tones < n_tones:
+                print "insufficient tones found ... try increasing start delta"
+
+            # Now put in forward order
+            bcontrol_files = np.asarray(found_files)[::-1]
         
-
+        # Add to RS
         if bcontrol_files is not None:
             for file in bcontrol_files:
                 rs.add_file(file)
-        
-
-        # Now load data from them
-        tls = [myutils.ToneLoader(file) for file in usefiles]
-        tones = np.concatenate([tl.tones for tl in tls])
-        attens = np.concatenate([tl.attens for tl in tls])  
-        
-        
-        # extract tones and attens from each
-        #tls = [myutils.ToneLoader(file) for file in bcontrol_files[:-len(times)-1:-1]]
+    
+        # Now that we've settled on a canonical bcontrol file ordering,
+        # dump tones and attens
         tls = [myutils.ToneLoader(file) for file in bcontrol_files]
         tones = np.concatenate([tl.tones for tl in tls])
-        attens = np.concatenate([tl.attens for tl in tls])
+        attens = np.concatenate([tl.attens for tl in tls])  
+        np.savetxt(tone_filename, tones)
+        np.savetxt(atten_filename, attens, fmt='%d')
+        
+
+    if plot_spectrograms:
+        tones = np.loadtxt(tone_filename)
+        attens = np.loadtxt(atten_filename, dtype=np.int)
         
         # verify timestamps
         timestamps = rs.read_timestamps()
@@ -123,28 +223,38 @@ def run_tones(rs=None,
         raw = l.get_chunk_by_channel()
         ain135 = raw[135]
         ain136 = raw[136]
+        
+        # Spectrogrammer object
         sg = myutils.Spectrogrammer(NFFT=1024, Fs=30e3, max_freq=30e3, 
             min_freq=0, noverlap=512, downsample_ratio=1)
-        for n, tl in enumerate(tls):
-            ts = timestamps[200*n]
-            known_tones = tl.aliased_tones()[:5]
+        
+        # Fake toneloader to calculate aliased tones
+        tl = myutils.ToneLoader()
+        tl.tones = tones
+        aliased_tones = tl.aliased_tones()
+        
+        for n in range(0, len(tones) - 5, 200):
+            ts = timestamps[n]
+            known_tones = aliased_tones[n:n+5]
             slc1 = ain135[ts:ts+30e3]
             slc2 = ain136[ts:ts+30e3]
+            
+            # Transform and plot
             Pxx, freqs, t = sg.transform(np.mean([slc1, slc2], axis=0))
             myutils.my_imshow(Pxx, t, freqs)
             plt.axis('auto')
-                
+            
+            # Title with known tones
             plt.title('tl%d %0.1f %0.1f %0.1f %0.1f %0.1f' % (
                 n, known_tones[0], known_tones[1], known_tones[2], 
                 known_tones[3], known_tones[4]))
             
-            plt.savefig(os.path.join(rs.full_path, 'tone_tl_%d.png' % n))
+            # Save to RS
+            plt.savefig(os.path.join(rs.full_path, 'tones_%d.png' % n))
             plt.close()
         
         if break_at_spectrograms:
             1/0
-        
-        # put metadata into db? or save tones/attens to directory?
 
     # put in neural db (does nothing if exists unless forced)
     printnow('putting neural data')
@@ -173,9 +283,19 @@ def run_tones(rs=None,
     # make a tuning curve
     if do_tuning_curve:
         # extract tones and attens from each
-        tls = [myutils.ToneLoader(file) for file in bcontrol_files]
-        tones = np.concatenate([tl.tones for tl in tls])
-        attens = np.concatenate([tl.attens for tl in tls])        
+        tones = np.loadtxt(tone_filename)
+        attens = np.loadtxt(atten_filename, dtype=np.int)
+        if len(timestamps) < len(tones):
+            print "warning not enough timestamps, discarding tones: " + \
+                "%d timestamps but %d tones" % (
+                len(timestamps), len(tones))
+            tones = tones[:len(timestamps)]
+            attens = attens[:len(timestamps)]
+        elif len(timestamps) > len(tones):
+            print "warning too many timestamps, provide more tones: " + \
+                "%d timestamps but %d tones" % (
+                len(timestamps), len(tones))        
+        
         
         # parameters for tuning curve
         tc_freqs = 10 ** np.linspace(np.log10(5e3), np.log10(50e3), 15)
