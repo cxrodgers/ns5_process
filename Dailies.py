@@ -39,8 +39,8 @@ def run_tones(rs=None,
     bcontrol_files=None,
     n_tones=None,
     TR_NDAQ_offset_sec=420,
-    pre_begin_sec=0,
-    post_end_sec=0,
+    start_offset=0,
+    stop_offset=0,
     do_timestamps=True,
     plot_spectrograms=True,
     break_at_spectrograms=False,
@@ -140,59 +140,71 @@ def run_tones(rs=None,
         
         if bcontrol_files is None:
             # Guess by ns5 filetime
-            ns5time = gettime(rs.get_ns5_filename())
-            
-            # This is the difference between clocks on the computers
-            TR_NDAQ_offset = datetime.timedelta(seconds=TR_NDAQ_offset_sec)
-            
-            # This is the minimum filetime that we can accept
-            mintime = ns5time + TR_NDAQ_offset - datetime.timedelta(seconds=
+            ns5_stoptime = gettime(rs.get_ns5_filename())
+            ns5_startime = ns5_stoptime - datetime.timedelta(seconds=
                 rs.get_ns5_loader().header.n_samples / rs.get_sampling_rate())
-            mintime += datetime.timedelta(seconds=pre_begin_sec)
-
-            # And the maximum
-            maxtime = ns5time + TR_NDAQ_offset + \
-                datetime.timedelta(seconds=post_end_sec)
-
+            ns5_stoptime += datetime.timedelta(seconds=TR_NDAQ_offset_sec)
+            ns5_startime += datetime.timedelta(seconds=TR_NDAQ_offset_sec)
+            mintime = ns5_startime + datetime.timedelta(seconds=start_offset)
+            maxtime = ns5_stoptime + datetime.timedelta(seconds=stop_offset)
+            
             # Find the bcontrol files that were saved during the recording
+            # And sort by time
             allfiles = np.asarray(glob.glob(os.path.join(
                 bcontrol_folder, 'speakercal*.mat')))
-            bcontrol_filetimes = map(gettime, allfiles)
-            idxs = before(bcontrol_filetimes, maxtime)
+            bcontrol_filetimes = np.asarray(map(gettime, allfiles))
+            sidxs = np.argsort(bcontrol_filetimes)
+            bcontrol_filetimes = bcontrol_filetimes[sidxs]
+            allfiles = allfiles[sidxs]
+            
+            # Choose the files within the window
+            check_idxs = np.where(
+                (bcontrol_filetimes > mintime) & 
+                (bcontrol_filetimes < maxtime))[0]
             
             # Iterate through the found files until a sufficient number
             # of tones have been found
             n_found_tones = 0
-            search_idx = 0
             found_files = []
-            while n_found_tones < n_tones:
-                # Find current file and update for next iteration
-                idx = idxs[search_idx]
-                search_idx += 1                
-                filename = allfiles[idx]
-                
-                # Break if mintime passed
-                if gettime(filename) < mintime:
-                    break
-                
+            for check_idx in check_idxs:
                 # Load file
+                filename = allfiles[check_idx]
                 tl = myutils.ToneLoader(filename)
                 
                 # Skip if WN
-                if np.all(tl.tones == 0): continue
+                if not np.all(tl.tones == 0):
+                    found_files.append(filename)
+                    n_found_tones += len(tl.tones)
                 
-                # Update for next iteration
-                found_files.append(filename)
-                n_found_tones += len(tl.tones)
+                # Break if enough found
+                if n_found_tones >= n_tones:
+                    break
 
             # Output debugging info
             print "I found %d tones in %d files" % (
                 n_found_tones, len(found_files))
             if n_found_tones < n_tones:
                 print "insufficient tones found ... try increasing start delta"
+            
+            # More debugging info about first file
+            print "Using general offset of " + str(TR_NDAQ_offset_sec) + " ...."
+            idx1 = np.where(allfiles == found_files[0])[0]
+            offsets = bcontrol_filetimes[idx1-1:idx1+2] - ns5_startime
+            poffsets = [offset.seconds if offset > datetime.timedelta(0) 
+                else -(-offset).seconds for offset in offsets]
+            print "First file (prev,curr,next) offsets from start: %d %d %d" % \
+                (poffsets[0], poffsets[1], poffsets[2])
+            
+            # And last file
+            idx1 = np.where(allfiles == found_files[-1])[0]
+            offsets = bcontrol_filetimes[idx1-1:idx1+2] - ns5_stoptime
+            poffsets = [offset.seconds if offset > datetime.timedelta(0) 
+                else -(-offset).seconds for offset in offsets]
+            print "Last file (prev,curr,next) offsets from stop: %d %d %d" % \
+                (poffsets[0], poffsets[1], poffsets[2])
 
             # Now put in forward order
-            bcontrol_files = np.asarray(found_files)[::-1]
+            bcontrol_files = np.asarray(found_files)
         
         # Add to RS
         if bcontrol_files is not None:
