@@ -38,6 +38,9 @@ def run_tones(rs=None,
     bcontrol_folder='/media/hippocampus/TRWINRIG_DATA/Data/SPEAKERCAL/',
     bcontrol_files=None,
     n_tones=None,
+    TR_NDAQ_offset_sec=420,
+    pre_begin_sec=0,
+    post_end_sec=0,
     do_timestamps=True,
     plot_spectrograms=True,
     break_at_spectrograms=False,
@@ -127,8 +130,8 @@ def run_tones(rs=None,
     # add bcontrol
     tone_filename = os.path.join(rs.full_path, 'tones')
     atten_filename = os.path.join(rs.full_path, 'attens')
-    if do_add_bcontrol and not os.path.exists(tone_filename) and not \
-        os.path.exists(atten_filename):
+    if do_add_bcontrol and (not os.path.exists(tone_filename) or not \
+        os.path.exists(atten_filename)):
         printnow('adding bcontrol')
         
         # First find out how many tones there probably are
@@ -140,17 +143,22 @@ def run_tones(rs=None,
             ns5time = gettime(rs.get_ns5_filename())
             
             # This is the difference between clocks on the computers
-            TR_NDAQ_offset = datetime.timedelta(minutes=7)
+            TR_NDAQ_offset = datetime.timedelta(seconds=TR_NDAQ_offset_sec)
             
             # This is the minimum filetime that we can accept
             mintime = ns5time + TR_NDAQ_offset - datetime.timedelta(seconds=
                 rs.get_ns5_loader().header.n_samples / rs.get_sampling_rate())
+            mintime += datetime.timedelta(seconds=pre_begin_sec)
+
+            # And the maximum
+            maxtime = ns5time + TR_NDAQ_offset + \
+                datetime.timedelta(seconds=post_end_sec)
 
             # Find the bcontrol files that were saved during the recording
             allfiles = np.asarray(glob.glob(os.path.join(
                 bcontrol_folder, 'speakercal*.mat')))
             bcontrol_filetimes = map(gettime, allfiles)
-            idxs = before(bcontrol_filetimes, ns5time + TR_NDAQ_offset)
+            idxs = before(bcontrol_filetimes, maxtime)
             
             # Iterate through the found files until a sufficient number
             # of tones have been found
@@ -306,7 +314,7 @@ def run_tones(rs=None,
         tone_atten_bin = np.searchsorted(tc_attens, attens, side='right') - 1
         
         # spike count for each trial
-        group = 7
+        group = 5
         spike_time_file = os.path.join(rs.last_klusters_dir(),
             '%s.res.%d' % (rs.session_name, group))
         spike_times = np.loadtxt(spike_time_file, dtype=np.int)
