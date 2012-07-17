@@ -190,21 +190,32 @@ def run_tones(rs=None,
             print "Using general offset of " + str(TR_NDAQ_offset_sec) + " ...."
             idx1 = np.where(allfiles == found_files[0])[0]
             offsets = bcontrol_filetimes[idx1-1:idx1+2] - ns5_startime
-            poffsets = [offset.seconds if offset > datetime.timedelta(0) 
+            poffsets1 = [offset.seconds if offset > datetime.timedelta(0) 
                 else -(-offset).seconds for offset in offsets]
             print "First file (prev,curr,next) offsets from start: %d %d %d" % \
-                (poffsets[0], poffsets[1], poffsets[2])
+                (poffsets1[0], poffsets1[1], poffsets1[2])
             
             # And last file
             idx1 = np.where(allfiles == found_files[-1])[0]
             offsets = bcontrol_filetimes[idx1-1:idx1+2] - ns5_stoptime
-            poffsets = [offset.seconds if offset > datetime.timedelta(0) 
+            poffsets2 = [offset.seconds if offset > datetime.timedelta(0) 
                 else -(-offset).seconds for offset in offsets]
             print "Last file (prev,curr,next) offsets from stop: %d %d %d" % \
-                (poffsets[0], poffsets[1], poffsets[2])
+                (poffsets2[0], poffsets2[1], poffsets2[2])
 
             # Now put in forward order
             bcontrol_files = np.asarray(found_files)
+            
+            # Debugging output
+            print "Like these results? Here's how to replicate:"
+            print "<speakercal_files>"
+            for bcf in bcontrol_files:
+                print os.path.split(bcf)[1]
+            print "</speakercal_files>"
+            print "clock_offset='%d' start_offset='%d %d %d' stop_offset='%d %d %d'" % (
+                TR_NDAQ_offset_sec, 
+                poffsets1[0], start_offset, poffsets1[1], 
+                poffsets2[1], stop_offset, poffsets2[2])
         
         # Add to RS
         if bcontrol_files is not None:
