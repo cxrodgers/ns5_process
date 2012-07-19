@@ -387,6 +387,88 @@ def count_within_window(timestamps, spike_times, winstart=0, winstop=1):
     return np.asarray(count_l)
     
 
+def run_tonetask(rs=None, 
+    output_dir='/media/dendrite',
+    all_channels_file='../DO1_ALL_CHANNELS', 
+    channel_groups_file='../DO1_CHANNEL_GROUPS', 
+    analog_channels_file='../ANALOG_7_8',
+    ns5_filename=None,
+    remove_from_TC=None,
+    soft_time_limits=(-2000., 2000.),
+    hard_time_limits=(-.04, .15),
+    do_timestamps=False,
+    force_put_neural_data=False,
+    do_avg_plots=True,
+    do_extract_spikes=True,
+    CAR=True,
+    save_to_klusters=True,
+    do_MUA_grand_plot=True,
+    do_run_klustakwik=False,
+    group_multiplier=100,
+    **kwargs
+    ):
+    if len(kwargs) > 0:
+        print "unexpected kwargs"
+        print kwargs
+    
+    # Make session
+    if rs is None:
+        printnow("creating recording session %s" % ns5_filename)
+        rsm = rswrap.RecordingSessionMaker(
+            data_analysis_dir=output_dir,
+            all_channels_file=all_channels_file,
+            channel_groups_file=channel_groups_file,
+            analog_channels_file=analog_channels_file)
+
+        if remove_from_TC is None:
+            remove_from_TC = []
+
+        rs = rsm.make_session(
+            ns5_filename=ns5_filename,
+            remove_from_TC=remove_from_TC)
+    
+        rs.write_time_limits(soft_time_limits, hard_time_limits)
+    printnow("RS %s" % rs.full_path)
+
+    # add timestamps
+    if do_timestamps:
+        1/0
+        printnow("adding timestamps")
+        # write timestamps to directory
+        times, numbers = rswrap.add_timestamps_to_session(rs, verbose=True, 
+            meth='audio_onset')
+    
+    # put in neural db (does nothing if exists unless forced)
+    printnow('putting neural data')
+    rs.put_neural_data_into_db(verbose=True, force=force_put_neural_data)
+    
+    # plot averages
+    if do_avg_plots:
+        printnow("avg plots")
+        rswrap.plot_avg_lfp(rs, savefig=True)
+        rswrap.plot_avg_audio(rs, savefig=True)
+
+    # spike extract
+    if do_extract_spikes:
+        printnow('extracting spikes')
+        rs.generate_spike_block(CAR=CAR, smooth_spikes=False, verbose=True)
+        rs.run_spikesorter(save_to_db=True, save_to_klusters=save_to_klusters)
+        rs.spiketime_dump()
+
+    # plot MUA stuff
+    if do_MUA_grand_plot:
+        printnow('mua grand psths')
+        rswrap.plot_all_spike_psths(rs, savefig=True)
+
+    # spike sort
+    if do_run_klustakwik:
+        printnow('running klustakwik')
+        rs.group_multiplier = group_multiplier
+        rs.run_klustakwik()
+        rs.prep_for_klusters(verbose=True)
+
+    return rs
+
 
 def run_wn(rs=None, 
     output_dir='/media/dendrite',
