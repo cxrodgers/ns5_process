@@ -107,14 +107,50 @@ def wide_plot_smoothed(res, analog_channels, savefig=False, **plot_kwargs):
             plt.close(f)
 
 
-def plot_audio_alignment(data, n=None, ax=None, **kwargs):
+def plot_audio_alignment(data, n=None, ax=None, start=None, stop=None, 
+    plot_endpoints=False, **kwargs):
     """Simple plotting function"""
     if n is None:
         n = np.arange(data.shape[1], dtype=np.int)
+    
+    if start is not None or stop is not None:
+        data = data.copy()
+    
+    if start is not None:
+        if hasattr(start, '__len__'):
+            if len(start) != len(data):
+                raise ValueError("start must be same length as data or scalar")
+            for nrow in range(len(data)):
+                data[nrow, n < start[nrow]] = np.nan
+        else:
+            data = data[:, n >= start]
+            n = n[n >= start]
+            
+    if stop is not None:
+        if hasattr(stop, '__len__'):
+            if len(stop) != len(data):
+                raise ValueError("stop must be same length as data or scalar")
+            for nrow in range(len(data)):
+                data[nrow, n >= stop[nrow]] = np.nan
+        else:
+            data = data[:, n < stop]
+            n = n[n < stop]
+    
     if ax is None:
         f = plt.figure()
         ax = f.add_subplot(111)
-    ax.plot(n, data.transpose())
+    
+    # Now do the plotting 
+    ax.plot(n, data.transpose(), **kwargs)
+    if plot_endpoints:
+        if stop is not None:
+            for nrow in range(len(data)):
+                if stop[nrow] > n.max():
+                    idx = len(stop) - 1
+                else:
+                    idx = np.where(n == stop[nrow])[0].item() - 1
+                ax.plot(n[idx], data[nrow, idx], 'k*')
+    
     return ax
 
 
