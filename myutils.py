@@ -142,7 +142,11 @@ def parse_bitstream(bitstream, onethresh=.7 * 2**15, zerothresh=.3 * 2**15,
 
     # Threshold the signal
     ones = np.where(bitstream > onethresh)[0]
-    zeros = np.where(bitstream < zerothresh)[0]
+    #zeros = np.where(bitstream < zerothresh)[0] # never actually used?
+
+    # Return empties if no ones found
+    if len(ones) == 0:
+        return np.array([]), np.array([])
 
     # Find when start bits occur, rejecting those within refractory period
     trigger_l = [ones[0]]

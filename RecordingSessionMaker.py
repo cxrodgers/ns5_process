@@ -980,7 +980,7 @@ def calculate_timestamps_from_digital(filename, trial_number_channel=16,
     l.load_file()
     
     # Get signal and truncate as requested
-    trialnum_sig = l.get_analog_channel_as_array(16)
+    trialnum_sig = l.get_analog_channel_as_array(trial_number_channel)
     if post_last == 0:
         # Do not truncate end
         post_last = len(trialnum_sig)
@@ -990,14 +990,20 @@ def calculate_timestamps_from_digital(filename, trial_number_channel=16,
     trial_start_times, trial_numbers = parse_bitstream(trialnum_sig,
         debug_mode=debug_mode)
     
-    # Some debugging stuff
-    if verbose:
-        print "found trials from %d to %d" % (trial_numbers[0], trial_numbers[-1])
-    if np.any((trial_numbers - trial_numbers[0]) != range(len(trial_numbers))):
-        print "warning: trial numbers not ordered correctly"
-    
-    # Account for truncation
-    trial_start_times = trial_start_times + pre_first
+    # Return empty if none found
+    if len(trial_start_times) == 0:
+        print "warning: no trial numbers found in %s" % filename
+    else:
+        # Some debugging stuff
+        if verbose:
+            print "found trials from %d to %d" % (
+                trial_numbers[0], trial_numbers[-1])
+        if np.any((trial_numbers - trial_numbers[0]) != 
+            range(len(trial_numbers))):
+            print "warning: trial numbers not ordered correctly"
+        
+        # Account for truncation
+        trial_start_times = trial_start_times + pre_first
     
     return trial_start_times, trial_numbers
 
