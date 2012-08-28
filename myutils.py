@@ -11,6 +11,8 @@ import os.path
 import datetime
 import scipy.io
 import scipy.signal
+from lxml import etree
+import kkpandas
 
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
     'rihi': 'RIGHT+HIGH'}
@@ -759,3 +761,56 @@ def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, **kwargs):
     
     plt.xticks(np.array([45, 135, 225, 315, 405])*np.pi/180.0,
         ['RIGHT+HIGH', 'LEFT+HIGH', 'LEFT+LOW', 'RIGHT+LOW'])
+
+def map_d(func, dic):
+    """Map like func(val) for items in dic and maintain keys"""
+    return dict([(key, func(val)) for key, val in dic.items()])
+
+def filter_d(cond, dic):
+    """Filter by cond(val) for items in dic and maintain keys"""
+    return dict([(key, val) for key, val in dic.items() if cond(val)])
+    
+
+def getstarted():
+    """Load all my data into kkpandas and RS objects
+    
+    Returns:
+    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers
+    
+    Each is a dict keyed by ratname
+    """
+    xmlfiles = {
+        'CR20B' : os.path.expanduser('~/Dropbox/lab/CR20B_summary/CR20B.xml'),
+        'CR21A' : os.path.expanduser('~/Dropbox/lab/CR21A_summary/CR21A.xml'),
+        'YT6A' : os.path.expanduser('~/Dropbox/lab/YT6A_summary/YT6A.xml')
+        }
+    
+    kksfiles = {
+        'CR20B' : os.path.expanduser(
+            '~/Dropbox/lab/CR20B_summary/CR20B_behaving.kks'),
+        'CR21A' : os.path.expanduser(
+            '~/Dropbox/lab/CR21A_summary/CR21A_behaving.kks'),
+        'YT6A' : os.path.expanduser(
+            '~/Dropbox/lab/YT6A_summary/YT6A_behaving.kks'),
+        }
+    
+    kk_servers = dict([
+        (ratname, kkpandas.kkio.KK_Server.from_saved(kksfile))
+        for ratname, kksfile in kksfiles.items()])
+    
+    data_dirs = {
+        'CR20B' : '/media/hippocampus/chris/20120705_CR20B_allsessions',
+        'CR21A' : '/media/hippocampus/chris/20120622_CR21A_allsessions',
+        'YT6A' : '/media/hippocampus/chris/20120221_YT6A_allsessions'
+        }
+    
+    xml_roots = dict([
+        (ratname, etree.parse(xmlfile).getroot())
+        for ratname, xmlfile in xmlfiles.items()])
+
+    xpath_str = '//unit[quality/text()>=3 and ../../../@analyze="True"]'
+    well_sorted_units = dict([
+        (ratname, root.xpath(xpath_str))
+        for ratname, root in xml_roots.items()])
+
+    return xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers
