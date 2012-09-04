@@ -814,3 +814,52 @@ def getstarted():
         for ratname, root in xml_roots.items()])
 
     return xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers
+
+def load_channel_mat(filename, return_dataframe=True, dump_filler=True):
+    """Load data from bao-lab format for single channel
+    
+    filename : path to file that has been broken out into each channel
+        separately
+    
+    Each mat-file contains structured array like this:
+    ans = 
+
+                LFP: [1x763 single]
+               PDec: [1x763 int16]
+                 CH: [1x1 struct]
+        Epoch_Value: [1 20 55]
+    --- data.trial(1).CH
+    ---- latency, spikewaveform    
+    
+    Returns: trials_info, spike_times
+        trials_info : array of shape (n_trials, 3)
+            if return_dataframe, this is a pandas.DataFrame instead
+        spike_times : list of length n_trials, each containing array of
+            trial-locked spike times.
+    """
+    # Load the structured array 'trial', with length n_trials
+    data = scipy.io.loadmat(filename, squeeze_me=True)    
+    trial = data['data']['trial'].item()
+    
+    # Here is the spikes from each trial
+    # The purpose of the extra `flatten` is to ensure that arrays containing
+    # 0 or 1 spike time are always 1-dimensional instead of 0-dimensional
+    spike_times = map(lambda t: t.item()[2]['latency'].item().flatten(), trial) 
+
+    # Here is the information about each trial
+    trials_info = np.array(map(lambda t: t.item()[3], trial))
+    
+    # Remove trials containing nothing useful, ie delay 55ms or atten 70
+    if dump_filler:
+        bad_mask = (
+            (trials_info[:, 2] == 55) |
+            (trials_info[:, 1] == 70))
+        trials_info = trials_info[~bad_mask]
+        spike_times = list(np.asarray(spike_times)[~bad_mask])
+    
+    # Make a DataFrame
+    if return_dataframe:
+        trials_info = pandas.DataFrame(trials_info, 
+            columns=['freq', 'atten', 'light'])    
+    
+    return trials_info, spike_times
