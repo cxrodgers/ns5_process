@@ -25,6 +25,17 @@ LBPB_stimnames = [
 LBPB_sn2name = {k: v for k, v in zip(LBPB_sns, LBPB_stimnames)}
 
 
+def pickle_dump(obj, filename):
+    import cPickle
+    with file(filename, 'w') as fi:
+        cPickle.dump(obj, fi)
+
+def pickle_load(filename):
+    import cPickle
+    with file(filename) as fi:
+        res = cPickle.load(fi)
+    return res
+
 def invert_linear_poly(p):
     return np.array([1, -p[1]]).astype(np.float) / p[0]
 
