@@ -933,8 +933,8 @@ def test_vs_baseline(data, baseline_idxs, test_idxs, debug_figure=False,
         raise ValueError("baseline indexes are not valid row indexes")
 
     # for visualization/debugging, store histograms of all tests
-    hmax = np.max([refdata.max(), tb.counts.ix[test_idxs].values.max()])
-    hmin = np.min([refdata.min(), tb.counts.ix[test_idxs].values.min()])
+    hmax = np.max([refdata.max(), data[test_idxs].max()])
+    hmin = np.min([refdata.min(), data[test_idxs].min()])
     if not np.iterable(bins):
         bins = np.linspace(hmin, hmax, bins + 1)
 
