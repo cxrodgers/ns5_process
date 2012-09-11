@@ -1118,6 +1118,30 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
             #seg.save() # this resaves the whole deal!
     session.commit()
 
+def trial_numbers_from_info_field_to_text(rs):
+    """Parses trial numbers from OE db, converts to text TRIAL_NUMBERS
+    
+    This is a conversion method from an old way of storing behavioral trial
+    numbers (in the info field of each Segment) to a new way (a simple
+    flat text file consisting of each trial number).
+    
+    Also does some simple error checking
+    1.  The trial numbers should be monotonically increasing. If this is
+        not the case, then probably there is an issue with SQL truncation.
+    2.  The values derived from the raw data block and spike data blocks
+        should be the same.
+    3.  The segments themselves should be named with the correct neural
+        numbering. This is simply range(len(n_segments))
+    """
+    trialnumbers = []
+    block = rs.get_raw_data_block()
+    for n, seg in enumerate(block._segments):
+        assert seg.name == ('Segment %d' % n)
+        bnum = int(seg.info)
+        trialnumbers.append(bnum)
+    np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+        trialnumbers, fmt='%d')    
+
 def write_b2n_sync_file(rs, btimes=None, ntimes=None, peh=None,
     known_trial_numbers=None, extra_peh_entries=0, force=False,
     assumed_dilation=.99663):
