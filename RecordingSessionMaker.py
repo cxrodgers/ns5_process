@@ -1092,16 +1092,22 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
             # with current code which depends on it
             if verbose:
                 printnow("falling back to classic detection")
+            
+            # This does the complicated syncing and stores in OE db
             add_behavioral_trial_numbers(rs)
             
-            trialnumbers = []
-            block = rs.get_raw_data_block()
-            for n, seg in enumerate(block._segments):
-                assert seg.name == ('Segment %d' % n)
-                bnum = int(seg.info)
-                trialnumbers.append(bnum)
-            np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
-                trialnumbers, fmt='%d')
+            # Extract info field and write to TRIAL_NUMBERS in rs
+            trial_numbers_from_info_field_to_text(rs, write_to_rs=True)
+            
+            # Previous version of code to do the same thing
+            #~ trialnumbers = []
+            #~ block = rs.get_raw_data_block()
+            #~ for n, seg in enumerate(block._segments):
+                #~ assert seg.name == ('Segment %d' % n)
+                #~ bnum = int(seg.info)
+                #~ trialnumbers.append(bnum)
+            #~ np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+                #~ trialnumbers, fmt='%d')
             
             return
     
@@ -1118,7 +1124,7 @@ def add_behavioral_trial_numbers2(rs, known_trial_numbers=None,
             #seg.save() # this resaves the whole deal!
     session.commit()
 
-def trial_numbers_from_info_field_to_text(rs):
+def trial_numbers_from_info_field_to_text(rs, write_to_rs=True):
     """Parses trial numbers from OE db, converts to text TRIAL_NUMBERS
     
     This is a conversion method from an old way of storing behavioral trial
@@ -1133,14 +1139,40 @@ def trial_numbers_from_info_field_to_text(rs):
     3.  The segments themselves should be named with the correct neural
         numbering. This is simply range(len(n_segments))
     """
+    # Load btrial numbers from raw data
     trialnumbers = []
     block = rs.get_raw_data_block()
     for n, seg in enumerate(block._segments):
+        # Check that the name encodes the neural trial number
         assert seg.name == ('Segment %d' % n)
         bnum = int(seg.info)
         trialnumbers.append(bnum)
-    np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
-        trialnumbers, fmt='%d')    
+    
+    # Load btrial numbers from spike data (should be same)
+    trialnumbers2 = []
+    block = rs.get_spike_block()
+    for n, seg in enumerate(block._segments):
+        # Check that the name encodes the neural trial number        
+        assert seg.name == ('Segment %d' % n)
+        bnum = int(seg.info)
+        trialnumbers2.append(bnum)
+    
+    # Convert to array
+    trialnumbers = np.array(trialnumbers)
+    trialnumbers2 = np.array(trialnumbers2)
+    
+    # Check consistency between blocks
+    assert np.all(trialnumbers == trialnumbers2)
+    
+    # Check that the trial numbers look plausible
+    assert np.all(np.diff(trialnumbers) == 1)
+    
+    # Write out to the directory
+    if write_to_rs:
+        np.savetxt(os.path.join(rs.full_path, 'TRIAL_NUMBERS'),
+            trialnumbers, fmt='%d')    
+    
+    return trialnumbers
 
 def write_b2n_sync_file(rs, btimes=None, ntimes=None, peh=None,
     known_trial_numbers=None, extra_peh_entries=0, force=False,
@@ -1148,7 +1180,10 @@ def write_b2n_sync_file(rs, btimes=None, ntimes=None, peh=None,
     """Write syncing file for converting from behavior time to neural time.
     
     All this does is sync the behavioral times to the neural times with a 
-    polynomial. The tricky part is accounting for missing trials.
+    polynomial. The tricky part is accounting for missing trials. The easiest
+    way to do this is to provide known_trial_numbers (or write the file
+    called TRIAL_NUMBERS in rs.full_path). These are used to index into
+    `parsed_events_history` from the bcontrol file.
     
     You can provide `btimes` and/or `ntimes` as is. (Specify in seconds)
     
