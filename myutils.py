@@ -300,7 +300,42 @@ def auroc(data1, data2, return_p=False):
         return AUC, p
     else:
         return AUC
+
+def utest(x, y, return_auroc=False):
+    """Drop-in replacement for scipy.stats.mannwhitneyu with different defaults
     
+    If an error occurs in mannwhitneyu, this prints the message but returns
+    a reasonable value: p=1.0, U=.5*len(x)*len(y), AUC=0
+    
+    This also calculates two-sided p-value and AUROC. The latter is only
+    returned if return_auroc is True, so that the default is compatibility
+    with mannwhitneyu.
+    """
+    badflag = False
+    try:
+        U, p = scipy.stats.mannwhitneyu(x, y)
+        p = p * 2
+    except ValueError as v:
+        print "Caught exception:", v
+        badflag = True
+
+    # Calculate AUC
+    if badflag:
+        # Make up reasonable return values
+        p = 1.0
+        U = .5 * len(x) * len(y)
+        AUC = .5
+    elif len(x) == 0 or len(y) == 0:
+        print "warning: one argument to mannwhitneyu is empty"
+        AUC = .5
+    else:
+        AUC  = 1 - (U / (len(x) * len(y)))
+    
+    # Now return
+    if return_auroc:
+        return U, p, AUC
+    else:
+        return U, p
 
 class UniqueError(Exception):
     pass
@@ -957,9 +992,9 @@ def test_vs_baseline(data, baseline_idxs, test_idxs, debug_figure=False,
         test_counts = np.histogram(testdata, bins=bins)[0]
         
         # test it
-        u, p = scipy.stats.mannwhitneyu(refdata, testdata)
-        p *= 2
-        auroc = 1 - (u / (len(refdata) * len(testdata)))
+        u, p, auroc = utest(refdata, testdata, return_auroc=True)
+
+        # Estimate direction of effect
         #dir = np.sum(testdata > np.median(np.concatenate([refdata, testdata]))) > \
         #    len(testdata) / 2.
         dir = np.mean(testdata) > np.mean(refdata)
