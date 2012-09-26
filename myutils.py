@@ -876,11 +876,15 @@ def getstarted():
     # onset windows
     # right now this is just copied from script
     # maybe should be saved to disk somewhere
+    # Had to manually comment out a few that were spurious
+    # 2019 actually should be more like 10ms-24ms but it triggered too soon
+    # 4083 barely peaks above signif
+    # Both are too short to include any spikes
     dd_onset_windows = {}
     dd_onset_windows['CR12B'] = {
         'CR12B_110422_behaving-2020':np.array([ 0.011,  0.021]),
         'CR12B_110422_behaving-2022':np.array([ 0.0125,  0.018 ]),
-        'CR12B_110423_behaving-2019':np.array([ 0.007 ,  0.0085]),
+        #'CR12B_110423_behaving-2019':np.array([.01, .024]), #np.array([ 0.007 ,  0.0085]),
         'CR12B_110423_behaving-2020':np.array([ 0.0135,  0.0195]),
         'CR12B_110425_behaving-2027':np.array([ 0.016 ,  0.0175]),
         'CR12B_110426_behaving-2021':np.array([ 0.013 ,  0.0195]),
@@ -903,7 +907,7 @@ def getstarted():
         'CR12B_110429_behaving-4115':np.array([ 0.0075,  0.024 ]),
         'CR12B_110429_behaving-4119':np.array([ 0.0085,  0.022 ]),
         'CR12B_110430_behaving-4081':np.array([ 0.03  ,  0.0325]),
-        'CR12B_110430_behaving-4083':np.array([ 0.0185,  0.0205]),
+        #'CR12B_110430_behaving-4083':np.array([ 0.0185,  0.0205]),
         'CR12B_110502_behaving-3062':np.array([ 0.   ,  0.003]),
         'CR12B_110502_behaving-4075':np.array([ 0.0065,  0.009 ]),
         'CR12B_110503_behaving-4067':np.array([ 0.0035,  0.0085]),
@@ -1118,7 +1122,11 @@ def means_tester(d0, d1):
 def keep(d0, d1):
     return (d0, d1)
 
-def bootstrap_main_effect(data, n_boots=1000, meth=None):
+class BootstrapError(BaseException):
+    pass
+
+def bootstrap_main_effect(data, n_boots=1000, draw_meth='equal', meth=None,
+    min_bucket=1):
     """Given 2xN set of data of unequal sample sizes, bootstrap main effect.
 
     We will generate a bunch of fake datasets by resampling from data.
@@ -1171,12 +1179,16 @@ def bootstrap_main_effect(data, n_boots=1000, meth=None):
         for category_num in range(N_categories):
             # Group 0
             n_draw = np.sum(fakedata_category_label_group0 == category_num)
+            if len(data[category_num][0]) < min_bucket:
+                raise BootstrapError("insufficient data in a category")
             idxs = np.random.randint(0, len(data[category_num][0]),
                 n_draw)
             fakedata_by_group[0].append(data[category_num][0][idxs])
             
             # Group 1
             n_draw = np.sum(fakedata_category_label_group0 == category_num)
+            if len(data[category_num][1]) < min_bucket:
+                raise BootstrapError("insufficient data in a category")
             idxs = np.random.randint(0, len(data[category_num][1]),
                 n_draw)
             fakedata_by_group[1].append(data[category_num][1][idxs])
@@ -1188,6 +1200,87 @@ def bootstrap_main_effect(data, n_boots=1000, meth=None):
         # Test difference in means
         #res = np.mean(fakedata_by_group[1]) - np.mean(fakedata_by_group[0])
         res = meth(fakedata_by_group[0], fakedata_by_group[1])
+        res_l.append(res)
+    
+    return np.asarray(res_l)
+
+
+def bootstrap_main_effect2(data, n_boots=1000, combo_meth='subtract_separately', meth=None):
+    """Given 2xN set of data of unequal sample sizes, bootstrap main effect.
+
+    We will generate a bunch of fake datasets by resampling from data.
+    Then we combine across categories. The total number of data points
+    will be the same as in the original dataset; however, the resampling
+    is such that each category is equally represented.    
+    
+    data : list of length N, each entry a list of length 2
+        Each entry in `data` is a "category".
+        Each category consists of two groups.
+        The question is: what is the difference between the groups, without
+        contaminating by the different size of each category?
+    
+    n_boots : number of times to randomly draw, should be as high as you
+        can stand
+    
+    meth : what to apply to the drawn samples from each group
+        If None, use means_tester
+        It can be any function that takes (group0, group1)
+        Results of every call are returned
+
+    Returns:
+        np.asarray([meth(group0, group1) for group0, group1 in each boot])    
+    """    
+    if meth is None:
+        meth = means_tester
+    
+    data = [[np.asarray(d) for d in dd] for dd in data]
+    
+    # How many to generate from each group, total
+    N_group0 = np.sum([len(category[0]) for category in data])
+    N_group1 = np.sum([len(category[1]) for category in data])
+    N_group = np.rint(np.mean([N_group0, N_group1])).astype(np.int)
+    N_categories = len(data)
+    N_draws_per_group = np.ceil(N_group / N_categories).astype(np.int)
+    
+    # Which categories to draw from
+    res_l = []
+    for n_boot in range(n_boots):
+        # Iterate over groups, processing each separately
+        # Draw the data, separately by each category
+        fakedata_by_group = [[], []]
+        for category_num in range(N_categories):
+            # Group 0
+            if len(data[category_num][0]) == 0:
+                raise BootstrapError("no data in a category")
+            idxs = np.random.randint(0, len(data[category_num][0]),
+                N_draws_per_group)
+            fakedata_by_group[0].append(data[category_num][0][idxs])
+            
+            # Group 1
+            if len(data[category_num][1]) == 0:
+                raise BootstrapError("no data in a category")            
+            idxs = np.random.randint(0, len(data[category_num][1]),
+                N_draws_per_group)
+            fakedata_by_group[1].append(data[category_num][1][idxs])
+        
+
+        if combo_meth == 'subtract_together':
+            # Concatenate across categories
+            fakedata_by_group[0] = np.concatenate(fakedata_by_group[0])
+            fakedata_by_group[1] = np.concatenate(fakedata_by_group[1])
+            
+            # Test difference in means
+            res = np.mean(fakedata_by_group[1] - fakedata_by_group[0])
+        elif combo_meth == 'subtract_separately':
+            res = np.mean([
+                np.mean(fakedata_by_group[1][n_category]) - 
+                np.mean(fakedata_by_group[0][n_category]) 
+                for n_category in range(N_categories)])
+            #res = meth(fakedata_by_group[0], fakedata_by_group[1])
+
+            
+        else:
+            1/0
         res_l.append(res)
     
     return np.asarray(res_l)
