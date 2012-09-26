@@ -821,7 +821,14 @@ def getstarted():
     """Load all my data into kkpandas and RS objects
     
     Returns:
-    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers
+    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers,
+        dd_onset_windows
+    
+    dd_onset_windows : dict {ratname : dict { ulabel : array of onset window}}
+        This one might change ... not sure this is the best way to handle this.
+        First of all, seems like it should be loaded from disk, not hard-coded.
+        Second, is the choice of ulabel as session_name-unum temporary or
+        permanent?
     
     Each is a dict keyed by ratname
     """
@@ -864,8 +871,77 @@ def getstarted():
     well_sorted_units = dict([
         (ratname, root.xpath(xpath_str))
         for ratname, root in xml_roots.items()])
+    
+    
+    # onset windows
+    # right now this is just copied from script
+    # maybe should be saved to disk somewhere
+    dd_onset_windows = {}
+    dd_onset_windows['CR12B'] = {
+        'CR12B_110422_behaving-2020':np.array([ 0.011,  0.021]),
+        'CR12B_110422_behaving-2022':np.array([ 0.0125,  0.018 ]),
+        'CR12B_110423_behaving-2019':np.array([ 0.007 ,  0.0085]),
+        'CR12B_110423_behaving-2020':np.array([ 0.0135,  0.0195]),
+        'CR12B_110425_behaving-2027':np.array([ 0.016 ,  0.0175]),
+        'CR12B_110426_behaving-2021':np.array([ 0.013 ,  0.0195]),
+        'CR12B_110426_behaving-4035':np.array([ 0.0135,  0.0195]),
+        'CR12B_110427_behaving-1017':np.array([ 0.01  ,  0.0125]),
+        'CR12B_110427_behaving-2033':np.array([ 0.0145,  0.0225]),
+        'CR12B_110427_behaving-4043':np.array([ 0.0135,  0.0195]),
+        'CR12B_110428_behaving-2028':np.array([ 0.0125,  0.0245]),
+        'CR12B_110428_behaving-3034':np.array([ 0.016,  0.018]),
+        'CR12B_110428_behaving-4037':np.array([ 0.0135,  0.019 ]),
+        'CR12B_110428_behaving-4038':np.array([ 0.011,  0.018]),
+        'CR12B_110429_behaving-2089':np.array([ 0.016 ,  0.0255]),
+        'CR12B_110429_behaving-2092':np.array([ 0.0075,  0.0095]),
+        'CR12B_110429_behaving-2094':np.array([ 0.0085,  0.02  ]),
+        'CR12B_110429_behaving-2096':np.array([ 0.011 ,  0.0235]),
+        'CR12B_110429_behaving-2098':np.array([ 0.0005,  0.0045]),
+        'CR12B_110429_behaving-3102':np.array([ 0.    ,  0.0035]),
+        'CR12B_110429_behaving-3105':np.array([ 0.0075,  0.014 ]),
+        'CR12B_110429_behaving-4113':np.array([ 0.0085,  0.031 ]),
+        'CR12B_110429_behaving-4115':np.array([ 0.0075,  0.024 ]),
+        'CR12B_110429_behaving-4119':np.array([ 0.0085,  0.022 ]),
+        'CR12B_110430_behaving-4081':np.array([ 0.03  ,  0.0325]),
+        'CR12B_110430_behaving-4083':np.array([ 0.0185,  0.0205]),
+        'CR12B_110502_behaving-3062':np.array([ 0.   ,  0.003]),
+        'CR12B_110502_behaving-4075':np.array([ 0.0065,  0.009 ]),
+        'CR12B_110503_behaving-4067':np.array([ 0.0035,  0.0085]),
+        'CR12B_110505_behaving-3059':np.array([ 0.009 ,  0.0165]),
+        'CR12B_110507_behaving-3066':np.array([ 0.0115,  0.013 ]),
+        'CR12B_110511_behaving-3065':np.array([ 0.0075,  0.0215]),
+        'CR12B_110513_behaving-3051':np.array([ 0.0125,  0.0195]),
+        'CR12B_110514_behaving-3050':np.array([ 0.0075,  0.0335])}
+    
+    dd_onset_windows['CR17B'] = {
+        'CR17B_110729_behaving-415': np.array([ 0.014,  0.021]),
+        'CR17B_110731B_behaving-208': np.array([ 0.007,  0.019]),
+        'CR17B_110731B_behaving-311': np.array([ 0.0105,  0.017 ]),
+        'CR17B_110801_behaving-321': np.array([ 0.007 ,  0.0155]),
+        'CR17B_110802B_behaving-222': np.array([ 0.0075,  0.0205]),
+        'CR17B_110802B_behaving-327': np.array([ 0.01  ,  0.0135]),
+        'CR17B_110803_behaving-321': np.array([ 0.0105,  0.0305]),
+        'CR17B_110804_behaving-322': np.array([ 0.0085,  0.0225]),
+        'CR17B_110805_behaving-218': np.array([ 0.0045,  0.019 ]),
+        'CR17B_110806_behaving-309': np.array([ 0.0085,  0.0185])}
 
-    return xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers
+    dd_onset_windows['CR20B'] = {
+        'CR20B_120531_001_behaving-613':np.array([ 0.0055,  0.0085]),
+        'CR20B_120601_001_behaving-211':np.array([ 0.02  ,  0.0255]),
+        'CR20B_120601_001_behaving-817':np.array([ 0.0155,  0.0185]),
+        'CR20B_120602_001_behaving-612':np.array([ 0.0065,  0.0335]),
+        'CR20B_120602_001_behaving-712':np.array([ 0.006,  0.043]),
+        'CR20B_120605_001_behaving-603':np.array([ 0.007,  0.022]),
+        'CR20B_120606_004_behaving-716':np.array([ 0.0095,  0.0295]),
+        'CR20B_120609_001_behaving-803':np.array([ 0.018 ,  0.0285]),
+        'CR20B_120609_001_behaving-804':np.array([ 0.017 ,  0.0355])}
+    
+    dd_onset_windows['CR21A'] = {
+        'CR21A_120503_004_behaving-604':np.array([ 0.0055,  0.04  ])}    
+            
+
+    return (xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, 
+        kk_servers, dd_onset_windows)
 
 def load_channel_mat(filename, return_dataframe=True, dump_filler=True):
     """Load data from bao-lab format for single channel
@@ -1034,3 +1110,84 @@ def test_vs_baseline(data, baseline_idxs, test_idxs, debug_figure=False,
         plt.plot(bins[:-1], ref_toplot, 'b', lw=2)
 
     return all_u, all_p, all_auroc, all_dir, ref_counts, all_test_counts
+
+
+def means_tester(d0, d1):
+    return np.mean(d1) - np.mean(d0)
+
+def keep(d0, d1):
+    return (d0, d1)
+
+def bootstrap_main_effect(data, n_boots=1000, meth=None):
+    """Given 2xN set of data of unequal sample sizes, bootstrap main effect.
+
+    We will generate a bunch of fake datasets by resampling from data.
+    Then we combine across categories. The total number of data points
+    will be the same as in the original dataset; however, the resampling
+    is such that each category is equally represented.    
+    
+    data : list of length N, each entry a list of length 2
+        Each entry in `data` is a "category".
+        Each category consists of two groups.
+        The question is: what is the difference between the groups, without
+        contaminating by the different size of each category?
+    
+    n_boots : number of times to randomly draw, should be as high as you
+        can stand
+    
+    meth : what to apply to the drawn samples from each group
+        If None, use means_tester
+        It can be any function that takes (group0, group1)
+        Results of every call are returned
+
+    Returns:
+        np.asarray([meth(group0, group1) for group0, group1 in each boot])    
+    """    
+    if meth is None:
+        meth = means_tester
+    
+    data = [[np.asarray(d) for d in dd] for dd in data]
+    
+    # How many to generate from each group, total
+    N_group0 = np.sum([len(category[0]) for category in data])
+    N_group1 = np.sum([len(category[1]) for category in data])
+    N_categories = len(data)
+    
+    # Which categories to draw from
+    res_l = []
+    for n_boot in range(n_boots):
+        # Determine the representation of each category
+        # Randomly generating so in the limit each category is equally
+        # represented. Alternatively we could use fixed, equal representation,
+        # but then we need to worry about rounding error when it doesn't
+        # divide exactly evenly.
+        fakedata_category_label_group0 = np.random.randint(  
+            0, N_categories, N_group0)
+        fakedata_category_label_group1 = np.random.randint(
+            0, N_categories, N_group1)
+        
+        # Draw the data, separately by each category
+        fakedata_by_group = [[], []]
+        for category_num in range(N_categories):
+            # Group 0
+            n_draw = np.sum(fakedata_category_label_group0 == category_num)
+            idxs = np.random.randint(0, len(data[category_num][0]),
+                n_draw)
+            fakedata_by_group[0].append(data[category_num][0][idxs])
+            
+            # Group 1
+            n_draw = np.sum(fakedata_category_label_group0 == category_num)
+            idxs = np.random.randint(0, len(data[category_num][1]),
+                n_draw)
+            fakedata_by_group[1].append(data[category_num][1][idxs])
+        
+        # Concatenate across categories
+        fakedata_by_group[0] = np.concatenate(fakedata_by_group[0])
+        fakedata_by_group[1] = np.concatenate(fakedata_by_group[1])
+        
+        # Test difference in means
+        #res = np.mean(fakedata_by_group[1]) - np.mean(fakedata_by_group[0])
+        res = meth(fakedata_by_group[0], fakedata_by_group[1])
+        res_l.append(res)
+    
+    return np.asarray(res_l)
