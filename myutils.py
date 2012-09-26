@@ -1191,3 +1191,32 @@ def bootstrap_main_effect(data, n_boots=1000, meth=None):
         res_l.append(res)
     
     return np.asarray(res_l)
+
+
+from collections import defaultdict
+def nested_defaultdict():
+    """Returns a defaultdict with generator equal to this method.
+    In [30]: nd = myutils.nested_defaultdict()
+
+    In [31]: nd[3]
+    Out[31]: defaultdict(<function nested_defaultdict at 0x48ca500>, {})
+
+    In [32]: nd[3][2] = 'rat'
+
+    In [33]: nd[3]
+    Out[33]: defaultdict(<function nested_defaultdict at 0x48ca500>, {2: 'rat'})
+
+    In [34]: nd[4]
+    Out[34]: defaultdict(<function nested_defaultdict at 0x48ca500>, {})
+
+    In [35]: nd[5][6][7] = 'cat'
+
+    In [36]: nd
+    Out[36]: defaultdict(<function nested_defaultdict at 0x48ca500>, 
+        {3: defaultdict(<function nested_defaultdict at 0x48ca500>, 
+        {2: 'rat'}), 4: defaultdict(<function nested_defaultdict at 0x48ca500>, 
+        {}), 5: defaultdict(<function nested_defaultdict at 0x48ca500>, 
+        {6: defaultdict(<function nested_defaultdict at 0x48ca500>, 
+        {7: 'cat'})})})
+    """
+    return defaultdict(nested_defaultdict)
