@@ -1332,7 +1332,7 @@ def nested_defaultdict():
     return defaultdict(nested_defaultdict)
 
 
-def LBPB_get_dfolded_by_block_from_ulabel(ulabel):
+def LBPB_get_dfolded_by_block_from_ulabel(ulabel, folding_kwargs=None):
     """Convenience function for getting PSTHs by block, as a dfolded"""
     import kkpandas, LBPB
     from kkpandas import kkrs
@@ -1357,7 +1357,8 @@ def LBPB_get_dfolded_by_block_from_ulabel(ulabel):
         }
     
     # How to fold the window around each trial
-    folding_kwargs = {'dstart': -.25, 'dstop': .3}
+    if folding_kwargs is None:
+        folding_kwargs = {'dstart': -.25, 'dstop': .3}
     
     # Run the pipeline
     res = kkpandas.pipeline.pipeline_overblock_oneevent(
@@ -1367,8 +1368,9 @@ def LBPB_get_dfolded_by_block_from_ulabel(ulabel):
     
     return res
 
-def plot_LBPB_by_block_from_ulabel(ulabel, **binning_kwargs):
+def plot_LBPB_by_block_from_ulabel(ulabel, folding_kwargs=None, **binning_kwargs):
     """Convenience function for plotting PSTHs by block"""
-    res = LBPB_get_dfolded_by_block_from_ulabel(ulabel)
+    res = LBPB_get_dfolded_by_block_from_ulabel(ulabel, folding_kwargs=folding_kwargs)
     binned = kkpandas.Binned.from_dict_of_folded(res, **binning_kwargs)    
-    return kkpandas.plotting.plot_binned(binned)
+    #return kkpandas.plotting.plot_binned(binned)
+    return kkpandas.chris.plot_all_stimuli_by_block(binned)
