@@ -376,7 +376,8 @@ def plot_with_trend_line(x, y, xname='X', yname='Y', ax=None):
     plt.show()
 
 
-def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, **kwargs):
+def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, 
+    yerr=None, **kwargs):
     """Y should have 4 columns in it, one for each sound."""
     if hasattr(Y, 'index'):
         YY = Y[['rihi', 'lehi', 'lelo', 'rilo']].values.transpose()
@@ -401,7 +402,12 @@ def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, **kwargs):
         f = plt.figure()
         ax = f.add_subplot(111, polar=True)
 
-    ax.plot(np.array([45, 135, 225, 315, 405])*np.pi/180.0, YYY, **kwargs)
+    if yerr is None:
+        ax.plot(np.array([45, 135, 225, 315, 405])*np.pi/180.0, YYY, **kwargs)
+    else:
+        ax.errorbar(x=np.array([45, 135, 225, 315, 405])*np.pi/180.0, y=YYY, 
+            yerr=yerr)
+    return ax
 
 
 def prefidx(A, B):
@@ -876,17 +882,20 @@ def getstarted():
     # onset windows
     # right now this is just copied from script
     # maybe should be saved to disk somewhere
-    # Had to manually comment out a few that were spurious
-    # 2019 actually should be more like 10ms-24ms but it triggered too soon
-    # 4083 barely peaks above signif
-    # Both are too short to include any spikes
+    
+    # MANUAL ALTERATIONS
+    # 0423-2019 -- triggered too soon, just lost it. Clearly should be 10ms-24ms.
+    
+    # Removing the following, simply because the osnet windows are extremely
+    # short and include almost zero spikes ever.
+    # 0430-83 and 0502-75 and 0507-66 and 0425-27 and 0503-67 
     dd_onset_windows = {}
     dd_onset_windows['CR12B'] = {
         'CR12B_110422_behaving-2020':np.array([ 0.011,  0.021]),
         'CR12B_110422_behaving-2022':np.array([ 0.0125,  0.018 ]),
-        #'CR12B_110423_behaving-2019':np.array([.01, .024]), #np.array([ 0.007 ,  0.0085]),
+        'CR12B_110423_behaving-2019':np.array([.01, .024]), #np.array([ 0.007 ,  0.0085]),
         'CR12B_110423_behaving-2020':np.array([ 0.0135,  0.0195]),
-        'CR12B_110425_behaving-2027':np.array([ 0.016 ,  0.0175]),
+        #'CR12B_110425_behaving-2027':np.array([ 0.016 ,  0.0175]),
         'CR12B_110426_behaving-2021':np.array([ 0.013 ,  0.0195]),
         'CR12B_110426_behaving-4035':np.array([ 0.0135,  0.0195]),
         'CR12B_110427_behaving-1017':np.array([ 0.01  ,  0.0125]),
@@ -909,10 +918,10 @@ def getstarted():
         'CR12B_110430_behaving-4081':np.array([ 0.03  ,  0.0325]),
         #'CR12B_110430_behaving-4083':np.array([ 0.0185,  0.0205]),
         'CR12B_110502_behaving-3062':np.array([ 0.   ,  0.003]),
-        'CR12B_110502_behaving-4075':np.array([ 0.0065,  0.009 ]),
-        'CR12B_110503_behaving-4067':np.array([ 0.0035,  0.0085]),
+        #'CR12B_110502_behaving-4075':np.array([ 0.0065,  0.009 ]),
+        #'CR12B_110503_behaving-4067':np.array([ 0.0035,  0.0085]),
         'CR12B_110505_behaving-3059':np.array([ 0.009 ,  0.0165]),
-        'CR12B_110507_behaving-3066':np.array([ 0.0115,  0.013 ]),
+        #'CR12B_110507_behaving-3066':np.array([ 0.0115,  0.013 ]),
         'CR12B_110511_behaving-3065':np.array([ 0.0075,  0.0215]),
         'CR12B_110513_behaving-3051':np.array([ 0.0125,  0.0195]),
         'CR12B_110514_behaving-3050':np.array([ 0.0075,  0.0335])}
@@ -1126,7 +1135,7 @@ class BootstrapError(BaseException):
     pass
 
 def bootstrap_main_effect(data, n_boots=1000, draw_meth='equal', meth=None,
-    min_bucket=1):
+    min_bucket=5):
     """Given 2xN set of data of unequal sample sizes, bootstrap main effect.
 
     We will generate a bunch of fake datasets by resampling from data.
@@ -1154,7 +1163,15 @@ def bootstrap_main_effect(data, n_boots=1000, draw_meth='equal', meth=None,
     if meth is None:
         meth = means_tester
     
+    # Convert to standard format
     data = [[np.asarray(d) for d in dd] for dd in data]
+    
+    # Test
+    alld = np.concatenate([np.concatenate([dd for dd in d]) for d in data])
+    if len(np.unique(alld)) == 0:
+        raise BootstrapError("no data")
+    elif len(np.unique(alld)) == 1:
+        raise BootstrapError("all data points are identical")
     
     # How many to generate from each group, total
     N_group0 = np.sum([len(category[0]) for category in data])
@@ -1313,3 +1330,45 @@ def nested_defaultdict():
         {7: 'cat'})})})
     """
     return defaultdict(nested_defaultdict)
+
+
+def LBPB_get_dfolded_by_block_from_ulabel(ulabel):
+    """Convenience function for getting PSTHs by block, as a dfolded"""
+    import kkpandas, LBPB
+    from kkpandas import kkrs
+    
+    # Load data
+    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers, \
+        dd_onset_windows = getstarted()
+    session_name = ulabel.split('-')[0]
+    unum = int(ulabel.split('-')[1])
+    
+    # link back
+    rs = kkrs.session2rs(session_name, kk_servers, data_dirs)
+    kks = kkrs.session2kk_server(session_name, kk_servers)
+    
+    # Set up the pipeline
+    # How to parse out trials
+    trial_picker_kwargs = {
+        'labels': LBPB.mixed_stimnames, 
+        'label_kwargs': [{'stim_name':s} for s in LBPB.mixed_stimnames],
+        'nonrandom' : 0,
+        'outcome' : 'hit'
+        }
+    
+    # How to fold the window around each trial
+    folding_kwargs = {'dstart': -.25, 'dstop': .3}
+    
+    # Run the pipeline
+    res = kkpandas.pipeline.pipeline_overblock_oneevent(
+        kks, session_name, unum, rs, 
+        trial_picker_kwargs=trial_picker_kwargs,
+        folding_kwargs=folding_kwargs)
+    
+    return res
+
+def plot_LBPB_by_block_from_ulabel(ulabel, **binning_kwargs):
+    """Convenience function for plotting PSTHs by block"""
+    res = LBPB_get_dfolded_by_block_from_ulabel(ulabel)
+    binned = kkpandas.Binned.from_dict_of_folded(res, **binning_kwargs)    
+    return kkpandas.plotting.plot_binned(binned)
