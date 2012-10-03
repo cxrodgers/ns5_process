@@ -29,3 +29,5 @@ sn2sound_block_tuple = {sn: t
     for sn, t in zip(mixed_sns, sound_block_tuple)}
 sn2block_sound_tuple = {sn: t 
     for sn, t in zip(mixed_sns, block_sound_tuple)}
+
+mixed_stimnames_noblock = ('le_hi', 'ri_hi', 'le_lo', 'ri_lo')
