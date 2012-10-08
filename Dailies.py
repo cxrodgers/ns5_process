@@ -633,7 +633,7 @@ def run_behaving(rs=None,
     if do_avg_plots:
         printnow("avg plots")
         if lfp_time_limits == 'hard':
-            lfp_time_limits = rs.read_time_limits[1]
+            lfp_time_limits = rs.read_time_limits()[1]
         
         rswrap.plot_avg_lfp(rs, savefig=True, 
             t_start=lfp_time_limits[0], t_stop=lfp_time_limits[1])
