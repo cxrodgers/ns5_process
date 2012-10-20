@@ -1374,3 +1374,74 @@ def plot_LBPB_by_block_from_ulabel(ulabel, folding_kwargs=None, **binning_kwargs
     binned = kkpandas.Binned.from_dict_of_folded(res, **binning_kwargs)    
     #return kkpandas.plotting.plot_binned(binned)
     return kkpandas.chris.plot_all_stimuli_by_block(binned)
+
+
+def crucifix_plot(x, y, xerr, yerr, p=None, ax=None, factor=None,
+    below_color='b', above_color='r', nonsig_color='gray', maxval=None):
+    if ax is None:
+        f = plt.figure()
+        ax = f.add_subplot(111)
+    
+    x, y, xerr, yerr = np.asarray(x), np.asarray(y), np.asarray(xerr), np.asarray(yerr)
+    if p is not None:
+        p = np.asarray(p)
+    if factor is not None:
+        x, y, xerr, yerr = factor*x, factor*y, factor*xerr, factor*yerr
+    
+    max_l = []
+    for n, (xval, yval, xerrval, yerrval) in enumerate(zip(x, y, xerr, yerr)):
+        if p is not None:
+            pval = p[n]
+        else:
+            pval = 1.0
+        
+        # What color
+        if pval < .05:
+            if yval < xval:
+                color = below_color
+                pointspec = '.'
+                linespec = '-'
+            else:
+                color = above_color
+                pointspec = '.'
+                linespec = '-'
+            alpha = 1
+        else:
+            color = nonsig_color
+            pointspec = '.'
+            linespec = '-'
+            alpha = .5
+        
+        # Now actually plot
+        ax.plot([xval], [yval], pointspec, color=color, alpha=alpha)
+        
+        # plot error bars
+        if hasattr(xerrval, '__len__'):
+            ax.plot(xval + np.asarray(xerrval), [yval, yval], linespec, 
+                alpha=alpha, color=color, 
+                markerfacecolor=color, markeredgecolor=color)
+            ax.plot([xval, xval], yval + np.asarray(yerrval), linespec, 
+                alpha=alpha, color=color, 
+                markerfacecolor=color, markeredgecolor=color)
+            max_l += list(xval + np.asarray(xerrval))
+            max_l += list(yval + np.asarray(yerrval))
+        else:
+            ax.plot([xval-xerrval, xval+xerrval], [yval, yval], linespec, 
+                alpha=alpha, color=color, 
+                markerfacecolor=color, markeredgecolor=color)
+            ax.plot([xval, xval], [yval-yerrval, yval+yerrval], linespec, 
+                alpha=alpha, color=color, 
+                markerfacecolor=color, markeredgecolor=color)
+            max_l += [xval+xerrval, yval+yerrval]
+
+    # Plot the unity line
+    if maxval is None:
+        maxval = np.max(max_l)
+    ax.plot([0, maxval], [0, maxval], 'k:')
+    ax.set_xlim([0, maxval])
+    ax.set_ylim([0, maxval])
+    
+    ax.axis('scaled')
+    
+    
+    return ax
