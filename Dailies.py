@@ -38,6 +38,7 @@ def run_tones(rs=None,
     bcontrol_folder='/media/hippocampus/TRWINRIG_DATA/Data/SPEAKERCAL/',
     bcontrol_files=None,
     n_tones=None,
+    n_tones_per_bout=200,
     TR_NDAQ_offset_sec=420,
     start_offset=0,
     stop_offset=0,
@@ -88,6 +89,11 @@ def run_tones(rs=None,
     
     do_tuning_curve : if True, plots tuning curve
     
+    n_tones_per_bout : int, or list of ints
+        Number of tones expected in each bout.
+        This is used for calculating timestamps of each tone, from timestamps
+        of each trial (which corresponds to a single bcontrol file).
+    
     Other parameters should be same as other Dailies.
     """
     if len(kwargs) > 0:
@@ -122,10 +128,23 @@ def run_tones(rs=None,
         times, numbers = rswrap.add_timestamps_to_session(rs, verbose=True, 
             force=True, meth='digital_trial_number')
         
-        # sub time
-        subtimes = np.rint(np.linspace(3300, 1194210, 200)).astype(np.int)
-        alltimes = np.concatenate([time + subtimes for time in times])
-        rs.add_timestamps(alltimes)
+        # Right now one time per trial (bcontrol file)
+        # Need to decimate by number of trials per bout
+        # First figure out whether int or list of ints
+        if not hasattr(n_tones_per_bout, '__len__'):
+            n_tones_per_bout = [n_tones_per_bout] * len(times)
+
+        # Now decimate each bout
+        # This command works for 200 tones, extrapolate correct formula from it
+        # subtimes = np.rint(np.linspace(3300, 1194210, 200)).astype(np.int)
+        alltimes = []
+        for time, n_tones in zip(times, n_tones_per_bout):
+            istart = 3300
+            istop = istart + np.rint((n_tones - 1) * 5984.5).astype(np.int)
+            subtimes = np.rint(np.linspace(istart, istop, n_tones)).astype(np.int)
+            alltimes.append(time + subtimes)
+        alltimes = np.concatenate(alltimes)
+        rs.add_timestamps(alltimes)        
     
     # add bcontrol
     tone_filename = os.path.join(rs.full_path, 'tones')
@@ -633,7 +652,7 @@ def run_behaving(rs=None,
     if do_avg_plots:
         printnow("avg plots")
         if lfp_time_limits == 'hard':
-            lfp_time_limits = rs.read_time_limits[1]
+            lfp_time_limits = rs.read_time_limits()[1]
         
         rswrap.plot_avg_lfp(rs, savefig=True, 
             t_start=lfp_time_limits[0], t_stop=lfp_time_limits[1])
