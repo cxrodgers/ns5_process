@@ -827,8 +827,8 @@ def getstarted():
     """Load all my data into kkpandas and RS objects
     
     Returns:
-    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers,
-        dd_onset_windows
+    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers, \
+        dd_onset_windows, non_audresp_units = myutils.getstarted()
     
     dd_onset_windows : dict {ratname : dict { ulabel : array of onset window}}
         This one might change ... not sure this is the best way to handle this.
@@ -951,10 +951,55 @@ def getstarted():
     
     dd_onset_windows['CR21A'] = {
         'CR21A_120503_004_behaving-604':np.array([ 0.0055,  0.04  ])}    
-            
+    
+    
+    # Now the auditory NON-responsive units, for 12B and 17B.
+    # For other rats, this information is available from well_sorted_units
+    non_audresp_units = {}
+    non_audresp_units['CR12B'] = (
+        'CR12B_110422_behaving-2017',
+        'CR12B_110423_behaving-2024',
+        'CR12B_110425_behaving-1022',
+        'CR12B_110425_behaving-2027',
+        'CR12B_110426_behaving-2030',
+        'CR12B_110426_behaving-3017',
+        'CR12B_110427_behaving-4042',
+        'CR12B_110428_behaving-3033',
+        'CR12B_110429_behaving-3108',
+        'CR12B_110430_behaving-3063',
+        'CR12B_110430_behaving-4076',
+        'CR12B_110430_behaving-4078',
+        'CR12B_110430_behaving-4083',
+        'CR12B_110502_behaving-4074',
+        'CR12B_110502_behaving-4075',
+        'CR12B_110503_behaving-4066',
+        'CR12B_110503_behaving-4067',
+        'CR12B_110503_behaving-4068',
+        'CR12B_110504_behaving-4063',
+        'CR12B_110505_behaving-3049',
+        'CR12B_110505_behaving-3050',
+        'CR12B_110505_behaving-3056',
+        'CR12B_110506_behaving-3058',
+        'CR12B_110507_behaving-3066',
+        'CR12B_110507_behaving-3067',
+        'CR12B_110508_behaving-3054',
+        'CR12B_110508_behaving-3058',
+        'CR12B_110508_behaving-3060',
+        'CR12B_110508_behaving-3063',
+        'CR12B_110511_behaving-3056',
+        'CR12B_110511_behaving-4071',
+        'CR12B_110516_behaving-1004',
+        'CR12B_110516_behaving-2021',
+        'CR12B_110516_behaving-2023')
+    non_audresp_units['CR17B'] = (
+        'CR17B_110801_behaving-320',
+        'CR17B_110728_behaving-430',
+        'CR17B_110804_behaving-321',
+        'CR17B_110727_behaving-417')
+
 
     return (xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, 
-        kk_servers, dd_onset_windows)
+        kk_servers, dd_onset_windows, non_audresp_units)
 
 def load_channel_mat(filename, return_dataframe=True, dump_filler=True):
     """Load data from bao-lab format for single channel
