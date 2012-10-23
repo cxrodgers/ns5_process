@@ -958,11 +958,11 @@ def getstarted():
     non_audresp_units = {}
     non_audresp_units['CR12B'] = (
         'CR12B_110422_behaving-2017',
-        'CR12B_110423_behaving-2024',
+        #'CR12B_110423_behaving-2024', # probable mistranscription
         'CR12B_110425_behaving-1022',
         'CR12B_110425_behaving-2027',
-        'CR12B_110426_behaving-2030',
-        'CR12B_110426_behaving-3017',
+        #'CR12B_110426_behaving-2030', # probable mistranscription
+        #'CR12B_110426_behaving-3017', # probable mistranscription
         'CR12B_110427_behaving-4042',
         'CR12B_110428_behaving-3033',
         'CR12B_110429_behaving-3108',
@@ -986,8 +986,8 @@ def getstarted():
         'CR12B_110508_behaving-3058',
         'CR12B_110508_behaving-3060',
         'CR12B_110508_behaving-3063',
-        'CR12B_110511_behaving-3056',
-        'CR12B_110511_behaving-4071',
+        #'CR12B_110511_behaving-3056', # mistranscription from notes
+        #'CR12B_110511_behaving-4071', # mistranscription from notes
         'CR12B_110516_behaving-1004',
         'CR12B_110516_behaving-2021',
         'CR12B_110516_behaving-2023')
@@ -1178,6 +1178,77 @@ def keep(d0, d1):
 
 class BootstrapError(BaseException):
     pass
+
+def CI_compare(CI1, CI2):
+    """Return +1 if CI1 > CI2, -1 if CI1 < CI2, 0 if overlapping"""
+    if CI1[1] < CI2[0]:
+        return -1
+    elif CI2[1] < CI1[0]:
+        return +1
+    else:
+        return 0
+
+def simple_bootstrap(data, n_boots=1000, min_bucket=20):
+    if len(data) < min_bucket:
+        raise myutils.BootstrapError("too few samples")
+    
+    res = []
+    data = np.asarray(data)
+    for boot in range(n_boots):
+        idxs = np.random.randint(0, len(data), len(data))
+        draw = data[idxs]
+        res.append(np.mean(draw))
+    res = np.asarray(res)
+    CI = mlab.prctile(res, (2.5, 97.5))
+    
+    return res, res.mean(), CI
+
+def difference_CI_bootstrap_wrapper(data, **boot_kwargs):
+    """Given parsed data from single ulabel, return difference CIs.
+    
+    data : same format as bootstrap_main_effect expects
+    
+    Will calculate the following statistics:
+        means : mean of each condition, across draws
+        CIs : confidence intervals on each condition
+        mean_difference : mean difference between conditions
+        difference_CI : confidence interval on difference between conditions
+        p : two-tailed p-value of 'no difference'
+    
+    Returns:
+        dict of those statistics
+    """
+    # Yields a 1000 x 2 x N_trials matrix:
+    # 1000 draws from the original data, under both conditions.
+    bh = myutils.bootstrap_main_effect(data, meth=myutils.keep, **boot_kwargs)
+
+    # Find the distribution of means of each draw, across trials
+    # This is 1000 x 2, one for each condition
+    # hist(means_of_all_draws) shows the comparison across conditions
+    means_of_all_draws = bh.mean(axis=2)
+
+    # Confidence intervals across the draw means for each condition
+    condition_CIs = np.array([
+        mlab.prctile(dist, (2.5, 97.5)) for dist in means_of_all_draws.T])
+
+    # Means of each ulabel (centers of the CIs, basically)
+    condition_means = means_of_all_draws.mean(axis=0)
+
+    # Now the CI on the *difference between conditions*
+    difference_of_conditions = np.diff(means_of_all_draws).flatten()
+    difference_CI = mlab.prctile(difference_of_conditions, (2.5, 97.5)) 
+
+    # p-value of 0. in the difference distribution
+    cdf_at_value = np.sum(difference_of_conditions < 0.) / \
+        float(len(difference_of_conditions))
+    p_at_value = 2 * np.min([cdf_at_value, 1 - cdf_at_value])
+    
+    # Should probably floor the p-value at 1/n_boots
+
+    return {'p' : p_at_value, 
+        'means' : condition_means, 'CIs': condition_CIs,
+        'mean_difference': difference_of_conditions.mean(), 
+        'difference_CI' : difference_CI}
 
 def bootstrap_main_effect(data, n_boots=1000, draw_meth='equal', meth=None,
     min_bucket=5):
