@@ -508,7 +508,17 @@ def set_fonts_big(undo=False):
         matplotlib.rcParams['xtick.labelsize'] = 'small'
         matplotlib.rcParams['ytick.labelsize'] = 'small'
 
-def my_imshow(C, x=None, y=None, ax=None, cmap=None):
+def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None):
+    """Wrapper around imshow with better defaults.
+    
+    Plots "right-side up" my default, that is, like an image, not a graph.
+    The first pixel is in the upper left, not the lower left.
+    
+    Also uses the x and y values that you provide. Uses the extent keyword
+    so that the limits match the data, not the number of pixels.
+    
+    Return the image
+    """
     if ax is None:
         f = plt.figure()
         ax = f.add_subplot(111)
@@ -518,9 +528,17 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=None):
     if y is None:
         y = range(C.shape[0])
     extent = x[0], x[-1], y[0], y[-1]
-    plt.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
+    #plt.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
+    im = ax.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
     ax.axis('auto')
-    plt.show()
+    ax.set_xlim((x.min(), x.max()))
+    ax.set_ylim((y.min(), y.max()))
+    if clim is not None:
+        im.set_clim(clim)
+    
+    return im
+    
+    #plt.show()
 
 def iziprows(df):
    series = [df[col] for col in df.columns]
