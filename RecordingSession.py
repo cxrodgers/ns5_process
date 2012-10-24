@@ -167,7 +167,7 @@ class RecordingSession:
     the former should provide getter methods that always work, even 
     if file doesn't exist. Or is that too confusing?
     """
-    def __init__(self, dirname):
+    def __init__(self, dirname, stifle_warning=False):
         """Create object linked to a data directory
         
         If directory does not exist, will create it.
@@ -177,7 +177,7 @@ class RecordingSession:
         
         if not os.path.exists(self.full_path):
             os.mkdir(self.full_path)
-        elif self.get_ns5_filename() is None:
+        elif self.get_ns5_filename() is None and not stifle_warning:
             print "warning: no ns5 file in %s" % self.full_path
         
         self.session = None
@@ -316,15 +316,21 @@ class RecordingSession:
         return np.array([tt[0] for tt in t])
     
     def calculate_trial_boundaries(self, soft_limits_sec=None,
-        hard_limits_sec=None, meth='end_of_previous'):
+        hard_limits_sec=None, meth='end_of_previous', final_sample=None):
         """Reads timestamps and returns trial boundaries.
         
         For implementation, see TrialSlicer. This is just a thin wrapper
         around that.
         
+        final_sample : Last sample in the file. If None, then uses
+            l.header.n_samples (but note this requires ns5 file to exist).
+        
         Returns: (t_starts, t_stops)
         """
-        l = self.get_ns5_loader()
+        if final_sample is None:
+            l = self.get_ns5_loader()
+            final_sample = l.header.n_samples
+        
         fs = self.get_sampling_rate()
         t = self.read_timestamps()
         
@@ -344,7 +350,7 @@ class RecordingSession:
             soft_limits=soft_limits, 
             hard_limits=hard_limits, 
             meth=meth, 
-            data_range=(0, l.header.n_samples))
+            data_range=(0, final_sample))
         
         return t_starts, t_stops
     
