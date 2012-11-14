@@ -1445,3 +1445,70 @@ def crucifix_plot(x, y, xerr, yerr, p=None, ax=None, factor=None,
     
     
     return ax
+
+
+def print_xml(et, filename, prettify_text_nodes=True, **kwargs):
+    """Print an ElementTree to a file.
+    
+    If prettify_text_nodes, fixes some indentation issues with text nodes.
+    """
+    from lxml import etree
+    str_to_write = etree.tostring(et, pretty_print=True)
+    if prettify_text_nodes:
+        str_to_write = prettify_text_nodes_in_pretty_xml(str_to_write, **kwargs)
+    
+    fi = file(filename, 'w')
+    fi.write(str_to_write)    
+    fi.close()
+
+def prettify_text_nodes_in_pretty_xml(string_of_xml, n_spaces=2, 
+    special_case_end_element=True):
+    """Fix the spacing from etree pretty print.
+    
+    Problems to fix:
+    1)  Text nodes are not indented at all.
+    2)  The closing tag after a text node is not indented.
+    
+    string_of_xml : output of etree.tostring(et, pretty_print=True)
+    n_spaces : Amount to reindent a text node, vs its previous open element
+    special_case_end_element : if True, also fix the closing tag
+    
+    Returns: prettified
+        A new string with indentation fixed.
+    """    
+    # Input and output lists
+    in_list = string_of_xml.split('\n')
+    out_list = []
+
+    # Initialize some persistent loop variables
+    indent_level, just_did_text_line = 0, False
+
+    # Iterate over lines
+    for nline, orig_line in enumerate(in_list):
+        # Strip the line
+        stripped_line = orig_line.lstrip()
+        
+        # Deal with elements and text nodes separately
+        if len(stripped_line) > 0 and stripped_line[0] == '<':
+            # Not a text node, determine it's indent level
+            new_indent_level = len(orig_line) - len(stripped_line)
+            
+            # Deal with a special case    
+            if just_did_text_line and new_indent_level == 0:
+                # This is the end tag after a text node, inappropriately indented
+                # Fix it
+                out_list.append(' ' * indent_level + stripped_line)
+            else:
+                # Just any old element line, leave it
+                out_list.append(orig_line)
+            
+            # Update the loop variables
+            indent_level, just_did_text_line = new_indent_level, False
+        else:
+            # This is a text node. Indent to current level + 2
+            out_list.append(' ' * (indent_level + n_spaces) + stripped_line)
+            just_did_text_line = True
+    prettified = '\n'.join(out_list)
+    return prettified
+
+
