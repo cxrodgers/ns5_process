@@ -12,6 +12,7 @@ import datetime
 import scipy.io
 import scipy.signal
 from lxml import etree
+Element = etree.Element
 import kkpandas
 
 longname = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
@@ -1646,3 +1647,25 @@ def prettify_text_nodes_in_pretty_xml(string_of_xml, n_spaces=2,
     return prettified
 
 
+
+def insert_notes(el, notes):
+    el.append(Element("notes"))
+    el[-1].text = notes
+inn = insert_notes
+
+def add_child(el, child_name, notes=None, insert_pos=None, **kwargs):
+    child = Element(child_name, **kwargs)
+    if notes is not None:
+        inn(child, notes)
+    if insert_pos is None:
+        el.append(child)
+    else:
+        el.insert(insert_pos, child)
+    return child
+
+def load_xml_file(filename, unprettyprint=True):
+    if unprettyprint:
+        parser = etree.XMLParser(remove_blank_text=True)
+    else:
+        parser = None
+    return etree.parse(filename, parser=parser).getroot()
