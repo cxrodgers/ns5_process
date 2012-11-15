@@ -362,11 +362,16 @@ class OnlyOneError(Exception):
 
 def only_one(l):
     """Returns the only value in l, or l itself if non-iterable."""
-    try:
-        val = np.asarray(l).item()
-    except ValueError:
+    # listify
+    if not hasattr(l, '__len__'):
+        l = [l]
+    
+    # check length
+    if len(l) != 1:
         raise OnlyOneError("must contain exactly one value")
-    return val
+    
+    # return entry
+    return l[0]
 
 def plot_with_trend_line(x, y, xname='X', yname='Y', ax=None):
     dropna = np.isnan(x) | np.isnan(y)
