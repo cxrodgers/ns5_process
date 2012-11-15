@@ -351,12 +351,16 @@ def unique_or_error(a):
     else:
         return u[0]
 
+class OnlyOneError(Exception):
+    pass
+
 def only_one(l):
-    """this will be redefined to error unless `l` is length one"""
-    print "warning: use `unique_or_error`"
-    ll = np.unique(np.asarray(l))
-    assert len(ll) == 1, "values are not unique"
-    return ll[0]
+    """Returns the only value in l, or l itself if non-iterable."""
+    try:
+        val = np.asarray(l).item()
+    except ValueError:
+        raise OnlyOneError("must contain exactly one value")
+    return val
 
 def plot_with_trend_line(x, y, xname='X', yname='Y', ax=None):
     dropna = np.isnan(x) | np.isnan(y)
