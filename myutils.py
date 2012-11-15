@@ -301,11 +301,15 @@ def auroc(data1, data2, return_p=False):
     else:
         return AUC
 
-def utest(x, y, return_auroc=False):
+def utest(x, y, return_auroc=False, print_mannwhitneyu_warnings=True,
+    print_empty_data_warnings=True):
     """Drop-in replacement for scipy.stats.mannwhitneyu with different defaults
     
     If an error occurs in mannwhitneyu, this prints the message but returns
     a reasonable value: p=1.0, U=.5*len(x)*len(y), AUC=0
+    
+    print_mannwhitneyu_warnings : print warnings caught from underlying utest
+    print_empty_data_warnings : print a warning of one of the data is empty
     
     This also calculates two-sided p-value and AUROC. The latter is only
     returned if return_auroc is True, so that the default is compatibility
@@ -316,7 +320,8 @@ def utest(x, y, return_auroc=False):
         U, p = scipy.stats.mannwhitneyu(x, y)
         p = p * 2
     except ValueError as v:
-        print "Caught exception:", v
+        if print_mannwhitneyu_warnings:
+            print "Caught exception:", v
         badflag = True
 
     # Calculate AUC
@@ -326,7 +331,8 @@ def utest(x, y, return_auroc=False):
         U = .5 * len(x) * len(y)
         AUC = .5
     elif len(x) == 0 or len(y) == 0:
-        print "warning: one argument to mannwhitneyu is empty"
+        if print_empty_data_warnings:
+            print "warning: one argument to mannwhitneyu is empty"
         AUC = .5
     else:
         AUC  = 1 - (U / (len(x) * len(y)))
@@ -1190,7 +1196,7 @@ def CI_compare(CI1, CI2):
 
 def simple_bootstrap(data, n_boots=1000, min_bucket=20):
     if len(data) < min_bucket:
-        raise myutils.BootstrapError("too few samples")
+        raise BootstrapError("too few samples")
     
     res = []
     data = np.asarray(data)
@@ -1220,7 +1226,7 @@ def difference_CI_bootstrap_wrapper(data, **boot_kwargs):
     """
     # Yields a 1000 x 2 x N_trials matrix:
     # 1000 draws from the original data, under both conditions.
-    bh = myutils.bootstrap_main_effect(data, meth=myutils.keep, **boot_kwargs)
+    bh = bootstrap_main_effect(data, meth=keep, **boot_kwargs)
 
     # Find the distribution of means of each draw, across trials
     # This is 1000 x 2, one for each condition
