@@ -1162,10 +1162,13 @@ def trial_numbers_from_info_field_to_text(rs, write_to_rs=True):
     trialnumbers2 = np.array(trialnumbers2)
     
     # Check consistency between blocks
-    assert np.all(trialnumbers == trialnumbers2)
+    if not np.all(trialnumbers == trialnumbers2):
+        print ("WARNING: spike block and raw block trial numbers differ in " +
+            rs.full_path)
     
     # Check that the trial numbers look plausible
-    assert np.all(np.diff(trialnumbers) == 1)
+    if not np.all(np.diff(trialnumbers) == 1):
+        print ("WARNING: trial numbers are not contiguous in " + rs.full_path)
     
     # Write out to the directory
     if write_to_rs:
@@ -1399,6 +1402,11 @@ def add_behavioral_trial_numbers(rs, bskip=1, copy_corr_files=True):
         # Store behavioral trial number in the info field
         seg.info = '%d' % b_trial
         seg.save()
+
+    # Pretty sure there is a missing session.commit() here
+    # Oh well, will probably happen when the session variable is destroyed ...
+    # Also, pretty sure the seg.save() is superfluous
+    # This has been fixed in the newer version of this method
 
     return bs
     
