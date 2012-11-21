@@ -1401,12 +1401,12 @@ def add_behavioral_trial_numbers(rs, bskip=1, copy_corr_files=True):
         
         # Store behavioral trial number in the info field
         seg.info = '%d' % b_trial
-        seg.save()
+        
+        # This step is unnecessary and rewrites all of the binary data
+        #seg.save()
 
-    # Pretty sure there is a missing session.commit() here
-    # Oh well, will probably happen when the session variable is destroyed ...
-    # Also, pretty sure the seg.save() is superfluous
-    # This has been fixed in the newer version of this method
+    # This was missing before and sessions were left dangling
+    session.commit()
 
     return bs
     
