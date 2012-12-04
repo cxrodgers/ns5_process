@@ -432,48 +432,157 @@ def prefidx(A, B):
 class Spectrogrammer:
     """Turns a waveform into a spectrogram"""
     def __init__(self, NFFT=256, downsample_ratio=5, new_bin_width_sec=None,
-        max_freq=40e3, min_freq=5e3, Fs=200e3, noverlap=None, normalization=1.0,
-        detrend=matplotlib.pylab.detrend_mean):
-        """Initialize object to turn waveforms to spectrograms.
+        max_freq=40e3, min_freq=5e3, Fs=200e3, noverlap=None, normalization=0,
+        detrend=matplotlib.pylab.detrend_mean, **kwargs):
+        """Object to turn waveforms into spectrograms.
         
-        Stores parameter choices, so you can batch analyze waveforms using
-        the `transform` method.
+        This is a wrapper around mlab.specgram. What this object provides
+        is slightly more intelligent parameter choice, and a nicer way
+        to trade off resolution in frequency and time. It also remembers
+        parameter choices, so that the same object can be used to batch
+        analyze a bunch of waveforms using the `transform` method.
         
-        If you specify new_bin_width_sec, this chooses the closest integer 
-        downsample_ratio and that parameter is actually saved and used.
-        This is determined by:
-            new_bin_width_sec * Fs / NFFT / (NFFT/(NFFT-noverlap))
-        That is, increased temporal resolution can be achieved by increasing
-        noverlap. Decreased temporal resolution can be achieved by setting
-        downsample_ratio higher (or more usually, a larger NFFT).
+        Arguments passed to mlab.specgram
+        ----------------------------------
+        NFFT - number of points used in each segment
+            Determines the number of frequency bins, which will be
+            NFFT / 2 before stripping out those outside min_freq and max_freq
         
-        TODO: catch other kwargs and pass to specgram.
+        noverlap - int, number of samples of overlap between segments
+            Default is NFFT / 2
+        
+        Fs - sampling rate
+        
+        detrend - detrend each segment before FFT
+            Default is to remove the mean (DC component)
+        
+        **kwargs - anything else you want to pass to mlab.specgram
+        
+        
+        Other arguments
+        ---------------
+        downsample_ratio - int, amount to downsample in time
+            After all other calculations are done, the temporal resolution
+        
+        new_bin_width_sec - float, target temporal resolution
+            The returned spectrogram will have a temporal resolution as
+            close to this as possible.
+            If this is specified, then the downsample_ratio is adjusted
+            as necessary to achieve it. If noverlap is left as default,
+            it will try 50% first and then 0, to achieve the desired resolution.
+            If it is not possible to achieve within a factor of 2 of this
+            resolution, a warning is issued.
+        
+        normalization - the power in each frequency bin is multiplied by
+            the frequency raised to this power.
+            0 means do nothing.
+            1 means that 1/f noise becomes white.
+        
+        min_freq, max_freq - discard frequencies outside of this range
+        
+        
+        Returns
+        -------
+        Pxx - 2d array of power in dB. Shape (n_freq_bins, n_time_bins)
+        
+        freqs - 1d array of frequency bins
+        
+        t - 1d array of times
+        
+        
+        Theory
+        ------
+        The fundamental tradeoff is between time and frequency resolution and
+        is set by NFFT.
+        
+        For instance, consider a 2-second signal, sampled at 1024Hz, chosen
+        such that the number of samples is 2048 = 2**11.
+        *   If NFFT is 2048, you will have 1024 frequency bins (spaced 
+            between 0KHz and 0.512KHz) and 1 time bin. 
+            This is a simple windowed FFT**2, with the redundant negative
+            frequencies discarded since the waveform is real.
+            Note that the phase information is lost.
+        *   If NFFT is 256, you will have 128 frequency bins and 8 time bins.
+        *   If NFFT is 16, you will have 8 freqency bins and 128 time bins.
+        
+        In each case the FFT-induced trade-off is:
+            n_freq_bins * n_time_bins_per_s = Fs / 2
+            n_freq_bins = NFFT
+        
+        So far, using only NFFT, we have traded off time resolution for
+        frequency resolution. We can achieve greater noise reduction with
+        appropriate choice of noverlap and downsample_ratio. The PSD
+        function achieves this by using overlapping segments, then averaging
+        the FFT of each segment. The use of noverlap in mlab.specgram is 
+        a bit of a misnomer, since no temporal averaging occurs there!
+        But this object can reinstate this temporal averaging.
+        
+        For our signal above, if our desired temporal resolution is 64Hz,
+        that is, 128 samples total, and NFFT is 16, we have a choice.
+        *   noverlap = 0. Non-overlapping segments. As above, 8 frequency
+            bins and 128 time bins. No averaging
+        *   noverlap = 64. 50% overlap. Now we will get 256 time bins.
+            We can then average together each pair of adjacent bins
+            by downsampling, theoretically reducing the noise. Note that
+            this will be a biased estimate since the overlapping windows
+            are not redundant.
+        *   noverlap = 127. Maximal overlap. Now we will get about 2048 bins,
+            which we can then downsample by 128 times to get our desired
+            time resolution.
+        
+        The trade-off is now:
+            overlap_factor = (NFFT - overlap) / NFFT
+            n_freq_bins * n_time_bins_per_s * overlap_factor = Fs / downsample_ratio
+        
+        Since we always do the smoothing in the time domain, NFFT = n_freq bins
+        and the tradeoff becomes
+            n_time_bins_per_s = Fs / downsample_ratio / (NFFT - overlap)
+        
+        That is, to decrease the time resolution, we can:
+            * Increase the frequency resolution (NFFT)
+            * Decrease the overlap, down to a minimum of 0 (no averaging)
+            * Increase the downsample_ratio (more averaging)
+        
+        How to choose the overlap, or the downsample ratio? In general,
+        50% overlap seems good, since we'd like to use some averaging, but
+        we get limited benefit from averaging many redundant samples.        
         """
         
         # figure out downsample_ratio
         if new_bin_width_sec is not None:
-            #self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT))
-            self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT \
-                / (NFFT/float(NFFT-noverlap))))
-        else:
-            self.downsample_ratio = int(downsample_ratio)
-        
+            # Set noverlap to default
+            if noverlap is None:
+                # Try to do it with 50% overlap
+                noverlap = NFFT / 2
+            
+            # Calculate downsample_ratio to achieve this
+            self.downsample_ratio = \
+                Fs * new_bin_width_sec / float(NFFT - noverlap)
+            
+            # If this is not achievable, then set noverlap to 0 and try again
+            if np.rint(self.downsample_ratio).astype(np.int) < 1:
+                noverlap = 0
+                self.downsample_ratio = Fs * new_bin_width_sec / float(NFFT)
+            
+        # Convert to nearest int and test if possible
+        self.downsample_ratio = np.rint(self.downsample_ratio).astype(np.int)        
         if self.downsample_ratio == 0:
             print "requested temporal resolution too high, using maximum"
             self.downsample_ratio = 1
-            
+    
+        # Default value for noverlap if still None
+        if noverlap is None:
+            noverlap = NFFT / 2
+        self.noverlap = noverlap
         
         # store other defaults
         self.NFFT = NFFT
         self.max_freq = max_freq
         self.min_freq = min_freq
         self.Fs = Fs
-        self.noverlap = noverlap
-        if self.noverlap is None:
-            self.noverlap = NFFT / 2
-        
         self.normalization = normalization
         self.detrend = detrend
+        self.specgram_kwargs = kwargs
 
     
     def transform(self, waveform):
@@ -489,7 +598,10 @@ class Spectrogrammer:
         # For now use NFFT of 256 to get appropriately wide freq bands, then
         # downsample in time
         Pxx, freqs, t = mlab.specgram(waveform, NFFT=self.NFFT, 
-            noverlap=self.noverlap, Fs=self.Fs, detrend=self.detrend)
+            noverlap=self.noverlap, Fs=self.Fs, detrend=self.detrend, 
+            **self.specgram_kwargs)
+        
+        # Apply the normalization
         Pxx = Pxx * np.tile(freqs[:, np.newaxis] ** self.normalization, 
             (1, Pxx.shape[1]))
 
