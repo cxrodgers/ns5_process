@@ -441,13 +441,20 @@ class Spectrogrammer:
         
         If you specify new_bin_width_sec, this chooses the closest integer 
         downsample_ratio and that parameter is actually saved and used.
+        This is determined by:
+            new_bin_width_sec * Fs / NFFT / (NFFT/(NFFT-noverlap))
+        That is, increased temporal resolution can be achieved by increasing
+        noverlap. Decreased temporal resolution can be achieved by setting
+        downsample_ratio higher (or more usually, a larger NFFT).
         
         TODO: catch other kwargs and pass to specgram.
         """
         
         # figure out downsample_ratio
         if new_bin_width_sec is not None:
-            self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT))
+            #self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT))
+            self.downsample_ratio = int(np.rint(new_bin_width_sec * Fs / NFFT \
+                / (NFFT/float(NFFT-noverlap))))
         else:
             self.downsample_ratio = int(downsample_ratio)
         
