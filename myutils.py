@@ -484,6 +484,7 @@ class Spectrogrammer:
         Returns
         -------
         Pxx - 2d array of power in dB. Shape (n_freq_bins, n_time_bins)
+            May contain -np.inf where the power was exactly zero.
         
         freqs - 1d array of frequency bins
         
