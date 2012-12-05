@@ -672,9 +672,9 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None):
         ax = f.add_subplot(111)
     
     if x is None:
-        x = range(C.shape[1])
+        x = np.array(range(C.shape[1]))
     if y is None:
-        y = range(C.shape[0])
+        y = np.array(range(C.shape[0]))
     extent = x[0], x[-1], y[0], y[-1]
     #plt.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
     im = ax.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
@@ -1816,3 +1816,16 @@ def load_xml_file(filename, unprettyprint=True):
     else:
         parser = None
     return etree.parse(filename, parser=parser).getroot()
+
+def allclose_2d(a):
+    """Returns True if entries in `a` are close to equal.
+    
+    a : iterable, convertable to array
+    
+    If the entries are arrays of different size, returns False.
+    If len(a) == 1, returns True.
+    """
+    a = np.asarray(a)
+    if a.ndim == 0:
+        raise ValueError("input to allclose_2d cannot be 0d")
+    return np.all([np.allclose(a[0], aa) for aa in a[1:]])
