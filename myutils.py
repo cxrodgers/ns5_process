@@ -431,7 +431,7 @@ def prefidx(A, B):
 
 class Spectrogrammer:
     """Turns a waveform into a spectrogram"""
-    def __init__(self, NFFT=256, downsample_ratio=5, new_bin_width_sec=None,
+    def __init__(self, NFFT=256, downsample_ratio=1, new_bin_width_sec=None,
         max_freq=40e3, min_freq=5e3, Fs=200e3, noverlap=None, normalization=0,
         detrend=matplotlib.pylab.detrend_mean, **kwargs):
         """Object to turn waveforms into spectrograms.
@@ -507,7 +507,7 @@ class Spectrogrammer:
         
         In each case the FFT-induced trade-off is:
             n_freq_bins * n_time_bins_per_s = Fs / 2
-            n_freq_bins = NFFT
+            n_freq_bins = NFFT / 2
         
         So far, using only NFFT, we have traded off time resolution for
         frequency resolution. We can achieve greater noise reduction with
@@ -532,20 +532,32 @@ class Spectrogrammer:
         
         The trade-off is now:
             overlap_factor = (NFFT - overlap) / NFFT
-            n_freq_bins * n_time_bins_per_s * overlap_factor = Fs / downsample_ratio
+            n_freq_bins * n_time_bins_per_s * overlap_factor = Fs / downsample_ratio / 2
         
-        Since we always do the smoothing in the time domain, NFFT = n_freq bins
+        Since we always do the smoothing in the time domain, n_freq bins = NFFT / 2
         and the tradeoff becomes
             n_time_bins_per_s = Fs / downsample_ratio / (NFFT - overlap)
         
-        That is, to decrease the time resolution, we can:
-            * Increase the frequency resolution (NFFT)
-            * Decrease the overlap, down to a minimum of 0 (no averaging)
-            * Increase the downsample_ratio (more averaging)
+        That is, to increase the time resolution, we can:
+            * Decrease the frequency resolution (NFFT)
+            * Increase the overlap, up to a maximum of NFFT - 1
+              This is a sort of spurious improvement because adjacent windows
+              are highly correlated.
+            * Decrease the downsample_ratio (less averaging)
+        
+        To decrease noise, we can:
+            * Decrease the frequency resolution (NFFT)
+            * Increase the downsample_ratio (more averaging, fewer timepoints)
         
         How to choose the overlap, or the downsample ratio? In general,
         50% overlap seems good, since we'd like to use some averaging, but
         we get limited benefit from averaging many redundant samples.        
+        
+        This object tries for 50% overlap and adjusts the downsample_ratio
+        (averaging) to achieve the requested temporal resolution. If this is
+        not possible, then no temporal averaging is done (just like mlab.specgram)
+        and the overlap is increased as necessary to achieve the requested
+        temporal resolution.
         """
         
         # figure out downsample_ratio
@@ -559,10 +571,10 @@ class Spectrogrammer:
             self.downsample_ratio = \
                 Fs * new_bin_width_sec / float(NFFT - noverlap)
             
-            # If this is not achievable, then set noverlap to 0 and try again
+            # If this is not achievable, then try again with minimal downsampling
             if np.rint(self.downsample_ratio).astype(np.int) < 1:
-                noverlap = 0
-                self.downsample_ratio = Fs * new_bin_width_sec / float(NFFT)
+                self.downsample_ratio = 1
+                noverlap = np.rint(NFFT - Fs * new_bin_width_sec).astype(np.int)
             
         # Convert to nearest int and test if possible
         self.downsample_ratio = np.rint(self.downsample_ratio).astype(np.int)        
