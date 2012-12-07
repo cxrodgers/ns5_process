@@ -108,14 +108,29 @@ def wide_plot_smoothed(res, analog_channels, savefig=False, **plot_kwargs):
 
 
 def plot_audio_alignment(data, n=None, ax=None, start=None, stop=None, 
-    plot_endpoints=False, **kwargs):
-    """Simple plotting function"""
+    plot_endpoints=False, downsample_ratio=1, **kwargs):
+    """Simple plotting function
+    
+    data - 2d array of traces to plot
+        shape n_traces x n_samples
+    n - indexes of each sample point
+        if None, will generate based on shape of data
+    start, stop, plot_endpoints - will plot the beginning and end of the
+        traces where n == start and n == stop
+        These are calculated independently for each trace
+    """
     if n is None:
         n = np.arange(data.shape[1], dtype=np.int)
     
     if start is not None or stop is not None:
         data = data.copy()
     
+    # Deal with downsampling
+    if downsample_ratio != 1:
+        data = data[:, ::downsample_ratio]
+        n = n[::downsample_ratio]
+    
+    # Set data to nan outside of start
     if start is not None:
         if hasattr(start, '__len__'):
             if len(start) != len(data):
@@ -125,7 +140,8 @@ def plot_audio_alignment(data, n=None, ax=None, start=None, stop=None,
         else:
             data = data[:, n >= start]
             n = n[n >= start]
-            
+    
+    # Set data to nan outside of stop
     if stop is not None:
         if hasattr(stop, '__len__'):
             if len(stop) != len(data):
@@ -142,13 +158,20 @@ def plot_audio_alignment(data, n=None, ax=None, start=None, stop=None,
     
     # Now do the plotting 
     ax.plot(n, data.transpose(), **kwargs)
+    
+    # Plot the endpoints 
     if plot_endpoints:
         if stop is not None:
             for nrow in range(len(data)):
                 if stop[nrow] > n.max():
-                    idx = len(stop) - 1
+                    idx = len(n) - 1
                 else:
-                    idx = np.where(n == stop[nrow])[0].item() - 1
+                    # Calculate the value of n where the trace stops
+                    try:
+                        idx = np.where(n == stop[nrow])[0].item() - 1
+                    except (IndexError, ValueError):
+                        # This is in case the stop falls between values of n
+                        idx = np.where(n >= stop[nrow])[0][0].item() - 1
                 ax.plot(n[idx], data[nrow, idx], 'k*')
     
     return ax
