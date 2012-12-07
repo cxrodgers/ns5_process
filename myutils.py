@@ -1831,3 +1831,41 @@ def allclose_2d(a):
     if a.ndim == 0:
         raise ValueError("input to allclose_2d cannot be 0d")
     return np.all([np.allclose(a[0], aa) for aa in a[1:]])
+
+def apply_and_filter_by_regex(pattern, list_of_strings, sort=True, 
+    squeeze=True, warn_on_regex_miss=False):
+    """Apply regex pattern to each string, return hits from each match.
+    
+    The pattern is applied to each string in the list using re.match.
+    If there is no match, the string is skipped.
+    If there is a match, the groups will be appended to a list of hits.
+    Optionally the list of hits is sorted. Then it is returned.
+    
+    pattern - regex pattern, passed to re.match
+    
+    list_of_strings - duh
+    
+    sort - if True, sort the list of hits
+    
+    squeeze - if True and there is only one group, simply save this group,
+        rather than a 1-tuple.
+    """
+    import re
+    res = []
+    for s in list_of_strings:
+        m = re.match(pattern, s)
+        if m is None:
+            if warn_on_regex_miss:
+                print "warning: regex miss %s" % s
+            continue
+        else:
+            if len(m.groups()) == 1 and squeeze:
+                # Only 1 group
+                res.append(m.groups()[0])
+            else:
+                res.append(m.groups())
+    
+    if sort:
+        return sorted(res)
+    else:
+        return res
