@@ -656,7 +656,8 @@ def set_fonts_big(undo=False):
         matplotlib.rcParams['xtick.labelsize'] = 'small'
         matplotlib.rcParams['ytick.labelsize'] = 'small'
 
-def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None):
+def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None,
+    center_clim=False):
     """Wrapper around imshow with better defaults.
     
     Plots "right-side up" my default, that is, like an image, not a graph.
@@ -683,6 +684,10 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None):
     ax.set_ylim((y.min(), y.max()))
     if clim is not None:
         im.set_clim(clim)
+    
+    if center_clim:
+        cl = np.asarray(im.get_clim())
+        im.set_clim(-np.abs(cl).max(), np.abs(cl).max())
     
     return im
     
