@@ -657,8 +657,24 @@ def dictify_mat_struct(mat_struct, flatten_0d=True, max_depth=-1):
                     for key, val in mat_struct.items()])
         elif hasattr(mat_struct, '__len__'):
             # list-like
-            return [dictify_mat_struct(val, flatten_0d, max_depth=max_depth-1) 
-                for val in mat_struct]
+            # this case now seems to catch strings too!
+            # detect which it is
+            try:
+                if str(mat_struct) == mat_struct:
+                    is_a_string = True
+                else:
+                    is_a_string = False
+            except:
+                raise ValueError("cannot convert obj to string")
+            
+            # If a string, return directly
+            # Else, dictify every object in the list-like object
+            if is_a_string:
+                return mat_struct
+            else:
+                return [
+                    dictify_mat_struct(val, flatten_0d, max_depth=max_depth-1) 
+                    for val in mat_struct]
         else:
             # everything else
             return mat_struct
