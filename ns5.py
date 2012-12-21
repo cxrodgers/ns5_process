@@ -239,7 +239,7 @@ class Loader(object):
     
     def get_channel(self, channel, start=0, n_samples=None, stop=None):
         if channel not in self.header.Channel_ID:
-            raise "channel %d not in data file" % channel
+            raise ValueError("channel %d not in data file" % channel)
         res = self.get_chunk_by_channel(start, n_samples, stop)
         return res[channel]
     
