@@ -660,6 +660,7 @@ def query_events(rs, event_name='Timestamp'):
 
 # Function to load audio data from raw file and detect onsets
 def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0, 
+    drop_after_Nth_timestamp=None,
     meth='audio_onset', verbose=False, save_trial_numbers=True, **kwargs):
     """Given a RecordingSession, makes TIMESTAMPS file.
     
@@ -681,6 +682,15 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
             This method reads audio channels from RS and passes them on.
             In this case the returned values are:
                 onset_times, offset_times
+            
+            All keyword arguments (except drop_first_N_timestamps) are passed
+            to calculate_timestamps, so see documentation there.
+                manual_threshhold=None, audio_channels=None, 
+                minimum_duration_ms=50, pre_first=0, post_last=0, 
+                debug_mode=False, 
+                verbose=False, trigger_channel=None
+            manual_threshhold should be in dB            
+            
         'digital_trial_number' : calls calculate_timestamps_from_digital
             and reads the digital trial numbers.
             In this cas ethe returned values are:
@@ -701,16 +711,14 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
         * manual threshhold should be specified, use something like 15e3,
           not dB like other case
     
-    All keyword arguments (except drop_first_N_timestamps) are passed
-    to calculate_timestamps, so see documentation there.
-        manual_threshhold=None, audio_channels=None, 
-        minimum_duration_ms=50, pre_first=0, post_last=0, debug_mode=False, 
-        verbose=False, trigger_channel=None
-    manual_threshhold should be in dB
-    
     drop_first_N_timestamps : after calculation of timestamps, drop
     the first N of them before writing to disk. Another alternative is
     the pre_first and post_last kwargs which can be specified in samples.
+    
+    drop_after_Nth_timestamp : similar. interpreted as 0-based index
+        essentially, 
+        trials = trials[drop_first_N_timestamps:drop_after_Nth_timestamp + 1]
+        with error checking
     """
     # Check whether we need to run
     if not force and os.path.exists(os.path.join(rs.full_path, 
@@ -734,9 +742,18 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
         t_on, t_off = calculate_timestamps(filename, verbose=verbose,
             audio_channels=audio_channels, **kwargs)
         
-        if drop_first_N_timestamps > 0:
-            t_on = t_on[drop_first_N_timestamps:]
-            t_off = t_off[drop_first_N_timestamps:]
+        # error check ones to drop
+        if drop_after_Nth_timestamp is None:
+            drop_after_Nth_timestamp = len(t_on) - 1
+        if drop_after_Nth_timestamp >= len(t_on):
+            print "warning: drop_after_Nth_timestamp is too high"
+            drop_after_Nth_timestamp = len(t_on) - 1
+        if drop_after_Nth_timestamp < drop_first_N_timestamps:
+            raise ValueError("warning: incompatible drop indices")
+        
+        # do the dropping
+        t_on = t_on[drop_first_N_timestamps:drop_after_Nth_timestamp + 1]
+        t_off = t_off[drop_first_N_timestamps:drop_after_Nth_timestamp + 1]
         
         # Tell RecordingSession about them
         rs.add_timestamps(t_on)
@@ -760,7 +777,7 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
 
 def calculate_timestamps_from_digital_and_sync(rs, verbose=False, 
     skip_verification=False, assumed_dilation=.99663, wordlen=160, 
-    drop_first_N_timestamps=0, **kwargs):
+    drop_first_N_timestamps=0, drop_after_Nth_timestamp=None, **kwargs):
     """Calculates timestamps from digital signal and syncs with behavior file.
     
     Wrapper around `calculate_timestamps_from_digital` which does basic
@@ -782,6 +799,7 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
     wordlen : length of the digital word in samples, which is accounted for
         in calculating stimulus onset
     drop_first_N_timestamps : drops this many timestamps from the beginning
+    drop_after_Nth_timestamp : drop all timestamps after this one
     kwargs : passed to calculate_timestamps_from_digital (pre_first, post_last,
         manual_threshold, etc)
     
@@ -797,6 +815,41 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
         if verbose:
             print "no times found!"
         return np.array([]), np.array([])
+
+    # Optionally drop trials from beginning
+    if drop_first_N_timestamps > 0:
+        print "dropping %d trials from %d to %d labeled %d to %d" % (
+            drop_first_N_timestamps, 
+            trial_start_times[0], trial_start_times[drop_first_N_timestamps-1],
+            trial_numbers[0], trial_numbers[drop_first_N_timestamps-1])
+        trial_start_times = trial_start_times[drop_first_N_timestamps:]
+        trial_numbers = trial_numbers[drop_first_N_timestamps:]
+    
+    # Optionally drop trials from end
+    if drop_after_Nth_timestamp is not None:
+        print "warning: untested code, only tested with audio_onset"
+        if drop_after_Nth_timestamp < 0:
+            raise ValueError("drop index cannot be negative")
+
+        # Adjust for the case when dropping from both ends (untested)
+        if drop_first_N_timestamps > 0:
+            print "warning: really drop from beginning %d and end %d both?" % (
+                drop_first_N_timestamps, drop_after_Nth_timestamp)
+            drop_after_Nth_timestamp = drop_after_Nth_timestamp - \
+                drop_first_N_timestamps
+        
+        # Drop trials
+        if drop_after_Nth_timestamp >= len(trial_numbers) - 1:
+            print "warning: specified drop index is too high, ignoring"
+        else:
+            to_drop_times = trial_start_times[drop_after_Nth_timestamp+1:]
+            to_drop_numbers = trial_numbers[drop_after_Nth_timestamp+1:]
+            print "dropping %d trials from %d to %d labeled %d to %d" % (
+                len(to_drop_numbers), 
+                to_drop_times[0], to_drop_times[-1],
+                to_drop_numbers[0], to_drop_numbers[-1])
+            trial_start_times = trial_start_times[:drop_after_Nth_timestamp]
+            trial_numbers = trial_numbers[:drop_after_Nth_timestamp]
     
     # if possible, load behavioral data
     bcld = bcontrol.Bcontrol_Loader_By_Dir(rs.full_path)
@@ -859,11 +912,6 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
     elif verbose:
         print "cannot load bcontrol data, skipping verification"
 
-    # write to directory
-    if drop_first_N_timestamps > 0:
-        trial_start_times = trial_start_times[drop_first_N_timestamps:]
-        trial_numbers = trial_numbers[drop_first_N_timestamps:]
-    
     return trial_start_times, trial_numbers
 
 
