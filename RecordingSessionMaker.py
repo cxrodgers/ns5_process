@@ -960,7 +960,7 @@ def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None,
     # Now create the numpy array containing mono or stereo data
     if trigger_channel is None:
         res = l.get_chunk_by_channel()
-        audio_data = np.array([res(ch) for ch in audio_channels])
+        audio_data = np.array([res[ch+128] for ch in audio_channels])
         del res
     else:
         audio_data = np.array(\
