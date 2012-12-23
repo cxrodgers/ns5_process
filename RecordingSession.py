@@ -1299,12 +1299,20 @@ class RecordingSession:
         
         return sp
 
-    def run_klustakwik(self, subdir=None, processes=4, n_features=8):
+    def run_klustakwik(self, subdir=None, processes=4, n_features=8, force=False):
         """Run KlustaKwik on spike subdirectory.
         
         subdir : if None, then the last subdirectory like 'klusters%d' will
         be used. Otherwise, specify the subdirectory name manually. Whatever
         you pass will be joined to self.full_path
+        
+        processes : how many independent KlustaKwik processes to spawn
+        n_features : how many features from the fetfiles to use
+            Right now this is not auto-detected from the feature file,
+            because sometimes the feature file includes time as a feature,
+            and so it's easier to specify exactly how many to use.
+        force : if False and if *.klg.* files exist in the subdirectory,
+            then returns without doing anything.
         """
         import multiprocessing, errno
         # Choose directory to run klustakwik
@@ -1312,6 +1320,12 @@ class RecordingSession:
             subdir = self.last_klusters_dir()
         else:
             subdir = os.path.join(self.full_path, subdir)
+        
+        # Check if klustakwik has already been run
+        klg_list = glob.glob(os.path.join(subdir, '*.klg.*'))
+        if len(klg_list) > 0 and not force:
+            print "klustakwik already ran in %s, continuing" % subdir
+            return
         
         p = multiprocessing.Pool(processes)
         
