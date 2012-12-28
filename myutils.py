@@ -1038,7 +1038,8 @@ def getstarted():
         'CR21A' : '/media/hippocampus/chris/20120622_CR21A_allsessions',
         'YT6A' : '/media/hippocampus/chris/20120221_YT6A_allsessions',
         'CR17B' : '/media/hippocampus/chris/20110907_CR17B_allsessions',
-        'CR12B' : '/media/granule/20121115_CR12B_allsessions',
+        'CR12B' : '/media/hippocampus/chris/20121115_CR12B_allsessions',
+        #'CR12B' : '/media/granule/20121115_CR12B_allsessions',
         #'CR12B' : '/media/hippocampus/chris/20111208_CR12B_allsessions_sorted',
         }
     
