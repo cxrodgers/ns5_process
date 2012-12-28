@@ -1875,3 +1875,17 @@ def apply_and_filter_by_regex(pattern, list_of_strings, sort=True,
         return sorted(res)
     else:
         return res
+
+def dict_sum(dicts, warn_on_overlap=True):
+    """Combines list of dict into one, warning if some of the keys overlap"""
+    # Check for overlap
+    if warn_on_overlap:
+        overlaps = set.intersection(*[set(dd.keys()) for dd in dicts])
+        if len(overlaps) > 0:
+            print "warning: overlapping keys in dict_sum: %r" % overlaps
+
+    # Combine
+    d = {}
+    for dd in dicts:
+        d.update(dd)
+    return d
