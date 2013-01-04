@@ -660,11 +660,20 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None,
     center_clim=False):
     """Wrapper around imshow with better defaults.
     
-    Plots "right-side up" my default, that is, like an image, not a graph.
-    The first pixel is in the upper left, not the lower left.
+    Plots "right-side up" with the first pixel (0, 0) in the upper left,
+    not the lower left. So it's like an image or a matrix, not like
+    a graph.
     
-    Also uses the x and y values that you provide. Uses the extent keyword
-    so that the limits match the data, not the number of pixels.
+    Other changes to the imshow defaults:
+        extent : the limits should match the data, not the number of pixels
+        interpolation : 'nearest' instead of smoothed
+        axis : 'auto' so that it fits the available space instead of
+            constraining the pixels to be square
+    
+    x : numerical labels for the columns
+    y : numerical labels for the rows
+        if None, the indexes are used, accounting for the y-axis flip
+    center_clim : 
     
     Return the image
     """
@@ -682,6 +691,10 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None,
     ax.axis('auto')
     ax.set_xlim((x.min(), x.max()))
     ax.set_ylim((y.min(), y.max()))
+    
+    # Account for y-axis flip
+    ax.set_yticklabels([int(v) for v in ax.get_yticks()[::-1]])
+    
     if clim is not None:
         im.set_clim(clim)
     
@@ -692,6 +705,32 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None,
     return im
     
     #plt.show()
+
+def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False):
+    """Set clim to be the same in all subplots in figure"""
+    # Which axes to operate on
+    if axa is None:
+        axa = fig.get_axes()
+    axa = np.asarray(axa)
+
+    # Get all the clim
+    for ax in axa.flatten():
+        all_clim = []
+        for im in ax.get_images():
+            all_clim.append(np.asarray(im.get_clim()))
+    
+    # Find covering clim and optionally center
+    all_clim_a = np.array(all_clim)
+    new_clim = (np.min(all_clim_a[:, 0]), np.max(all_clim_a[:, 1]))
+    if center_clim:
+        new_clim = np.max(np.abs(new_clim)) * np.array([-1, 1])
+    
+    # Set to new value
+    for ax in axa.flatten():
+        for im in ax.get_images():
+            im.set_clim(new_clim)
+    
+    return axa
 
 def iziprows(df):
    series = [df[col] for col in df.columns]
