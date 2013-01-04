@@ -706,22 +706,44 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None,
     
     #plt.show()
 
-def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False):
-    """Set clim to be the same in all subplots in figure"""
+def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False, trim=1):
+    """Set clim to be the same in all subplots in figur
+    
+    f : Figure to grab all axes from, or None
+    axa : the list of subplots (if f is None)
+    center_clim : if True, the mean of the new clim is always zero
+    trim : does nothing if 1 or None
+        otherwise, sets the clim to truncate extreme values
+        for example, if .99, uses the 1% and 99% values of the data
+    """
     # Which axes to operate on
     if axa is None:
         axa = fig.get_axes()
     axa = np.asarray(axa)
 
-    # Get all the clim
-    for ax in axa.flatten():
-        all_clim = []
-        for im in ax.get_images():
-            all_clim.append(np.asarray(im.get_clim()))
+    # Two ways of getting new clim
+    if trim is None or trim == 1:
+        # Get all the clim
+        all_clim = []        
+        for ax in axa.flatten():
+            for im in ax.get_images():
+                all_clim.append(np.asarray(im.get_clim()))
+        
+        # Find covering clim and optionally center
+        all_clim_a = np.array(all_clim)
+        new_clim = (np.min(all_clim_a[:, 0]), np.max(all_clim_a[:, 1]))
+    else:
+        # Trim to specified prctile of the image data
+        data_l = []
+        for ax in axa.flatten():
+            for im in ax.get_images():
+                data_l.append(np.asarray(im.get_array()).flatten())
+        data_a = np.concatenate(data_l)
+        
+        # New clim
+        new_clim = mlab.prctile(data_a, (100.*(1-trim), 100.*trim))
     
-    # Find covering clim and optionally center
-    all_clim_a = np.array(all_clim)
-    new_clim = (np.min(all_clim_a[:, 0]), np.max(all_clim_a[:, 1]))
+    # Optionally center
     if center_clim:
         new_clim = np.max(np.abs(new_clim)) * np.array([-1, 1])
     
@@ -730,7 +752,7 @@ def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False):
         for im in ax.get_images():
             im.set_clim(new_clim)
     
-    return axa
+    return new_clim
 
 def iziprows(df):
    series = [df[col] for col in df.columns]
