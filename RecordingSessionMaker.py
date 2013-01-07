@@ -762,7 +762,9 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
     elif meth == 'digital_trial_number':
         trial_start_times, trial_numbers = \
             calculate_timestamps_from_digital_and_sync(rs, verbose=verbose, 
-                drop_first_N_timestamps=drop_first_N_timestamps, **kwargs)
+                drop_first_N_timestamps=drop_first_N_timestamps, 
+                drop_after_Nth_timestamp=drop_after_Nth_timestamp,
+                **kwargs)
 
         rs.add_timestamps(trial_start_times)
         
@@ -800,6 +802,8 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
         in calculating stimulus onset
     drop_first_N_timestamps : drops this many timestamps from the beginning
     drop_after_Nth_timestamp : drop all timestamps after this one
+        ie, if this is 10, will drop those indexed by 11 and onward
+        (counter-intuitive since the 12th timestamp has index 11)
     kwargs : passed to calculate_timestamps_from_digital (pre_first, post_last,
         manual_threshold, etc)
     
@@ -827,7 +831,6 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
     
     # Optionally drop trials from end
     if drop_after_Nth_timestamp is not None:
-        print "warning: untested code, only tested with audio_onset"
         if drop_after_Nth_timestamp < 0:
             raise ValueError("drop index cannot be negative")
 
