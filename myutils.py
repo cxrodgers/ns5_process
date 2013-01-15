@@ -1479,6 +1479,9 @@ def difference_CI_bootstrap_wrapper(data, **boot_kwargs):
     difference_CI = mlab.prctile(difference_of_conditions, (2.5, 97.5)) 
 
     # p-value of 0. in the difference distribution
+    # This doesn't seem right. We are calculating p-value of observing 0
+    # under this distribution. Should be calculating the p-value of observing
+    # this distribution assuming true difference is zero.
     cdf_at_value = np.sum(difference_of_conditions < 0.) / \
         float(len(difference_of_conditions))
     p_at_value = 2 * np.min([cdf_at_value, 1 - cdf_at_value])
