@@ -83,11 +83,12 @@ def link_file(filename, final_dir, verbose=False, dryrun=False, force_run=True):
     
     # Link location
     target_filename = os.path.join(final_dir, os.path.split(filename)[1])
-    if os.path.exists(target_filename) and not force_run:
-        if verbose:
+    
+    # Deal with the case where the link exists, in a couple of ways
+    if os.path.islink(target_filename) or os.path.exists(target_filename):
+        if not force_run and verbose:
             print "link already exists, giving up"
-        return
-    if os.path.exists(target_filename) and force_run:
+            return
         if verbose:
             print "link already exists, deleting"
         if not dryrun:
