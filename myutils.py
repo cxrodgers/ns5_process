@@ -1076,6 +1076,7 @@ def getstarted():
         'YT6A' : os.path.expanduser('~/Dropbox/lab/YT6A_summary/YT6A.xml'),
         'CR12B' : os.path.expanduser('~/Dropbox/lab/CR12B_summary_v2/CR12B.xml'),
         'CR17B' : os.path.expanduser('~/Dropbox/lab/CR17B_summary_v2/CR17B.xml'),
+        'CR24A' : os.path.expanduser('~/Dropbox/lab/CR24A_summary/CR24A.xml'),
         }
     
     kksfiles = {
