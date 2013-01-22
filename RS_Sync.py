@@ -1,3 +1,8 @@
+"""Module containing all synchronization code for neural and behavioral
+
+Move this to kkpandas.kkrs as it does not use any ns5 or OE 
+"""
+
 import numpy as np
 from ns5_process import bcontrol
 import kkpandas
@@ -115,11 +120,18 @@ class RS_Syncer:
             # Code not written yet
             1/0
         
+        # Find the time of each trial change
+        # For speed, first find the events matching the trial change string
+        matching_events = events.event.str.match('trial_(\d+)_out')
+        mask = (matching_events.apply(len) > 0)
+        subevents = events[mask]
         res = []
         for bn in self.btrial_numbers:
             # Will error here if non-unique results
-            res.append(events[events.event == 'trial_%d_out' % bn].time.item())
+            res.append(
+                subevents[subevents.event == 'trial_%d_out' % bn].time.item())
         
+        # Convert to arrays and store        
         self.trialstart_nbase = np.array(res)
         self.trialstart_bbase = self.n2b(self.trialstart_nbase)
     
