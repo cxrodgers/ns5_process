@@ -560,6 +560,7 @@ class Spectrogrammer:
         and the overlap is increased as necessary to achieve the requested
         temporal resolution.
         """
+        self.downsample_ratio = downsample_ratio # until set otherwise
         
         # figure out downsample_ratio
         if new_bin_width_sec is not None:
