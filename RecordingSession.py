@@ -37,6 +37,7 @@ import SpikeTrainContainers
 from myutils import printnow
 import myutils
 import datetime
+import warnings
 
 # Globals
 ALL_CHANNELS_FILENAME = 'NEURAL_CHANNELS_TO_GET'
@@ -178,7 +179,7 @@ class RecordingSession:
         if not os.path.exists(self.full_path):
             os.mkdir(self.full_path)
         elif self.get_ns5_filename() is None and not stifle_warning:
-            print "warning: no ns5 file in %s" % self.full_path
+            warnings.warn("warning: no ns5 file in %s" % self.full_path)
         
         self.session = None
         self.group_multiplier = None
