@@ -1581,8 +1581,9 @@ def LBPB_get_dfolded_by_block_from_ulabel(ulabel, folding_kwargs=None):
     from kkpandas import kkrs
     
     # Load data
-    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers, \
-        dd_onset_windows = getstarted()
+    xmlfiles, kksfiles, data_dirs, xml_roots, well_sorted_units, kk_servers,\
+        dd_onset_windows, non_audresp_units = getstarted()
+
     session_name = ulabel.split('-')[0]
     unum = int(ulabel.split('-')[1])
     
