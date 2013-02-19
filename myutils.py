@@ -1076,7 +1076,7 @@ def getstarted():
     warnings.warn('deprecated, see my.dataload')
     gets = my.dataload.getstarted()
     res = [gets[k] for k in ['xmlfiles', 'kksfiles', 'data_dirs', 'xml_roots',
-        'manual_units', 'kk_servers']
+        'manual_units', 'kk_servers']]
     res += [None, None]
     return res
 
