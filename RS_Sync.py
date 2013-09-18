@@ -9,6 +9,10 @@ import kkpandas
 import os.path
 import collections
 
+# For sync_b_n_v
+import pandas
+import vidtrack, my, my.dataload
+
 class RS_Syncer:
     """Defines preferred interface for accessing trial numbers and times
     
@@ -146,3 +150,123 @@ class RS_Syncer:
         assert len(self.btrial_numbers) == len(self.trialstart_bbase)
         self.bnum2trialstart_bbase.update(zip(
             self.btrial_numbers, self.trialstart_bbase))
+
+
+
+
+
+
+
+
+def sync_b_n_v(session_name, 
+    vidtrack_root='/media/hippocampus/chris/20130916_vidtrack_sessions',
+    hold_filename='../../figures/20130621_figfinal/02_hold/counts_results'):
+    """Sanity check syncing function.
+    
+    Loads data from video, behavioral, and neural. Produces one dataframe
+    with info from everything. Useful for checking sure all trial numbers
+    are lined up. Still have to watch the video manually for some things.
+    
+    Would be worth breaking this into some smaller components
+    """
+
+    ## LOADING DATA
+    # Video tracking
+    vts = vidtrack.Session(full_path=os.path.join(vidtrack_root, session_name))
+    locdf = vidtrack.vts_db2head_pos_df(vts)
+    srv = vidtrack.interact.Server(db_filename=vts.file_schema.db_filename,
+        image_filenames=vts.file_schema.image_filenames,
+        image_full_filenames=vts.file_schema.image_full_filenames,
+        image_priorities=None,
+        hide_title=False)
+
+    # RS, events, trials_info
+    rs = my.dataload.session2rs(session_name)
+    rss = RS_Syncer(rs)
+    trials_info = kkpandas.io.load_trials_info(rs.full_path, drop_munged=False)
+    events = kkpandas.io.load_events(rs.full_path)
+
+    # Hold period analysis
+    # Use a representative ulabel from the hold analysis
+    # Should probably prioritize sigmod ulabels
+    hold_counts_results = pandas.load(hold_filename)
+    repres_ulabel = filter(lambda s: s.startswith(session_name), 
+        hold_counts_results.index)[0]
+    hold_counts_result = hold_counts_results.ix[repres_ulabel]
+
+    # Raw spikes
+    spks = my.dataload.ulabel2spikes(repres_ulabel)
+
+
+    ## FORMING DATAFRAME
+    # Construct dataframe, starting with TRIALS_INFO
+    # All of this is in the neural timebase, converted from behavioral at some point.
+    syncdf = trials_info[['block', 'stim_name', 'outcome', 'is_munged',
+        'cpoke_start', 'stim_onset', 'choice_made']].copy()
+    syncdf.index.name = 'btrial'
+
+    # Duration of cpoke
+    syncdf['pdur_act'] = trials_info['cpoke_stop'] - syncdf['cpoke_start']
+    syncdf['pdur_req'] = syncdf['stim_onset'] - syncdf['cpoke_start']
+
+    # Now add the ntrial numbers and TIMESTAMPS
+    # Some of this logic could go into RS_Sync
+    assert len(rss.btrial_numbers) == len(rs.read_timestamps())
+    syncdf['ts'] = np.nan
+    syncdf['ts'][rss.btrial_numbers] = rs.read_timestamps() / 30e3
+    syncdf['ntrial'] = -1
+    syncdf['ntrial'][rss.btrial_numbers] = list(range(len(rss.btrial_numbers)))
+
+    # Now add the spike counts and hold analysis
+    # Trials that were not analyzed will have a count of -1
+    hold_counts = np.concatenate([
+        hold_counts_result['LB_counts'], hold_counts_result['PB_counts']])
+    hold_trials = np.concatenate([
+        hold_counts_result['LB_trials'], hold_counts_result['PB_trials']])
+    syncdf['hcnt'] = -1
+    syncdf['hcnt'][hold_trials] = hold_counts
+
+    # Head angle on each trial, where it exists
+    syncdf = syncdf.join(locdf[['Mx', 'My', 'angl']])
+
+    # Convert time base
+    syncdf['stim_v'] = np.polyval(vts.n2v_sync, syncdf.stim_onset)
+
+
+    ## SANITY CHECKS
+    # Hold period analysis was done correctly
+    # Refold the spikes directly from scratch here
+    # May be a floating point or slight sync issue here
+    incl_mask = syncdf.hcnt != -1
+    delta = hold_counts_result['dt']
+    refolded = kkpandas.Folded.from_flat(spks, 
+        starts=syncdf['stim_onset'][incl_mask].values - delta,
+        stops=syncdf['stim_onset'][incl_mask].values,
+        subtract_off_center=False, labels=syncdf.index[incl_mask])
+    assert np.all(syncdf['hcnt'][incl_mask] == refolded.apply(len))
+
+    # All trials in hold analysis had sufficiently long actual hold
+    assert np.all(syncdf['pdur_req'][incl_mask] > delta)
+    assert np.all(syncdf['pdur_act'] > syncdf['pdur_req'])
+
+    # Check that neural and behavioral are lined up
+    # TIMESTAMPS should match stim_onset almost perfectly (with slight error)
+    # This ensures that the neural trials and behavioral trials are lined up
+    bn_err = syncdf.stim_onset - syncdf.ts
+    assert np.all(bn_err.dropna() < .001)
+    assert bn_err.abs().max() > 1e-4 # this could be lower, probably
+
+
+    ## MANUAL SANITY CHECKS
+    # Check that video matches syncdf
+    # The video trials should match the syncdf trials in outcome and timing
+    # Because inter-trial interval is variable, this can only happen if
+    # the btrial numbering is correct.
+
+
+
+    # Check that the head angle measurements match up
+    # The images shoulod match the frames
+    # And the angles should match the images/frames
+
+    return syncdf
