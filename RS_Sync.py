@@ -160,7 +160,8 @@ class RS_Syncer:
 
 def sync_b_n_v(session_name, 
     vidtrack_root='/media/hippocampus/chris/20130916_vidtrack_sessions',
-    hold_filename='../../figures/20130621_figfinal/02_hold/counts_results'):
+    hold_filename='../../figures/20130621_figfinal/02_hold/counts_results',
+    MAX_BN_SYNC_ERR=.002):
     """Sanity check syncing function.
     
     Loads data from video, behavioral, and neural. Produces one dataframe
@@ -253,7 +254,7 @@ def sync_b_n_v(session_name,
     # TIMESTAMPS should match stim_onset almost perfectly (with slight error)
     # This ensures that the neural trials and behavioral trials are lined up
     bn_err = syncdf.stim_onset - syncdf.ts
-    assert np.all(bn_err.dropna() < .001)
+    assert np.all(bn_err.dropna() < MAX_BN_SYNC_ERR)
     assert bn_err.abs().max() > 1e-4 # this could be lower, probably
 
 

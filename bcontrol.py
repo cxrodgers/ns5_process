@@ -280,7 +280,7 @@ class Bcontrol_Loader(object):
             self._vstring = 'v4'
     
     
-    def load(self, filename=None):
+    def load(self, filename=None, keep_matdata=False):
         """Loads the bcontrol matlab file.
         
         Loads the data from disk. Then, optionally, validates it. Finally,        
@@ -295,11 +295,15 @@ class Bcontrol_Loader(object):
         
         Note: for compatibility with Matlab, the stimulus numbers in
         TRIALS_INFO are numbered beginning with 1.
+        
+        If keep_matdata, then the raw data in the matfile is saved in `matdata`.
+        This is mainly useful if you want to investigate 'saved' and
+        'saved_history'.
         """
         if filename is not None: self.filename = filename
         
         # Actually load the file from disk and store variables in self.data
-        self._load()
+        self._load(keep_matdata=keep_matdata)
         
         # Optionally, run validation
         # Will fail assertion if errors, otherwise you're fine
@@ -342,7 +346,7 @@ class Bcontrol_Loader(object):
             enumerate(self.data['SOUNDS_INFO']['sound_name'])])
         return sn2name
     
-    def _load(self):
+    def _load(self, keep_matdata=False):
         """Hidden method that actually loads matfile data and stores
         
         This is for low-level code that parse the BControl `saved`,
@@ -353,6 +357,10 @@ class Bcontrol_Loader(object):
             struct_as_record=False)
         saved = matdata['saved']
         saved_history = matdata['saved_history']
+        
+        # Optionally store
+        if keep_matdata:
+            self.matdata = matdata
 
         # Load TRIALS_INFO matrix as recarray
         TRIALS_INFO = self._format_trials_info(saved)
