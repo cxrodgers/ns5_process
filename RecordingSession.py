@@ -938,11 +938,16 @@ class RecordingSession:
     
         return spikesorter
 
-    def prep_for_klusters(self, override_path=None, verbose=False, force=False):
+    def prep_for_klusters(self, override_path=None, verbose=False, force=False,
+        force_renumber=False):
         """Prepare fet and spk files for processing with Klusters.
         
         override_path : Full path to where klusters file exists.
             If None, use self.last_klusters_dir()
+            
+        force_renumber : Always increment group number.
+            If False, guesses whether to do this based on the existence
+            of a group 0.
         
         Renames to be 1-based instead of 0-based
         Creates xml file
@@ -963,6 +968,9 @@ class RecordingSession:
         else:
             print "error: cannot renumber fet and clu files"
             return
+        
+        if force_renumber:
+            renumber = True
         
         if renumber:
             # get file names and numbers
