@@ -1,5 +1,6 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
 # The purpose of this script is to load binary data from an ns5 file
 # and place the useful part of it into an OE db. The useful part is
 # determined by channels and timestamps that are loaded from disk
@@ -20,6 +21,7 @@ from __future__ import absolute_import
 # The data will be loaded and placed into the db with channel names
 
 # Contains loaders for ns5 files
+from past.utils import old_div
 from . import ns5
 import OpenElectrophy as OE
 import numpy as np
@@ -130,7 +132,7 @@ def stuff(filename, db_name, TIMESTAMPS, SHOVE_CHANNELS,
             sig = OE.AnalogSignal(signal=x,
                 channel=float(ch),
                 sampling_rate=l.header.f_samp,
-                t_start=(trial_start-pre_slice_len_samples)/l.header.f_samp,
+                t_start=old_div((trial_start-pre_slice_len_samples),l.header.f_samp),
                 id_segment=id_segment,
                 id_recordingpoint=ch2rpid[ch],
                 name=('Channel %d Trial %d' % (ch, tn)))   
@@ -161,7 +163,7 @@ def stuff(filename, db_name, TIMESTAMPS, SHOVE_CHANNELS,
             sig = OE.AnalogSignal(signal=x,
                 channel=float(ch),
                 sampling_rate=l.header.f_samp,
-                t_start=(trial_start-pre_slice_len_samples)/l.header.f_samp,
+                t_start=old_div((trial_start-pre_slice_len_samples),l.header.f_samp),
                 id_segment=id_segment,
                 name=sname)
             

@@ -1,4 +1,5 @@
 from __future__ import print_function
+from builtins import object
 import sys
 import os
 import shutil
@@ -6,7 +7,7 @@ import time
 import numpy as np
 import glob
 
-class NeuralDataGrabber:
+class NeuralDataGrabber(object):
     """Finds *.ns5 files and builds a data analysis directory."""
     def __init__(self, filename_prefix, ndaq_dir='/media/alfshr/REPO_NDAQ',
         data_analysis_dir='.', 

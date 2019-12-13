@@ -1,4 +1,6 @@
 from __future__ import print_function
+from __future__ import division
+from past.utils import old_div
 import numpy as np
 
 def slice_trials(timestamps, soft_limits=(-100,100), hard_limits=(-1,1), 
@@ -90,8 +92,8 @@ def slice_trials(timestamps, soft_limits=(-100,100), hard_limits=(-1,1),
         final_stops[collisions] = hard_stops[collisions]   
     elif meth == 'split':
         # Split the disputed territory halfway (integer division)
-        final_stops[collisions] = (hard_stops[collisions] + 
-            hard_starts[collisions + 1]) / 2
+        final_stops[collisions] = old_div((hard_stops[collisions] + 
+            hard_starts[collisions + 1]), 2)
     else:
         raise ValueError
     

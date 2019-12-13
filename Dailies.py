@@ -1,5 +1,11 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
+from builtins import zip
+from builtins import str
+from builtins import map
+from builtins import range
+from past.utils import old_div
 import numpy as np
 from .myutils import printnow
 from . import RecordingSession
@@ -18,9 +24,9 @@ def before(l, target, N=None, include_zero=True):
     la = np.asarray(l)
     idxs = np.argsort(target - la)
     if include_zero:
-        idxs2 = np.array(filter(lambda li: la[li] <= target, idxs))
+        idxs2 = np.array([li for li in idxs if la[li] <= target])
     else:
-        idxs2 = np.array(filter(lambda li: la[li] < target, idxs))
+        idxs2 = np.array([li for li in idxs if la[li] < target])
     
     if N is None:
         N = len(idxs2)
@@ -163,7 +169,7 @@ def run_tones(rs=None,
             # Guess by ns5 filetime
             ns5_stoptime = gettime(rs.get_ns5_filename())
             ns5_startime = ns5_stoptime - datetime.timedelta(seconds=
-                rs.get_ns5_loader().header.n_samples / rs.get_sampling_rate())
+                old_div(rs.get_ns5_loader().header.n_samples, rs.get_sampling_rate()))
             ns5_stoptime += datetime.timedelta(seconds=TR_NDAQ_offset_sec)
             ns5_startime += datetime.timedelta(seconds=TR_NDAQ_offset_sec)
             mintime = ns5_startime + datetime.timedelta(seconds=start_offset)
@@ -173,7 +179,7 @@ def run_tones(rs=None,
             # And sort by time
             allfiles = np.asarray(glob.glob(os.path.join(
                 bcontrol_folder, 'speakercal*.mat')))
-            bcontrol_filetimes = np.asarray(map(gettime, allfiles))
+            bcontrol_filetimes = np.asarray(list(map(gettime, allfiles)))
             sidxs = np.argsort(bcontrol_filetimes)
             bcontrol_filetimes = bcontrol_filetimes[sidxs]
             allfiles = allfiles[sidxs]
@@ -306,7 +312,7 @@ def run_tones(rs=None,
             plt.close()
         
         if break_at_spectrograms:
-            1/0
+            old_div(1,0)
 
     # put in neural db (does nothing if exists unless forced)
     printnow('putting neural data')
@@ -453,7 +459,7 @@ def run_tonetask(rs=None,
 
     # add timestamps
     if do_timestamps:
-        1/0
+        old_div(1,0)
         printnow("adding timestamps")
         # write timestamps to directory
         times, numbers = rswrap.add_timestamps_to_session(rs, verbose=True, 

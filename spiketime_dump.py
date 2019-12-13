@@ -32,6 +32,7 @@ Notice that the last line must end with a newline or carriage return.
 from __future__ import print_function
 
 
+from builtins import object
 import OpenElectrophy as OE
 import numpy as np
 import os.path
@@ -78,10 +79,10 @@ class KlustaKwikIO(object):
         return (fetfile, clufile)
     
     def _close_all_files(self):
-        for val in self._fetfiles.values():
+        for val in list(self._fetfiles.values()):
             val.close()
         
-        for val in self._clufiles.values():
+        for val in list(self._clufiles.values()):
             val.close()
     
     def _make_all_file_handles(self, neuron_list):
@@ -159,7 +160,7 @@ def plot_all_PSTHs(data_dir, PRE_STIMULUS_TIME=0, save_fig_dir=None):
     big_spiketimes = get_all_spike_times(neuron_list)
     
     # Plot PSTHs
-    for n_name, spike_time_list in big_spiketimes.items():
+    for n_name, spike_time_list in list(big_spiketimes.items()):
         plt.figure()
         plt.hist(np.array(spike_time_list) - PRE_STIMULUS_TIME, bins=100)
         plt.title(n_name)

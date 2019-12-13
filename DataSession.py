@@ -1,4 +1,10 @@
 from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import numpy as np
 import pdb
 import scipy as sp
@@ -8,7 +14,7 @@ import matplotlib.mlab as mlab
 import sys
 import os
 
-class DataSession:
+class DataSession(object):
     """A container to load and prepare data from a single experiment.
     
     """
@@ -163,9 +169,9 @@ class DataSession:
         # identify the onset too late!
         smoothed_audio_power = np.empty(audio_data.shape)
         audio_filter = np.ones((self.smoothing_filter_length,))
-        for c in xrange(smoothed_audio_power.shape[1]):
-            smoothed_audio_power[:,c] = sp.signal.lfilter(b=audio_filter,
-                a=[1], x=audio_data[:,c]**2) / self.smoothing_filter_length
+        for c in range(smoothed_audio_power.shape[1]):
+            smoothed_audio_power[:,c] = old_div(sp.signal.lfilter(b=audio_filter,
+                a=[1], x=audio_data[:,c]**2), self.smoothing_filter_length)
                 
                         
         # now calculate the automatic threshhold
@@ -249,7 +255,7 @@ class DataSession:
         for s, side in enumerate(['left', 'right']):
             f = plt.figure()
             f.suptitle(side)
-            ax = [f.add_subplot(2,2,n+1) for n in xrange(4)]            
+            ax = [f.add_subplot(2,2,n+1) for n in range(4)]            
             ax[0].set_title('Onset of sounds')
             ax[1].set_title('Offset of sounds')
             ax[2].set_title('Onset of smoothed')
@@ -362,7 +368,7 @@ class DataSession:
         
         # now find the slope of the distribution at each point
         # rise/run vs x-valuesf
-        diff_cum_dist_amp2 = np.diff(cum_dist_p2) / np.diff(cum_dist_amp2)
+        diff_cum_dist_amp2 = old_div(np.diff(cum_dist_p2), np.diff(cum_dist_amp2))
        
 
         
@@ -379,7 +385,7 @@ class DataSession:
         figure_of_merit = 1. / diff_cum_dist_amp2
         
         # normalize and turn positive
-        figure_of_merit = figure_of_merit / np.sum(figure_of_merit)
+        figure_of_merit = old_div(figure_of_merit, np.sum(figure_of_merit))
         
         
         # because the FOM was calculated with diff, it is one shorter than all
@@ -388,7 +394,7 @@ class DataSession:
         
         
         FOM_integral = np.cumsum(figure_of_merit*np.diff(cum_dist_amp2))
-        FOM_integral = FOM_integral / FOM_integral[-1]
+        FOM_integral = old_div(FOM_integral, FOM_integral[-1])
         
         
         
@@ -416,7 +422,7 @@ class DataSession:
         return 10.**(th/20.)
 
 
-class BehavingSyncer:
+class BehavingSyncer(object):
     """Syncs the audio onsets with other stimulus info in a DataSession.
     
     """
@@ -522,12 +528,12 @@ class BehavingSyncer:
         # to smoothed gaussian representation.
         try:
             LAST_TRIAL_B = np.nonzero(b_onsets - b_onsets[0] < \
-                MAX_CORR_LENGTH / SAMPLE_GAUSS)[0][-1]
+                old_div(MAX_CORR_LENGTH, SAMPLE_GAUSS))[0][-1]
         except IndexError:
             LAST_TRIAL_B = len(b_onsets) - 1
         
         # Onsets in neural data
-        n_onsets = rdl.audio_onsets / 30e3
+        n_onsets = old_div(rdl.audio_onsets, 30e3)
         # in sec
         
         
@@ -548,8 +554,8 @@ class BehavingSyncer:
         
         # gaussian filter the event trains
         nn, xn = self.gauss_event_train( \
-            (n_onsets[:LAST_TRIAL_N+1] / # The onset times 
-            ASSUMED_DILATION * # Accounting for estimated dilation
+            (old_div(n_onsets[:LAST_TRIAL_N+1], # The onset times 
+            ASSUMED_DILATION) * # Accounting for estimated dilation
             SAMPLE_GAUSS).round()) # Sampled at SAMPLE_GAUSS rate            
             
         nb, xb = self.gauss_event_train( \
@@ -638,7 +644,7 @@ class BehavingSyncer:
         """
         
         # Calculate the best delay for the second argument (xb)
-        best_offset_sec = np.float64((np.argmax(C) - len(C)/2)) / SAMPLE_GAUSS         
+        best_offset_sec = old_div(np.float64((np.argmax(C) - old_div(len(C),2))), SAMPLE_GAUSS)         
             
 
         """
@@ -649,8 +655,8 @@ class BehavingSyncer:
         """
         # apply this correction to the neural data
         stim_onsets2 = \
-            n_onsets / ASSUMED_DILATION \
-            - best_offset_sec - (nn[0] - nb[0]) / SAMPLE_GAUSS
+            old_div(n_onsets, ASSUMED_DILATION) \
+            - best_offset_sec - old_div((nn[0] - nb[0]), SAMPLE_GAUSS)
             
         
         # construct a matrix of synced times, one row for each neural stimulus
@@ -817,8 +823,8 @@ class BehavingSyncer:
         # generate normalized gaussian on n_gauss and x_gauss
         n_gauss = np.arange(-filter_truncation_width,
             filter_truncation_width + 1)
-        x_gauss = np.exp( -(np.float64(n_gauss) ** 2) / (2 * filter_std**2) )
-        x_gauss = x_gauss / np.sum(x_gauss)
+        x_gauss = np.exp( old_div(-(np.float64(n_gauss) ** 2), (2 * filter_std**2)) )
+        x_gauss = old_div(x_gauss, np.sum(x_gauss))
         
         # initialize return variables        
         n_op = np.arange(start_sample, stop_sample + 1)

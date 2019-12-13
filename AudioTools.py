@@ -1,6 +1,11 @@
 """Module providing objects to detect audio onsets."""
 from __future__ import print_function
+from __future__ import division
 
+from builtins import zip
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import numpy as np
 import scipy as sp
 import scipy.signal
@@ -54,7 +59,7 @@ def check_audio_alignment(rs=None, ns5_loader=None, timestamps=None,
         
         # Incatation such that b[0] == 1.0
         b = scipy.signal.gaussian(glen * 2, gstd, sym=False)[glen:]
-        b = b / np.sum(b**2)
+        b = old_div(b, np.sum(b**2))
 
         # Do the filtering
         try:
@@ -404,7 +409,7 @@ class OnsetDetector(object):
             # Print the total number of sounds identified.
             if self.verbose:
                 print("Identified %d sounds with average duration %0.3fs" % \
-                    (len(onsets), (offsets-onsets).mean() / self.F_SAMP))
+                    (len(onsets), old_div((offsets-onsets).mean(), self.F_SAMP)))
         
         
         # Store detected onsets
@@ -422,7 +427,7 @@ class OnsetDetector(object):
         
         # Initialize the figure and subplots.        
         f = plt.figure()
-        ax = [f.add_subplot(2,2,n+1) for n in xrange(4)]            
+        ax = [f.add_subplot(2,2,n+1) for n in range(4)]            
         ax[0].set_title('Onset of sounds')
         ax[1].set_title('Offset of sounds')
         ax[2].set_title('Onset of smoothed')
@@ -530,7 +535,7 @@ class ThreshholdAutosetter(object):
         self.plot_debugging_figures = plot_debugging_figures
         
         if input_data.size > max_data_points:
-            stride = np.ceil(input_data.size / max_data_points)
+            stride = np.ceil(old_div(input_data.size, max_data_points))
             self.input_data = input_data[::stride]
             #print "old size %d, new size %d" % (input_data.size, 
             #    self.input_data.size)
@@ -615,7 +620,7 @@ class ThreshholdAutosetterMinimalHistogram(ThreshholdAutosetter):
         
         # Calculate the part of the histogram that satisfies the minimum
         # and maximum constraints.
-        cumhist = np.float64(np.cumsum(h)) / len(self.input_data)
+        cumhist = old_div(np.float64(np.cumsum(h)), len(self.input_data))
         search_regime = \
             (cumhist > self.min_p_events) & \
             (cumhist < self.max_p_events)
@@ -633,7 +638,7 @@ class ThreshholdAutosetterMinimalHistogram(ThreshholdAutosetter):
         
         # Now a weighted average gives the index of the best threshhold. The
         # sparsest bins are weighted the most.
-        h = h / np.sum(h)
+        h = old_div(h, np.sum(h))
         weighted_best_bin = np.sum(h * np.arange(len(h)))
         best_thresh = bins[int(round(weighted_best_bin))]
         if self.plot_debugging_figures:

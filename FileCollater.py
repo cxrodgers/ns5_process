@@ -1,8 +1,9 @@
+from builtins import object
 import os
 import shutil
 import glob
 
-class FileCollater:
+class FileCollater(object):
     def __init__(self, data_dir_list, filenamestring, output_dir,
         output_file_name=None):
         self.data_dir_list = data_dir_list

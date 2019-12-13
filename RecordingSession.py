@@ -19,7 +19,13 @@ RecordingSession spec:
 """
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
 
+from builtins import str
+from builtins import zip
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import shutil
 import glob
 import os.path
@@ -85,7 +91,7 @@ def read_channel_numbers(filename, dtype=np.int):
     f.close()
     return [[dtype(c) for c in r] for r in [str.split(rr) for rr in x]]
 
-class FiltererForSpikes:
+class FiltererForSpikes(object):
     """Object that handles filtering raw data for spikes.
     
     This is intended to be created and used by RecordingSession.
@@ -129,13 +135,13 @@ class FiltererForSpikes:
     
     def _define_spike_filter_1(self):
         """Define a high-pass filter"""
-        normed_low_cut = self.low_cut / (self.fixed_sampling_rate / 2.)
+        normed_low_cut = old_div(self.low_cut, (self.fixed_sampling_rate / 2.))
         self._filter1 = self.filter_type(self.filter_ord1, 
             normed_low_cut, btype='high')
 
     def _define_spike_filter_2(self):
         """Define an optional low-pass filter for smoothing spikes"""
-        normed_high_cut = self.high_cut / (self.fixed_sampling_rate / 2.)
+        normed_high_cut = old_div(self.high_cut, (self.fixed_sampling_rate / 2.))
         self._filter2 = self.filter_type(self.filter_ord2,
             normed_high_cut, btype='low')
 
@@ -159,7 +165,7 @@ class FiltererForSpikes:
         
         return output_signal    
 
-class RecordingSession:
+class RecordingSession(object):
     """Object linked to a directory containing data for processing.
     
     Provides methods to read and write data from that directory.
@@ -441,7 +447,7 @@ class RecordingSession:
         if len(t) == len(block._segments):
             for tt, seg in zip(t, block._segments):
                 e = OE.Event(name='Timestamp', label='Timestamp')
-                e.time = (tt/self.get_sampling_rate())
+                e.time = (old_div(tt,self.get_sampling_rate()))
                 #e.save()
                 seg._events.append(e)
         else:
@@ -558,8 +564,7 @@ class RecordingSession:
             for item in sublist]
         
         # Get signals (including only ones we want to proces)
-        siglist = filter(lambda x: x.channel in flat_channel_groups,
-            old_seg._analogsignals)
+        siglist = [x for x in old_seg._analogsignals if x.channel in flat_channel_groups]
         
         # Error check length and sampling rate
         assert len(np.unique([len(sig.signal) for sig in siglist])) == 1
@@ -978,7 +983,7 @@ class RecordingSession:
             # get file names and numbers
             fns = sorted(os.listdir(kdir), reverse=True)
             if 'backup' in fns: fns.remove('backup')
-            fnums = map(lambda fn: int(fn.split('.')[-1]), fns)
+            fnums = [int(fn.split('.')[-1]) for fn in fns]
 
             # Rename each one
             for fn, fnum in zip(fns, fnums):
@@ -1102,16 +1107,16 @@ class RecordingSession:
             timestamps = self.read_timestamps()
             hard_limits_samples = [int(np.rint(x * self.get_sampling_rate())) 
                 for x in self.read_time_limits()[1]]
-            for spiketrain in spiketrain_dict.values():
+            for spiketrain in list(spiketrain_dict.values()):
                 spiketrain.add_trial_info(onsets=timestamps, 
-                    onset_trial_numbers=np.array(range(len(timestamps))),
+                    onset_trial_numbers=np.array(list(range(len(timestamps)))),
                     pre_win=-hard_limits_samples[0],
                     post_win=hard_limits_samples[1])        
         elif window == 'original':            
             t_starts, t_stops = self.calculate_trial_boundaries()
             
             # this is going to require rewriting the add_trial_info method
-            1/0
+            old_div(1,0)
         else:
             print("warning: unrecognized window")
         
@@ -1126,7 +1131,7 @@ class RecordingSession:
         """
         sts = self.get_spiketrains_centered(window='only hard')
         psths = {}
-        for groupnum, st in sts.items():
+        for groupnum, st in list(sts.items()):
             if combine_units:
                 psths[groupnum] = st.get_psth()
             else:
@@ -1134,10 +1139,10 @@ class RecordingSession:
                 uids = st.get_unique_unit_IDs()
                 if np.all(uids == np.array(None)) or len(uids) == 0:
                     print("no units, help")
-                    1/0
+                    old_div(1,0)
                 elif len(uids) == 1:
                     print("this is where code for MUA goes")
-                    1/0
+                    old_div(1,0)
                 else:                
                     for uid in uids:
                         psths[groupnum][uid] = st.get_psth(pick_units=[uid])
@@ -1287,9 +1292,9 @@ class RecordingSession:
         # Error check trial labels and times
         if len(t_nums) != len(np.unique(t_nums)):
             raise ValueError("Inconsistent trial labels")
-        if not np.all(np.argsort(t_starts) == range(len(t_starts))):
+        if not np.all(np.argsort(t_starts) == list(range(len(t_starts)))):
             raise ValueError("unsorted trial starts")
-        if not np.all(np.argsort(t_stops) == range(len(t_stops))):
+        if not np.all(np.argsort(t_stops) == list(range(len(t_stops)))):
             raise ValueError("unsorted trial stops")        
         
         # reslice and error check

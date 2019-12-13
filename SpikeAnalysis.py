@@ -21,6 +21,11 @@ Also, a containing object to remember time-parameters like f_samp, binwidth
 """
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
+from builtins import zip
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import numpy as np
 import pandas
 import glob
@@ -66,7 +71,7 @@ def get_stim_idxs_and_names():
     names, idx, groupnames = consts.comparisons(comp='sound')
     
     # this is the list of pairs of sound idxs
-    groups = map(lambda group: np.array(group).flatten(), idx)
+    groups = [np.array(group).flatten() for group in idx]
     
     sound_names = [groupname[0][:5].replace('_', '') 
         for groupname in groupnames]
@@ -97,14 +102,14 @@ def integrate_sdf_and_tdf(sdf, tdf, F_SAMP=30e3, n_bins=75, t_start=-.25,
             
             if not split_on_unit:
                 spike_times = spike_subset.adj_time
-                counts, junk = np.histogram(spike_times / F_SAMP, 
+                counts, junk = np.histogram(old_div(spike_times, F_SAMP), 
                     bins=t_vals)
                 
                 this_frame = pandas.DataFrame({
                     'counts': counts,
                     'block': [block]*len(counts),
                     'sound': [sound_name]*len(counts),
-                    'bin': range(len(counts)),
+                    'bin': list(range(len(counts))),
                     'trials': [len(trial_numbers)]*len(counts)})    
                 
                 data = data.append(this_frame, ignore_index=True)
@@ -112,14 +117,14 @@ def integrate_sdf_and_tdf(sdf, tdf, F_SAMP=30e3, n_bins=75, t_start=-.25,
                 for unit_num in np.unique(np.asarray(sdf.unit)):
                     spike_times = \
                         spike_subset[spike_subset.unit == unit_num].adj_time
-                    counts, junk = np.histogram(spike_times / F_SAMP, 
+                    counts, junk = np.histogram(old_div(spike_times, F_SAMP), 
                         bins=t_vals)
                     
                     this_frame = pandas.DataFrame({
                         'counts': counts,
                         'block': [block]*len(counts),
                         'sound': [sound_name]*len(counts),
-                        'bin': range(len(counts)),
+                        'bin': list(range(len(counts))),
                         'trials': [len(trial_numbers)]*len(counts),
                         'unit': [unit_num]*len(counts)})    
                     
@@ -127,7 +132,7 @@ def integrate_sdf_and_tdf(sdf, tdf, F_SAMP=30e3, n_bins=75, t_start=-.25,
     
     return data
 
-class SpikeServer:
+class SpikeServer(object):
     def __init__(self, base_dir, filename_filter=None, 
         SU_list_filename=None, f_samp=30e3, t_start=-.25, t_stop=.5,
         bins=75):
@@ -159,10 +164,8 @@ class SpikeServer:
         
         # Optionally filter
         if self.filename_filter is not None:
-            self.sdf_list = filter(lambda s: self.filename_filter in s, 
-                self.sdf_list)
-            self.tdf_list = filter(lambda s: self.filename_filter in s, 
-                self.tdf_list)
+            self.sdf_list = [s for s in self.sdf_list if self.filename_filter in s]
+            self.tdf_list = [s for s in self.tdf_list if self.filename_filter in s]
         
         # convert to array
         self.sdf_list = np.asarray(self.sdf_list)
@@ -170,11 +173,9 @@ class SpikeServer:
         
         
         # Extract session names and error check
-        self.session_names = np.array(map(lambda s: os.path.split(s)[1][:-7], 
-            self.sdf_list))
+        self.session_names = np.array([os.path.split(s)[1][:-7] for s in self.sdf_list])
 
-        temp = np.asarray(map(lambda s: os.path.split(s)[1][:-7], 
-            self.tdf_list))
+        temp = np.asarray([os.path.split(s)[1][:-7] for s in self.tdf_list])
         assert np.all(self.session_names == temp)
         
         if len(self.session_names) == 0:
@@ -238,8 +239,8 @@ class SpikeServer:
         
         # iterate through sessions
         df_list = []
-        iter_obj = zip(self.session_names[session_mask],
-            self.sdf_list[session_mask], self.tdf_list[session_mask])
+        iter_obj = list(zip(self.session_names[session_mask],
+            self.sdf_list[session_mask], self.tdf_list[session_mask]))
         for session_name, sdf_fn, tdf_fn in iter_obj:
             if unit_filter is not None and session_name not in unit_filter:
                 continue
@@ -329,7 +330,7 @@ class SpikeServer:
         # uses memoized property self.all_trials
         at = self.all_trials.reset_index()
         mask = np.ones(len(at), dtype=bool)
-        for key, vals in kwargs.items():
+        for key, vals in list(kwargs.items()):
             mask &= at[key].isin(vals)
         
         
@@ -356,7 +357,7 @@ class SpikeServer:
         dtypes: int64(3), object(3)
         """
 
-        fsd = self.read_flat_spikes_and_trials(stim_number_filter=range(5,13),
+        fsd = self.read_flat_spikes_and_trials(stim_number_filter=list(range(5,13)),
             include_trials=include_trials)
         replace_stim_numbers_with_names(fsd)
         
@@ -652,7 +653,7 @@ def bin_flat_spike_data(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
     rec_l = []
     for key, df in fsd.groupby(cols):
         # histogramming
-        counts, junk = np.histogram(df.adj_time / F_SAMP, bins=t_vals)
+        counts, junk = np.histogram(old_div(df.adj_time, F_SAMP), bins=t_vals)
         
         # count trials
         n_trials = None
@@ -787,7 +788,7 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0,
     session_l = np.unique(np.asarray(fdf.session))
     if len(session_l) != 1:
         print("error: must be exactly one session!")
-        1/0
+        old_div(1,0)
     session = session_l[0]
     
     
@@ -855,8 +856,8 @@ def compare_rasters(bspikes1, bspikes2, meth='ttest', p_adj_meth=None,
         mag = np.mean(bspikes1, axis=1) - np.mean(bspikes2, axis=1)
     elif mag_meth == 'PI':
         mag = (
-            (np.mean(bspikes1, axis=1) - np.mean(bspikes2, axis=1)) /
-            (np.mean(bspikes1, axis=1) + np.mean(bspikes2, axis=1)))
+            old_div((np.mean(bspikes1, axis=1) - np.mean(bspikes2, axis=1)),
+            (np.mean(bspikes1, axis=1) + np.mean(bspikes2, axis=1))))
     
     if fillval is None:
         fillval = np.nan
@@ -963,7 +964,7 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
     """
     names, mag_d, p_d = [], {}, {}
     if split_on is None:
-        g = {None: fdf}.items()
+        g = list({None: fdf}.items())
     else:
         g = fdf.groupby(split_on)
     
@@ -979,7 +980,7 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
         session_l = np.unique(np.asarray(df.session))
         if len(session_l) != 1:
             print("error: must be exactly one session!")
-            1/0
+            old_div(1,0)
         session = session_l[0]     
         names.append(key)
 
@@ -1036,7 +1037,7 @@ def count_spikes_in_slice(fsd, t_start, t_stop, split_on, split_on_filter,
         trial_counter=trial_counter, split_on_filter=split_on_filter)
 
     # Extract count
-    bsd['resp'] = bsd.counts / (t_stop - t_start) / bsd.trials
+    bsd['resp'] = old_div(old_div(bsd.counts, (t_stop - t_start)), bsd.trials)
         
     if pivot_by_sound:
         bsd = bsd.pivot_table(rows=['session', 'unit'], 
@@ -1062,7 +1063,7 @@ def get_unit_filter(ratname=None):
             SUs.ix[key]['auditory_units'])
     
     unit_filter2 = []
-    for session, session_SUs in unit_filter.items():
+    for session, session_SUs in list(unit_filter.items()):
         for unit in session_SUs:
             unit_filter2.append((session, unit))
     
@@ -1162,16 +1163,16 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         # Create axis for this plot and plot means with errorbars
         ax = f.add_subplot(2, 2, n + 1)
         if plot_all:
-            ax.plot(times, LB_counts / LB_trials.astype(np.float),
+            ax.plot(times, old_div(LB_counts, LB_trials.astype(np.float)),
                 label='LB', color='b')
-            ax.plot(times, PB_counts / PB_trials.astype(np.float),
+            ax.plot(times, old_div(PB_counts, PB_trials.astype(np.float)),
                 label='PB', color='r')
         else:
             myutils.plot_mean_trace(ax=ax, x=times, 
-                data=LB_counts / LB_trials.astype(np.float), 
+                data=old_div(LB_counts, LB_trials.astype(np.float)), 
                 label='LB', color='b', axis=1, errorbar=True)
             myutils.plot_mean_trace(ax=ax, x=times, 
-                data=PB_counts / PB_trials.astype(np.float), 
+                data=old_div(PB_counts, PB_trials.astype(np.float)), 
                 label='PB', color='r', axis=1, errorbar=True)
 
         assert(LB_counts.shape == LB_trials.shape)
@@ -1182,14 +1183,14 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         if plot_difference:
             myutils.plot_mean_trace(ax=ax, x=times,
                 data=(
-                    LB_counts / LB_trials.astype(np.float) -
-                    PB_counts / PB_trials.astype(np.float)),
+                    old_div(LB_counts, LB_trials.astype(np.float)) -
+                    old_div(PB_counts, PB_trials.astype(np.float))),
                 label='diff', color='m', axis=1, errorbar=True)
             ax.plot(times, np.zeros_like(times), 'k')
         
         if mark_significance:
-            LB_rate = LB_counts / LB_trials.astype(np.float)
-            PB_rate = PB_counts / PB_trials.astype(np.float)
+            LB_rate = old_div(LB_counts, LB_trials.astype(np.float))
+            PB_rate = old_div(PB_counts, PB_trials.astype(np.float))
             p_vals = scipy.stats.ttest_rel(LB_rate.transpose(), 
                 PB_rate.transpose())[1]
             

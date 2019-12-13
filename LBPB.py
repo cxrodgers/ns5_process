@@ -1,5 +1,7 @@
 """Various ways of dealing with stimulus names in LBPB task"""
 from __future__ import print_function
+from builtins import zip
+from builtins import range
 import numpy as np
 
 short2long = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
@@ -90,7 +92,7 @@ def block_trace_is_munged(block_trace):
     
     # check each block
     munged = False
-    for blocknum, acceptable_mods in blocknum2acceptable_mods.items():
+    for blocknum, acceptable_mods in list(blocknum2acceptable_mods.items()):
         block_trace_slc = block_trace[block_trace == blocknum]
         achieved_mods = np.mod(block_trace_slc.index, 160)
         if not np.all(np.in1d(achieved_mods, acceptable_mods)):

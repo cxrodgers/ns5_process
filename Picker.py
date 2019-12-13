@@ -1,4 +1,8 @@
 from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from past.utils import old_div
+from builtins import object
 import numpy as np
 import matplotlib.mlab as mlab
 from functools import reduce
@@ -8,7 +12,7 @@ add __getitem__ to call self._data.__getitem__
 """
 
 
-class Picker:
+class Picker(object):
     def __init__(self, data, method=1, info="A Picker"):
         self._data = data
         self.info = info
@@ -55,7 +59,7 @@ class Picker:
             if len(kwargs) > 1: print("warning: too many arguments")
             
             # get the name of the new field and the labels for each Picker
-            fieldname = kwargs.keys()[0]
+            fieldname = list(kwargs.keys())[0]
             labels = kwargs[fieldname]
             
             # create the new column and store the labels for each Picker
@@ -124,13 +128,13 @@ class Picker:
         #   {c1:[2], c2:[3]}, {c1:[2], c2:[4]}]
         f = lambda l, val: reduce(list.__add__, 
             [[ll + [xx] for xx in val] for ll in l])
-        all_combos = reduce(f, name_vals.values(), [[]])
+        all_combos = reduce(f, list(name_vals.values()), [[]])
         
         # Slice Picker once for each combo
         p = list()
         for combo in all_combos:
             # Create a filter based on each colname and its value in this combo
-            kwargs2 = dict([(k, [v]) for k, v in zip(name_vals.keys(), combo)])
+            kwargs2 = dict([(k, [v]) for k, v in zip(list(name_vals.keys()), combo)])
             
             res = self.filter(**kwargs2)
             if len(res) > 0: 
@@ -149,7 +153,7 @@ class Picker:
         
         # Use only first value for now.
         # TODO: construct all combinations
-        colname, vals = name_vals.items()[0]        
+        colname, vals = list(name_vals.items())[0]        
         
         # Slice Picker once for each
         p = dict()
@@ -177,7 +181,7 @@ class Picker:
         # Begin with all true
         mask = np.ones(self._data.shape, dtype=bool)
         
-        for colname, ok_value_list in kwargs.items():
+        for colname, ok_value_list in list(kwargs.items()):
             # OR together all records with _data['colname'] in ok_value_list
             one_col_mask = np.zeros_like(mask)
             try:
@@ -194,7 +198,7 @@ class Picker:
         # Begin with all true
         mask = np.ones(self._data.shape, dtype=bool)
         
-        for colname, ok_value_list in kwargs.items():
+        for colname, ok_value_list in list(kwargs.items()):
             # OR together all records with _data['colname'] in ok_value_list
             one_col_mask = np.zeros_like(mask)            
             for ok_value in ok_value_list:
@@ -210,7 +214,7 @@ class Picker:
                         [reduce(np.logical_or, 
                                 [self._data[colname] == ok_value
                                     for ok_value in ok_value_list]) \
-                            for colname, ok_value_list in kwargs.items()])
+                            for colname, ok_value_list in list(kwargs.items())])
         
         return mask
     
@@ -218,7 +222,7 @@ class Picker:
         # Begin with all true
         mask = np.ones(self._data.shape, dtype=bool)
 
-        for colname, ok_value_list in kwargs.items():
+        for colname, ok_value_list in list(kwargs.items()):
             # Find rows where data['colname'] is in ok_value_list
             one_col_mask = np.array([t in ok_value_list for t in \
                 self._data[colname]])            
@@ -232,7 +236,7 @@ class Picker:
         mask = reduce(np.logical_and, 
                         [np.array([t in ok_value_list for t in \
                                     self._data[colname]]) \
-                            for colname, ok_value_list in kwargs.items()])
+                            for colname, ok_value_list in list(kwargs.items())])
         
         return mask
 
@@ -253,8 +257,8 @@ if __name__ is '__main__':
     
     # Build a picker
     p = Picker(data=x, method=1)
-    pick_trials = np.arange(N_TRIALS/2)
-    pick_units = np.arange(N_UNITS/2)
+    pick_trials = np.arange(old_div(N_TRIALS,2))
+    pick_units = np.arange(old_div(N_UNITS,2))
     print(p.pick_data('spike_time', trial_id=pick_trials, unit_id=pick_units).sum())
     
     # Nest test

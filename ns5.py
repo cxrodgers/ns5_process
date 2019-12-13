@@ -1,8 +1,13 @@
 from __future__ import print_function
+from __future__ import division
+from builtins import chr
+from builtins import range
+from past.utils import old_div
+from builtins import object
 import numpy as np
 import struct
     
-class HeaderInfo:
+class HeaderInfo(object):
     """Holds information from the ns5 file header about the file."""
     pass       
 
@@ -143,7 +148,7 @@ class Loader(object):
             self.file_handle.read(4))
         self.header.Channel_ID = [struct.unpack('<I',
             self.file_handle.read(4))[0]
-            for n in xrange(self.header.Channel_Count)]
+            for n in range(self.header.Channel_Count)]
         
         # Compute total header length
         self.header.Header = 8 + 16 + 4 + 4 + \
@@ -153,10 +158,10 @@ class Loader(object):
         self.file_handle.seek(0, 2) # last byte
         self.header.file_total_size = self.file_handle.tell()
         self.header.n_samples = \
-            (self.header.file_total_size - self.header.Header) / \
-            self.header.Channel_Count / self.header.sample_width
-        self.header.Length = np.float64(self.header.n_samples) / \
-            self.header.Channel_Count
+            old_div(old_div((self.header.file_total_size - self.header.Header), \
+            self.header.Channel_Count), self.header.sample_width)
+        self.header.Length = old_div(np.float64(self.header.n_samples), \
+            self.header.Channel_Count)
         if self.header.sample_width * self.header.Channel_Count * \
             self.header.n_samples + \
             self.header.Header != self.header.file_total_size:
@@ -261,9 +266,8 @@ class Loader(object):
         
         These can then be loaded by calling get_analog_channel_as_array(chn).
         """
-        return np.array(filter(lambda x: (x > 128) and (x <= 144), 
-            self.header.Channel_ID)) - 128
+        return np.array([x for x in self.header.Channel_ID if (x > 128) and (x <= 144)]) - 128
 
     def get_neural_channel_ids(self):
-        return np.array(filter(lambda x: x <= 128, self.header.Channel_ID))
+        return np.array([x for x in self.header.Channel_ID if x <= 128])
 

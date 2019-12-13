@@ -1,5 +1,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from builtins import zip
+from builtins import object
 NS5_PROCESS_PATH = '/home/chris/ns5_process'
 import sys
 # Path to ns5_process
@@ -22,7 +24,7 @@ from . import KlustaKwikIO
 from . import SpikeTrainContainers
 
 
-class SpikeTrainEnsemble:
+class SpikeTrainEnsemble(object):
     """Stores and serves spiketrains matching various parameters.
     
     Generally this will be loaded using a dedicated object.
@@ -89,7 +91,7 @@ class SpikeTrainEnsemble:
             
             # Generate self.name2sn here
             self.name2sn = dict()
-            for k, v in self.sn2name.items():
+            for k, v in list(self.sn2name.items()):
                 self.name2sn[v] = k
             
             assert(len(self.name2sn) == len(self.sn2name)), 'key collision'
@@ -139,7 +141,7 @@ class SpikeTrainEnsemble:
         # Choose list of stimuli to use
         if stim is None:
             # Use all
-            stim = self.sn2name.keys()
+            stim = list(self.sn2name.keys())
         elif not np.iterable(stim):
             # Probably a single int
             stim = [stim]
@@ -207,7 +209,7 @@ class SpikeTrainEnsemble:
         
     def plot_all_stimuli_psths(block_list=None, bins=300):
         plt.figure()
-        for k, v in self.sn2name.items():
+        for k, v in list(self.sn2name.items()):
             ax = plt.subplot(3, 4, k)
             psth_yval_list = list()
             tval_keep = None
@@ -230,7 +232,7 @@ class SpikeTrainEnsemble:
 
 
 
-class SpikeTrainEnsembleCreator:
+class SpikeTrainEnsembleCreator(object):
     """Idiosyncratic class for loading bcontrol metadata and neural data"""
     def __init__(self, pre_win, post_win):
         self.ste = None
@@ -268,7 +270,7 @@ class SpikeTrainEnsembleCreator:
         sn2name = bcontrol_loader.get_sn2name()
         
         # Add metadata to each spiketrain and add to today
-        for tetnum, must in kkl.spiketrains.items():
+        for tetnum, must in list(kkl.spiketrains.items()):
             must.add_trial_info(metadata['stim_onset'], 
                 metadata['btrial_num'], pre_win=self.pre_win, 
                 post_win=self.post_win)        

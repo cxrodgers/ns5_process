@@ -1,4 +1,13 @@
 from __future__ import print_function
+from __future__ import division
+from future import standard_library
+standard_library.install_aliases()
+from builtins import zip
+from builtins import str
+from builtins import map
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,35 +37,35 @@ LBPB_sn2name = {k: v for k, v in zip(LBPB_sns, LBPB_stimnames)}
 
 
 def pickle_dump(obj, filename):
-    import cPickle
+    import pickle
     with file(filename, 'w') as fi:
-        cPickle.dump(obj, fi)
+        pickle.dump(obj, fi)
 
 def pickle_load(filename):
-    import cPickle
+    import pickle
     with file(filename) as fi:
-        res = cPickle.load(fi)
+        res = pickle.load(fi)
     return res
 
 def invert_linear_poly(p):
-    return np.array([1, -p[1]]).astype(np.float) / p[0]
+    return old_div(np.array([1, -p[1]]).astype(np.float), p[0])
 
 def soundsc(waveform, fs=44100, normalize=True):
     import scikits.audiolab as skab
     waveform = np.asarray(waveform)
-    n = waveform.astype(np.float) / np.abs(waveform).max()
+    n = old_div(waveform.astype(np.float), np.abs(waveform).max())
     skab.play(n, fs)
 
 
-class GaussianSmoother:
+class GaussianSmoother(object):
     def __init__(self, filter_std=5, width=10, gain=1):
         self.filter_std = float(filter_std)
         self.width = float(width)
         self.gain = float(gain)
         
         self.n = np.arange(filter_std * width, dtype=np.int)
-        self.b = np.exp( -(self.n.astype(np.float) ** 2) / (2 * filter_std**2) )
-        self.b = self.gain * self.b / np.sqrt((self.b ** 2).sum())
+        self.b = np.exp( old_div(-(self.n.astype(np.float) ** 2), (2 * filter_std**2)) )
+        self.b = old_div(self.gain * self.b, np.sqrt((self.b ** 2).sum()))
         self.a = np.array([1])
     
     def execute(self, input_data, **filter_kwargs):
@@ -67,7 +76,7 @@ class GaussianSmoother:
 
 
 
-class ToneLoader:
+class ToneLoader(object):
     
     def __init__(self, filename=None):
         self.filename = filename
@@ -86,7 +95,7 @@ class ToneLoader:
         split_fields[-1] = os.path.splitext(split_fields[-1])[0]
         
         # convert strings to integers, will crash here if parsing wrong
-        self.date_fields = map(int, split_fields)
+        self.date_fields = list(map(int, split_fields))
         
         self.datetime = datetime.datetime(*self.date_fields)
     
@@ -183,7 +192,7 @@ def parse_bitstream(bitstream, onethresh=.7 * 2**15, zerothresh=.3 * 2**15,
         word = []
         # Extract one bit at a time
         for nbit in range(nbits):
-            bitstr = bitstream[trial_start + nbit*bitlen + range(bitlen)]
+            bitstr = bitstream[trial_start + nbit*bitlen + list(range(bitlen))]
             
             # Decode as 1, 0, or unknown
             if np.sum(bitstr > onethresh) > certainty_thresh:
@@ -196,7 +205,7 @@ def parse_bitstream(bitstream, onethresh=.7 * 2**15, zerothresh=.3 * 2**15,
         
         # Fail if unknown bits occurred
         if -1 in word:
-            1/0
+            old_div(1,0)
         
         # Convert to integer
         val = np.sum(wordconv * np.array(word))
@@ -236,7 +245,7 @@ def load_waveform_from_wave_file(filename, dtype=np.float, rescale=False,
         sig = sig.flatten()
     
     if rescale:
-        sig = sig / 2**15
+        sig = old_div(sig, 2**15)
     
     if also_return_fs:
         return sig, wr.getframerate()
@@ -278,7 +287,7 @@ def wav_write(filename, signal, dtype=np.int16, rescale=True, fs=8000):
     # write to file
     ww = wave.Wave_write(filename)
     ww.setnchannels(nchannels)
-    ww.setsampwidth(np.iinfo(dtype).bits / 8)
+    ww.setsampwidth(old_div(np.iinfo(dtype).bits, 8))
     ww.setframerate(fs)
     ww.writeframes(sig)
     ww.close()
@@ -296,7 +305,7 @@ def auroc(data1, data2, return_p=False):
             return 0.5, 1.0
         else:
             return 0.5
-    AUC  = 1 - (U / (len(data1) * len(data2)))
+    AUC  = 1 - (old_div(U, (len(data1) * len(data2))))
 
     if return_p:
         return AUC, p
@@ -337,7 +346,7 @@ def utest(x, y, return_auroc=False, print_mannwhitneyu_warnings=True,
             print("warning: one argument to mannwhitneyu is empty")
         AUC = .5
     else:
-        AUC  = 1 - (U / (len(x) * len(y)))
+        AUC  = 1 - (old_div(U, (len(x) * len(y))))
     
     # Now return
     if return_auroc:
@@ -405,7 +414,7 @@ def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None,
         YY = YY[:, np.newaxis]
 
     if normalize:
-        YY = np.transpose([row / row.mean() for row in YY.transpose()])
+        YY = np.transpose([old_div(row, row.mean()) for row in YY.transpose()])
 
     YY[YY < 0.0] = 0.0
     if take_sqrt:
@@ -428,9 +437,9 @@ def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None,
 
 
 def prefidx(A, B):
-    return (A - B) / (A + B)
+    return old_div((A - B), (A + B))
 
-class Spectrogrammer:
+class Spectrogrammer(object):
     """Turns a waveform into a spectrogram"""
     def __init__(self, NFFT=256, downsample_ratio=1, new_bin_width_sec=None,
         max_freq=40e3, min_freq=5e3, Fs=200e3, noverlap=None, normalization=0,
@@ -568,7 +577,7 @@ class Spectrogrammer:
             # Set noverlap to default
             if noverlap is None:
                 # Try to do it with 50% overlap
-                noverlap = NFFT / 2
+                noverlap = old_div(NFFT, 2)
             
             # Calculate downsample_ratio to achieve this
             self.downsample_ratio = \
@@ -587,7 +596,7 @@ class Spectrogrammer:
     
         # Default value for noverlap if still None
         if noverlap is None:
-            noverlap = NFFT / 2
+            noverlap = old_div(NFFT, 2)
         self.noverlap = noverlap
         
         # store other defaults
@@ -684,9 +693,9 @@ def my_imshow(C, x=None, y=None, ax=None, cmap=plt.cm.RdBu_r, clim=None,
         ax = f.add_subplot(111)
     
     if x is None:
-        x = np.array(range(C.shape[1]))
+        x = np.array(list(range(C.shape[1])))
     if y is None:
-        y = np.array(range(C.shape[0]))
+        y = np.array(list(range(C.shape[0])))
     extent = x[0], x[-1], y[0], y[-1]
     #plt.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
     im = ax.imshow(np.flipud(C), interpolation='nearest', extent=extent, cmap=cmap)
@@ -759,7 +768,7 @@ def harmonize_clim_in_subplots(fig=None, axa=None, center_clim=False, trim=1):
 def iziprows(df):
    series = [df[col] for col in df.columns]
    series.insert(0, df.index)
-   return itertools.izip(*series)
+   return zip(*series)
 
 def list_intersection(l1, l2):
     return list(set.intersection(set(l1), set(l2)))
@@ -790,7 +799,7 @@ def std_error(data, axis=None):
     else:
         N = np.asarray(data).shape[axis]
     
-    return np.std(np.asarray(data), axis) / np.sqrt(N)
+    return old_div(np.std(np.asarray(data), axis), np.sqrt(N))
 
 def printnow(s):
     """Write string to stdout and flush immediately"""
@@ -812,12 +821,12 @@ def plot_mean_trace(ax=None, data=None, x=None, errorbar=True, axis=0, **kwargs)
         errorbar = False
         
         if x is None:
-            x = range(len(data))
+            x = list(range(len(data)))
     else:
         single_trace = False
         
         if x is None:
-            x = range(len(np.mean(data, axis=axis)))
+            x = list(range(len(np.mean(data, axis=axis))))
     
     if single_trace:
         ax.plot(x, data, **kwargs)
@@ -833,7 +842,7 @@ def plot_asterisks(pvals, ax, x=None, y=0, yd=1, levels=None):
     if levels is None:
         levels = [.05, .01, .001, .0001]
     if x is None:
-        x = range(len(pvals))
+        x = list(range(len(pvals)))
     x = np.asarray(x)
 
     already_marked = np.zeros(len(pvals), dtype=np.bool)
@@ -861,7 +870,7 @@ def times2bins_int(times, f_samp=1.0, t_start=None, t_stop=None):
     """
     f_samp = float(f_samp)
     if t_stop is None:
-        t_stop = times.max() + 1/f_samp
+        t_stop = times.max() + old_div(1,f_samp)
     if t_start is None:
         t_start = times.min()
     
@@ -904,9 +913,9 @@ def times2bins(times, f_samp=None, t_start=None, t_stop=None, bins=10,
     # optionally convert units    
     if f_samp is not None:
         if is2d:
-            times = np.array([t / f_samp for t in times])
+            times = np.array([old_div(t, f_samp) for t in times])
         else:
-            times = np.asarray(times) / f_samp
+            times = old_div(np.asarray(times), f_samp)
     
     # defaults for time
     if is2d:
@@ -1008,7 +1017,7 @@ def pick_mask(df, **kwargs):
     """Returns mask of df, s.t df[mask][key] == val for key, val in kwargs
     """
     mask = np.ones(len(df), dtype=np.bool)
-    for key, val in kwargs.items():
+    for key, val in list(kwargs.items()):
         mask = mask & (df[key] == val)
     
     return mask
@@ -1028,7 +1037,7 @@ def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, **kwargs):
         YY = YY[:, np.newaxis]
 
     if normalize:
-        YY = np.transpose([row / row.mean() for row in YY.transpose()])
+        YY = np.transpose([old_div(row, row.mean()) for row in YY.transpose()])
 
     YY[YY < 0.0] = 0.0
     if take_sqrt:
@@ -1050,11 +1059,11 @@ def polar_plot_by_sound(Y, take_sqrt=False, normalize=False, ax=None, **kwargs):
 
 def map_d(func, dic):
     """Map like func(val) for items in dic and maintain keys"""
-    return dict([(key, func(val)) for key, val in dic.items()])
+    return dict([(key, func(val)) for key, val in list(dic.items())])
 
 def filter_d(cond, dic):
     """Filter by cond(val) for items in dic and maintain keys"""
-    return dict([(key, val) for key, val in dic.items() if cond(val)])
+    return dict([(key, val) for key, val in list(dic.items()) if cond(val)])
     
 
 def getstarted():
@@ -1110,10 +1119,10 @@ def load_channel_mat(filename, return_dataframe=True, dump_filler=True):
     # Here is the spikes from each trial
     # The purpose of the extra `flatten` is to ensure that arrays containing
     # 0 or 1 spike time are always 1-dimensional instead of 0-dimensional
-    spike_times = map(lambda t: t.item()[2]['latency'].item().flatten(), trial) 
+    spike_times = [t.item()[2]['latency'].item().flatten() for t in trial] 
 
     # Here is the information about each trial
-    trials_info = np.array(map(lambda t: t.item()[3], trial))
+    trials_info = np.array([t.item()[3] for t in trial])
     
     # Remove trials containing nothing useful, ie delay 55ms or atten 70
     if dump_filler:
@@ -1339,7 +1348,7 @@ def bootstrap_main_effect2(data, n_boots=1000, combo_meth='subtract_separately',
     N_group1 = np.sum([len(category[1]) for category in data])
     N_group = np.rint(np.mean([N_group0, N_group1])).astype(np.int)
     N_categories = len(data)
-    N_draws_per_group = np.ceil(N_group / N_categories).astype(np.int)
+    N_draws_per_group = np.ceil(old_div(N_group, N_categories)).astype(np.int)
     
     # Which categories to draw from
     res_l = []
@@ -1379,7 +1388,7 @@ def bootstrap_main_effect2(data, n_boots=1000, combo_meth='subtract_separately',
 
             
         else:
-            1/0
+            old_div(1,0)
         res_l.append(res)
     
     return np.asarray(res_l)

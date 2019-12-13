@@ -2,7 +2,12 @@
 
 Move this to kkpandas.kkrs as it does not use any ns5 or OE 
 """
+from __future__ import division
 
+from builtins import zip
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import numpy as np
 from ns5_process import bcontrol
 import kkpandas
@@ -13,7 +18,7 @@ import collections
 import pandas
 import vidtrack, my, my.dataload
 
-class RS_Syncer:
+class RS_Syncer(object):
     """Defines preferred interface for accessing trial numbers and times
     
     This defines the "right" way to access the onset times and trial numbers
@@ -78,7 +83,7 @@ class RS_Syncer:
                 os.path.join(self.rs.full_path, 'TRIAL_NUMBERS'), dtype=np.int)
         except IOError:
             # Load from bcontrol in case syncing hasn't happened yet
-            1/0
+            old_div(1,0)
     
     def _set_sync(self):
         """Defines syncing function between timebases
@@ -90,10 +95,9 @@ class RS_Syncer:
                 os.path.join(self.rs.full_path, 'SYNC_B2N'), dtype=np.float)
         except IOError:
             # Auto sync? Leave None?
-            1/0
+            old_div(1,0)
     
-        self._sync_poly_inv = np.array([1., -self._sync_poly[1]]) \
-            / self._sync_poly[0]
+        self._sync_poly_inv = old_div(np.array([1., -self._sync_poly[1]]), self._sync_poly[0])
         
     def b2n(self, bt):
         return np.polyval(self._sync_poly, bt)
@@ -122,7 +126,7 @@ class RS_Syncer:
             # Should load them from bcontrol file
             # Then the syncing functions can use this same accessor method
             # Code not written yet
-            1/0
+            old_div(1,0)
         
         # Find the time of each trial change
         # For speed, first find the events matching the trial change string
@@ -144,12 +148,12 @@ class RS_Syncer:
         self.bnum2trialstart_bbase = collections.defaultdict(lambda: None)
         
         assert len(self.btrial_numbers) == len(self.trialstart_nbase)
-        self.bnum2trialstart_nbase.update(zip(
-            self.btrial_numbers, self.trialstart_nbase))
+        self.bnum2trialstart_nbase.update(list(zip(
+            self.btrial_numbers, self.trialstart_nbase)))
         
         assert len(self.btrial_numbers) == len(self.trialstart_bbase)
-        self.bnum2trialstart_bbase.update(zip(
-            self.btrial_numbers, self.trialstart_bbase))
+        self.bnum2trialstart_bbase.update(list(zip(
+            self.btrial_numbers, self.trialstart_bbase)))
 
 
 
@@ -191,8 +195,7 @@ def sync_b_n_v(session_name,
     # Use a representative ulabel from the hold analysis
     # Should probably prioritize sigmod ulabels
     hold_counts_results = pandas.load(hold_filename)
-    repres_ulabel = filter(lambda s: s.startswith(session_name), 
-        hold_counts_results.index)[0]
+    repres_ulabel = [s for s in hold_counts_results.index if s.startswith(session_name)][0]
     hold_counts_result = hold_counts_results.ix[repres_ulabel]
 
     # Raw spikes
@@ -214,7 +217,7 @@ def sync_b_n_v(session_name,
     # Some of this logic could go into RS_Sync
     assert len(rss.btrial_numbers) == len(rs.read_timestamps())
     syncdf['ts'] = np.nan
-    syncdf['ts'][rss.btrial_numbers] = rs.read_timestamps() / 30e3
+    syncdf['ts'][rss.btrial_numbers] = old_div(rs.read_timestamps(), 30e3)
     syncdf['ntrial'] = -1
     syncdf['ntrial'][rss.btrial_numbers] = list(range(len(rss.btrial_numbers)))
 

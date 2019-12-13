@@ -32,6 +32,8 @@ Notice that the last line must end with a newline or carriage return.
 from __future__ import print_function
 from __future__ import absolute_import
 
+from builtins import range
+from builtins import object
 import numpy as np
 import glob
 import matplotlib.mlab as mlab
@@ -83,10 +85,10 @@ class KlustaKwikIO(object):
         return (fetfile, clufile)
     
     def _close_all_files(self):
-        for val in self._fetfiles.values():
+        for val in list(self._fetfiles.values()):
             val.close()
         
-        for val in self._clufiles.values():
+        for val in list(self._clufiles.values()):
             val.close()
     
     def _make_all_file_handles(self, neuron_list):
@@ -175,7 +177,7 @@ class KK_loader(object):
         # Load spike times from each tetrode and store in a dict, keyed
         # by tetrode number
         self.spiketrains = dict()
-        for ntet in self._fetfiles.keys():
+        for ntet in list(self._fetfiles.keys()):
             fetfile = self._fetfiles[ntet]
             clufile = self._clufiles[ntet]            
             spks = self._load_spike_times(fetfile)
@@ -233,7 +235,7 @@ class KK_loader(object):
         
         # Each subsequent line consists of nbFeatures values, followed by
         # the spike time in samples.
-        names = ['feat%d' % n for n in xrange(nbFeatures - 1)]
+        names = ['feat%d' % n for n in range(nbFeatures - 1)]
         names.append('spike_time')
         
         # Load into recarray

@@ -1,5 +1,7 @@
 """Module containing objects to sync data"""
 from __future__ import absolute_import
+from __future__ import division
+from past.utils import old_div
 import numpy as np
 import scipy.signal
 from . import AudioTools
@@ -82,11 +84,11 @@ def find_audio_onsets_by_bout(rs=None, raudio=None, stop_at=None,
     
     # Find bout starts
     bout_starts = find_threshold_crossings(
-        dsmoothed, threshold, bout_refractory/dsratio)
+        dsmoothed, threshold, old_div(bout_refractory,dsratio))
     
     # Subslice to get tone starts
     starts = subslice(bout_starts, 0, within_bout_num=tones_per_bout, 
-        within_bout_inter=(inter_tone / dsratio))
+        within_bout_inter=(old_div(inter_tone, dsratio)))
     
     return starts, dsmoothed, threshold
 
@@ -96,7 +98,7 @@ def smooth(signal, gstd=100, glen=None):
     if glen is None:
         glen = int(2.5 * gstd)
     gb = scipy.signal.gaussian(glen * 2 , gstd, sym=False)[glen:]
-    gb = gb / np.sum(gb ** 2)
+    gb = old_div(gb, np.sum(gb ** 2))
     signal2 = scipy.signal.filtfilt(gb, [1], signal ** 2)
     
     return signal2
@@ -137,10 +139,10 @@ def highpass_smooth_threshold(raudio, dsratio=100):
     Doesn't work for targets near Nyquist
     """
     # Remove drift
-    b, a = scipy.signal.butter(2, 500/15e3, btype='high')
+    b, a = scipy.signal.butter(2, old_div(500,15e3), btype='high')
     fraudio = scipy.signal.filtfilt(b, a, raudio)
     
     smoothed = smooth(fraudio)
     smoothed = smoothed[::dsratio]
     
-    return find_threshold_crossings(smoothed, threshold=10e3, refractory=6e3/dsratio)
+    return find_threshold_crossings(smoothed, threshold=10e3, refractory=old_div(6e3,dsratio))

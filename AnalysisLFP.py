@@ -1,5 +1,8 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from builtins import zip
+from builtins import range
+from builtins import object
 import numpy as np
 import matplotlib.pyplot as plt
 import os.path
@@ -11,7 +14,7 @@ from matplotlib import mlab
 import scipy.stats
 
 
-class MultiServeLFP:
+class MultiServeLFP(object):
     def __init__(self, lfp_dir_list=None, tdf_filename_list=None, filter_list=None):
         self.lfp_dir_list = lfp_dir_list
         self.tdf_filename_list = tdf_filename_list
@@ -59,7 +62,7 @@ class MultiServeLFP:
         # Optionally filter by keywork, eg tetrode=[2]
         if len(kwargs) > 0:
             lfpf = self.lfp.copy()
-            for key, val in kwargs.items():
+            for key, val in list(kwargs.items()):
                 lfpf = lfpf[lfpf[key].isin(val)]
         else:
             lfpf = self.lfp
@@ -81,7 +84,7 @@ class MultiServeLFP:
                     ddf = pandas.DataFrame()
                     res[sound][block] = np.array([
                         df.ix[val][self.bins].mean(axis=0)
-                        for val in g2.groups.values()])
+                        for val in list(g2.groups.values())])
                 
                 # Optional detrend
                 if detrend == 'baseline':
@@ -103,7 +106,7 @@ class MultiServeLFP:
             return self._lfp
     
 
-class SingleServeLFP:
+class SingleServeLFP(object):
     def __init__(self, dirname=None, filename_filter=None, tdf_file=None,
         split_on_filter=None):
         self.dirname = dirname
@@ -162,7 +165,7 @@ class SingleServeLFP:
     def read(self, return_t=False, include_trials='hits', stim_number_filter=None):
         """Return DataFrame containing all LFP from this session"""
         if stim_number_filter is None:
-            stim_number_filter = range(5, 13)
+            stim_number_filter = list(range(5, 13))
         
         # Search directory for files
         self.refresh_files()
@@ -226,7 +229,7 @@ class SingleServeLFP:
         # Optionally filter by keywork, eg tetrode=[2]
         if len(kwargs) > 0:
             lfpf = self.lfp.copy()
-            for key, val in kwargs.items():
+            for key, val in list(kwargs.items()):
                 lfpf = lfpf[lfpf[key].isin(val)]
         else:
             lfpf = self.lfp
@@ -248,7 +251,7 @@ class SingleServeLFP:
                     ddf = pandas.DataFrame()
                     res[sound][block] = np.array([
                         df.ix[val][self.bins].mean(axis=0)
-                        for val in g2.groups.values()])
+                        for val in list(g2.groups.values())])
                 
                 # Optional detrend
                 if detrend == 'baseline':
@@ -314,7 +317,7 @@ def get_tetrode_filter(ratname=None):
     
     if ratname is None:
         l = []
-        for r in fn_d.keys():
+        for r in list(fn_d.keys()):
             l += get_tetrode_filter(r)        
         return l
 

@@ -1,5 +1,10 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
+from builtins import zip
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import numpy as np
 import glob
 import os.path
@@ -12,9 +17,9 @@ from . import myutils
 
 def my_imshow(C, x=None, y=None, ax=None):
     if x is None:
-        x = range(C.shape[1])
+        x = list(range(C.shape[1]))
     if y is None:
-        y = range(C.shape[0])
+        y = list(range(C.shape[0]))
     extent = x[0], x[-1], y[0], y[-1]
     
     if ax is None:
@@ -87,13 +92,13 @@ def clean_up_stimulus(whole_stimulus, silence_value='min_row', z_score=True):
         for n in range(cleaned_stimulus_a.shape[0]):
             s = np.std(cleaned_stimulus_a[n, :])
             if s < 10**-6: print("warning, std too small")
-            cleaned_stimulus_a[n, :] = (
-                cleaned_stimulus_a[n, :] - cleaned_stimulus_a[n, :].mean()) / \
-                np.std(cleaned_stimulus_a[n, :])
+            cleaned_stimulus_a[n, :] = old_div((
+                cleaned_stimulus_a[n, :] - cleaned_stimulus_a[n, :].mean()), \
+                np.std(cleaned_stimulus_a[n, :]))
     
     return cleaned_stimulus_a
 
-class STRF_experiment:
+class STRF_experiment(object):
     """Class that holds links to stimulus and response files"""
     stim_file_label = 'stim'
     spike_file_label = 'spike'
@@ -319,7 +324,7 @@ class STRF_experiment:
             st = []
             for line in s:
                 tmp = myutils.parse_space_sep(line, dtype=np.float)
-                tmp = np.asarray(tmp) / sampling_rate
+                tmp = old_div(np.asarray(tmp), sampling_rate)
                 if truncate:
                     tmp = tmp[tmp <= truncate]
                 else:
@@ -481,14 +486,14 @@ def clean_up_stimulus(whole_stimulus, silence_value='min_row', z_score=True):
         for n in range(cleaned_stimulus_a.shape[0]):
             s = np.std(cleaned_stimulus_a[n, :])
             if s < 10**-6: print("warning, std too small")
-            cleaned_stimulus_a[n, :] = (
-                cleaned_stimulus_a[n, :] - cleaned_stimulus_a[n, :].mean()) / \
-                np.std(cleaned_stimulus_a[n, :])
+            cleaned_stimulus_a[n, :] = old_div((
+                cleaned_stimulus_a[n, :] - cleaned_stimulus_a[n, :].mean()), \
+                np.std(cleaned_stimulus_a[n, :]))
     
     return cleaned_stimulus_a
 
 
-class DirectFitter:
+class DirectFitter(object):
     """Calculates STRF for response matrix and stimulus matrix"""
     def __init__(self, X=None, Y=None):
         """New fitter
@@ -511,8 +516,8 @@ class DirectFitter:
         
         Therefore the STA is given by np.dot(X.transpose(), Y) / Y.sum().
         """
-        return np.dot(self.X.transpose(), self.Y).astype(np.float) / \
-            self.Y.sum()
+        return old_div(np.dot(self.X.transpose(), self.Y).astype(np.float), \
+            self.Y.sum())
         #X = X - X.mean(axis=0)[newaxis, :] # each feature has zero-mean over time
         #X = X - X.mean(axis=1)[:, newaxis] # each datapoint has zero-mean over features
 

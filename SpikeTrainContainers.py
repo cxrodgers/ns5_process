@@ -1,5 +1,9 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
+from builtins import zip
+from past.utils import old_div
+from builtins import object
 import numpy as np
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -335,18 +339,18 @@ class PSTH(object):
             # Convert range to multiples of binwidth, and calculate nbins
             self.range = list(self.range)
             self.range[0] = \
-                int(np.rint(np.floor(self.range[0] / self.F_SAMP / self.binwidth) * \
+                int(np.rint(np.floor(old_div(old_div(self.range[0], self.F_SAMP), self.binwidth)) * \
                 self.F_SAMP * self.binwidth))
             self.range[1] = \
-                int(np.rint(np.ceil(self.range[1] / self.F_SAMP / self.binwidth) * \
+                int(np.rint(np.ceil(old_div(old_div(self.range[1], self.F_SAMP), self.binwidth)) * \
                 self.F_SAMP * self.binwidth))
-            self.nbins = int(np.rint((self.range[1] - self.range[0]) / \
-                (self.binwidth * self.F_SAMP)))
+            self.nbins = int(np.rint(old_div((self.range[1] - self.range[0]), \
+                (self.binwidth * self.F_SAMP))))
 
         self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
             bins=self.nbins, range=self.range)
         self._bin_edges = bin_edges
-        self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
+        self._t = old_div((bin_edges[:-1] + 0.5 * np.diff(bin_edges)), self.F_SAMP)
     
         if self.t_starts is not None:
             # Count how many trials are included in each bin
@@ -373,15 +377,15 @@ class PSTH(object):
             if self.t_starts is not None:
                 print("warning: you should probably call with style='elastic'")
         elif style == 'elastic':
-            trial_count = self._trials.astype(np.float) / np.diff(self._bin_edges)
+            trial_count = old_div(self._trials.astype(np.float), np.diff(self._bin_edges))
         else:
             raise ValueError
         
         # Return in correct units
         if units is 'spikes':
-            return (self._t, self._counts / trial_count)
+            return (self._t, old_div(self._counts, trial_count))
         elif (units is 'hz' or units is 'Hz'):
-            yval = self._counts / trial_count / self.bin_width()
+            yval = old_div(old_div(self._counts, trial_count), self.bin_width())
             return (self._t, yval) 
        
     def plot(self, ax=None, units='spikes', style='rigid'):
@@ -473,21 +477,21 @@ class PSTH(object):
         return np.median(d)
 
 from . import Picker
-class SpikePicker:
+class SpikePicker(object):
     def __init__(self, spiketrains, f_samp):
-        N_RECORDS = sum([len(st.spike_times) for st in spiketrains.values()])
+        N_RECORDS = sum([len(st.spike_times) for st in list(spiketrains.values())])
         x = np.recarray(shape=(N_RECORDS,),
             dtype=[('unit', np.int32), ('trial', np.int32), 
                 ('tetrode', np.int32), ('spike_time', np.int),
                 ('adj_spike_time', np.int), ('trial_time', np.int)])
         
         x['spike_time'] = np.concatenate([
-            st.spike_times for st in spiketrains.values()])
+            st.spike_times for st in list(spiketrains.values())])
         x['trial'] = -1 # for now
         x['unit'] = np.concatenate([
-            st.unit_IDs for st in spiketrains.values()])
+            st.unit_IDs for st in list(spiketrains.values())])
         x['tetrode'] = np.concatenate([tetn * np.ones_like(st.spike_times) \
-            for tetn, st in spiketrains.items()])
+            for tetn, st in list(spiketrains.items())])
         
         self._p = Picker.Picker(data=x)
         
@@ -560,7 +564,7 @@ class SpikePicker:
         spike_times = self.pick_spikes(adjusted, **kwargs)
         
         # Figure out how many trials were requested
-        if 'trial' not in kwargs.keys():
+        if 'trial' not in list(kwargs.keys()):
             # No trial filtering, use all trial numbers
             t_num = self.trialPicker['t_num']            
         else:

@@ -1,5 +1,7 @@
 from __future__ import absolute_import
+from __future__ import division
 # This file loads binary data and finds timestamps of audio events
+from past.utils import old_div
 import numpy as np
 from . import ns5
 from . import AudioTools
@@ -41,7 +43,7 @@ def run(filename, manual_threshhold=None, audio_channels=None,
         import matplotlib.pyplot as plt
         plt.plot(audio_data.transpose())
         plt.show()
-        1/0
+        old_div(1,0)
 
     # Truncate artefacts
     if truncate_data is not None:

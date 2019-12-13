@@ -10,7 +10,12 @@ Wraps RecordingSession
 """
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
 
+from builtins import str
+from builtins import range
+from past.utils import old_div
+from builtins import object
 import os
 import time
 from . import RecordingSession
@@ -104,7 +109,7 @@ def link_file(filename, final_dir, verbose=False, dryrun=False, force_run=True):
         os.system(sys_call_str)
 
 
-class RecordingSessionMaker:
+class RecordingSessionMaker(object):
     """Create a RecordingSession and add data to it.
     
     This class handles experiment-specific crap, like linking the data
@@ -460,7 +465,7 @@ def plot_all_spike_psths_by_stim(rs, savefig=None, t_start=None, t_stop=None,
                 "cannot find unit %d in spike times, try re-dumping")
         f = plt.figure(figsize=(16,12))
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
-        for sn, name in sn2names.items(): 
+        for sn, name in list(sn2names.items()): 
             if sn not in sn2trials:
                 continue
             ax = f.add_subplot(3, 4, sn)
@@ -525,7 +530,7 @@ def plot_MUA_by_stim(rs, savefig=None, t_start=None, t_stop=None,
         
         f = plt.figure(figsize=(16,12))
         #ymin, ymax, tmin, tmax = 0., 0., -np.inf, np.inf
-        for sn, name in sn2names.items(): 
+        for sn, name in list(sn2names.items()): 
             if sn not in sn2trials or len(sn2trials[sn]) == 0:
                 continue
             ax = f.add_subplot(3, 4, sn)
@@ -899,9 +904,8 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
             print(vmsg)
 
         # check that time syncs up    
-        stretch_factors = np.diff(
-            trial_start_times / rs.get_sampling_rate()) \
-            / np.diff(btrial_starts)
+        stretch_factors = old_div(np.diff(
+            old_div(trial_start_times, rs.get_sampling_rate())), np.diff(btrial_starts))
         if np.max(np.abs(stretch_factors - assumed_dilation)) > .001:
             print("WARNING: dilation is off, suspect sync error")
         
@@ -1056,7 +1060,7 @@ def calculate_timestamps_from_digital(filename, trial_number_channel=16,
             print("found trials from %d to %d" % (
                 trial_numbers[0], trial_numbers[-1]))
         if np.any((trial_numbers - trial_numbers[0]) != 
-            range(len(trial_numbers))):
+            list(range(len(trial_numbers)))):
             print("warning: trial numbers not ordered correctly")
         
         # Account for truncation
@@ -1290,7 +1294,7 @@ def write_b2n_sync_file(rs, btimes=None, ntimes=None, peh=None,
         btimes = np.asarray(btimes)
     
     if ntimes is None:
-        ntimes = rs.read_timestamps() / rs.get_sampling_rate()
+        ntimes = old_div(rs.read_timestamps(), rs.get_sampling_rate())
     
     # fit
     b2n = np.polyfit(btimes, ntimes, deg=1)
@@ -1584,7 +1588,7 @@ def generate_speakercal_timestamps(bout_onsets, n_tones=200, inter_tone=6000,
     for bout_onset in bout_onsets:
         # Length n_tones : offset introduced by the package
         package_offsets = package_offset * np.array(
-            [n_tone / tones_per_package for n_tone in range(n_tones)])
+            [old_div(n_tone, tones_per_package) for n_tone in range(n_tones)])
         
         # Length n_tones : offset introduced by the ITI
         tone_offsets = np.arange(n_tones, dtype=np.int) * inter_tone

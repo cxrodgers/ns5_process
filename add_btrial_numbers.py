@@ -4,6 +4,8 @@ from __future__ import absolute_import
 # on 1-27-11) with the original ns5 file. Put the stim numbers into
 # the database.
 
+from builtins import zip
+from builtins import object
 from . import DataSession
 import numpy as np
 import os.path
@@ -36,10 +38,10 @@ def run(control_params, auto_validate=True, v2_behavior=False):
     b_onsets = bcl.data['onsets']
 
     # Try to convert this stuff into the format expected by the syncer
-    class fake_bcl:
+    class fake_bcl(object):
         def __init__(self, onsets):
             self.audio_onsets = onsets
-    class fake_rdl:
+    class fake_rdl(object):
         def __init__(self, onsets):
             self.audio_onsets = onsets
 

@@ -1,4 +1,5 @@
 from __future__ import print_function
+from __future__ import division
 # The purpose of this script is to re-reference each neural channel
 # in the database. We use a common-average reference (CAR).
 # Potentially I might want to go ahead and high pass filter at this
@@ -14,6 +15,7 @@ from __future__ import print_function
 # We'll also add the tetrode-specific information (trodness, group)
 # at this point.
 
+from past.utils import old_div
 import OpenElectrophy as OE
 import numpy as np
 from os import path
@@ -148,7 +150,7 @@ def run(db_name, CAR=True, smooth_spikes=True):
         # Put the CAR into the new block
         # not assigning channel, t_start, sample_rate, maybe more?
         car_sig = OE.AnalogSignal(name='CAR',
-            signal=running_car/n_summed,
+            signal=old_div(running_car,n_summed),
             info='CAR calculated from good channels for this segment',
             id_segment=id_segment)    
         car_sig.save()

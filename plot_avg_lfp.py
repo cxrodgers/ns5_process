@@ -1,4 +1,7 @@
 from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from past.utils import old_div
 import OpenElectrophy as OE
 import numpy as np
 import matplotlib.pyplot as plt
@@ -39,11 +42,11 @@ def run(db_name, save_fig_name=None):
         for id_sig in id_sigs: 
             sig = OE.AnalogSignal().load(id_sig)
             avgsig = avgsig + sig.signal
-        avgsig = avgsig / len(id_sigs)
+        avgsig = old_div(avgsig, len(id_sigs))
 
         # Plot the average signal of this recording point
         ax = f.add_subplot(4,4,n+1)
-        ax.plot(np.arange(len(avgsig)) / sig.sampling_rate * 1000, avgsig)
+        ax.plot(old_div(np.arange(len(avgsig)), sig.sampling_rate) * 1000, avgsig)
         #ax.set_ylim((-250, 250))
         ax.set_title(tt)
 

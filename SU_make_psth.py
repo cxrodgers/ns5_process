@@ -1,9 +1,13 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
 # I think this can be broken into data container (MultipleUnitSpikeTrain),
 # loading into this container (KK_loader), display object (PSTH),
 # and initializing display object from bcontrol (various helper functions)
 
+from builtins import range
+from past.utils import old_div
+from builtins import object
 import numpy as np
 import os.path
 import glob
@@ -232,7 +236,7 @@ class KK_loader(object):
         # Load spike times from each tetrode and store in a dict, keyed
         # by tetrode number
         self.spiketrains = dict()
-        for ntet in self._fetfiles.keys():
+        for ntet in list(self._fetfiles.keys()):
             fetfile = self._fetfiles[ntet]
             clufile = self._clufiles[ntet]            
             spks = self._load_spike_times(fetfile)
@@ -282,7 +286,7 @@ class KK_loader(object):
         
         # Each subsequent line consists of nbFeatures values, followed by
         # the spike time in samples.
-        names = ['feat%d' % n for n in xrange(nbFeatures)]
+        names = ['feat%d' % n for n in range(nbFeatures)]
         names.append('spike_time')
         
         # Load into recarray
@@ -344,7 +348,7 @@ class PSTH(object):
         else:
             self._counts, bin_edges = np.histogram(self.adjusted_spike_times,
                 bins=self.nbins, range=self.range)
-            self._t = (bin_edges[:-1] + 0.5 * np.diff(bin_edges)) / self.F_SAMP
+            self._t = old_div((bin_edges[:-1] + 0.5 * np.diff(bin_edges)), self.F_SAMP)
     
     def plot(self, ax=None):
         if len(self._t) == 0:
@@ -370,8 +374,8 @@ class PSTH(object):
         """Return total count in epoch specified by tuple of bins"""
         n = self._counts[epoch[0]:epoch[1]+1].sum()
         if norm_to_spont:
-            ns = self.spont_rate() * (epoch[1] - epoch[0] + 1) * \
-                (self._t[-1] - self._t[0]) / self.nbins
+            ns = old_div(self.spont_rate() * (epoch[1] - epoch[0] + 1) * \
+                (self._t[-1] - self._t[0]), self.nbins)
         else:
             ns = 0.
         
@@ -381,8 +385,8 @@ class PSTH(object):
         return np.argmin(np.abs(self._t - t))
     
     def spont_rate(self):
-        return self.time_slice((0, self.closest_bin(0)), 
-            norm_to_spont=False) / -self._t[0]
+        return old_div(self.time_slice((0, self.closest_bin(0)), 
+            norm_to_spont=False), -self._t[0])
 
 
 
@@ -401,7 +405,7 @@ def calc_psth(st):
 def MUA_PSTH_vs_sn2(spiketrain, sn2trials, sn2name, nbins=300):
     print("DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY")
     tet_psth_vs_sn = dict()
-    for sn, trial_list in sn2trials.items():
+    for sn, trial_list in list(sn2trials.items()):
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list)
         tet_psth_vs_sn[sn] = PSTH(keepspikes, len(trial_list), nbins=nbins)
     return tet_psth_vs_sn    
@@ -409,7 +413,7 @@ def MUA_PSTH_vs_sn2(spiketrain, sn2trials, sn2name, nbins=300):
 def SUA_PSTH_vs_sn2(spiketrain, uid, sn2trials, sn2name, nbins=300, range=None):
     print("DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY")
     uu_psth_vs_sn = dict()
-    for sn, trial_list in sn2trials.items():
+    for sn, trial_list in list(sn2trials.items()):
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list, pick_units=[uid])
         uu_psth_vs_sn[sn] = PSTH(keepspikes, len(trial_list), nbins=nbins, range=range)
     return uu_psth_vs_sn    
@@ -421,7 +425,7 @@ def MUA_PSTH_vs_sn(spiketrain, sn2trials, sn2name, savename=None):
     and trials, plots an MUA PSTH."""
     plt.figure()            
     #plt.suptitle('T%d:MUA' % (tetn,))    
-    for sn, trial_list in sn2trials.items():
+    for sn, trial_list in list(sn2trials.items()):
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list)
         h, t = calc_psth(keepspikes)
         plt.subplot(3, 4, sn)
@@ -516,7 +520,7 @@ def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000,
     # Calculate each tetrode's data separately
     todays_psths = dict()
     todays_sorted_psths = dict()
-    for tetn, spiketrain in kkl.spiketrains.items():
+    for tetn, spiketrain in list(kkl.spiketrains.items()):
         todays_sorted_psths[tetn] = dict()
         
         # Link the spike times to the trials from whence they came
@@ -543,7 +547,7 @@ def execute(data_dir, pre_stim_samples=45000, post_stim_samples=45000,
             
             # And plot
             f = plt.figure()
-            for sn in todays_sorted_psths[tetn][uid].keys():
+            for sn in list(todays_sorted_psths[tetn][uid].keys()):
                 ax = plt.subplot(3, 4, sn)
                 todays_sorted_psths[tetn][uid][sn].plot(ax=ax)
                 plt.title(sn2name[sn])

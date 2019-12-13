@@ -1,4 +1,7 @@
 from __future__ import print_function
+from builtins import str
+from builtins import range
+from builtins import object
 import numpy as np
 import os.path
 import scipy.io
@@ -15,7 +18,7 @@ class LBPB_constants(object):
                  5: u'le_hi_pc', 6: u'ri_hi_pc', 7: u'le_lo_pc', 8: u'ri_lo_pc',
                  9: u'le_hi_lc', 10: u'ri_hi_lc', 11: u'le_lo_lc', 12: u'ri_lo_lc'}            
         self.sn2name = sn2name
-        self.name2sn = dict([(val, key) for key, val in sn2name.items()])
+        self.name2sn = dict([(val, key) for key, val in list(sn2name.items())])
         
         self.sn2shortname = \
             {1: u'lo', 2: u'hi', 3: u'le', 4: u'ri',
@@ -370,7 +373,7 @@ class Bcontrol_Loader(object):
         CONSTS = saved.__dict__[('TwoAltChoice_%s_CONSTS' % self._vstring)].\
             __dict__.copy()
         CONSTS.pop('_fieldnames')
-        for (k,v) in CONSTS.items():
+        for (k,v) in list(CONSTS.items()):
             try:
                 # This will work if v is a 0d array (EPD loadmat)
                 CONSTS[k] = v.flatten()[0]
@@ -418,10 +421,10 @@ class Bcontrol_Loader(object):
         d2.pop('_fieldnames')   
         try:
             # This will work if loadmat returns 0d arrays (EPD)
-            d3 = dict((v.flatten()[0], k) for k, v in d2.iteritems())
+            d3 = dict((v.flatten()[0], k) for k, v in d2.items())
         except AttributeError:
             # With other versions, v is an int
-            d3 = dict((v, k) for k, v in d2.iteritems())
+            d3 = dict((v, k) for k, v in d2.items())
 
         # Check that all the columns are named
         if len(d3) != len(d2):
@@ -430,7 +433,7 @@ class Bcontrol_Loader(object):
         # Write the column names in order
         # Will error here if the column names are messed up
         # Note inherent conversion from 1-based to 0-based indexing
-        field_names = [d3[col] for col in xrange(1,1+len(d3))]
+        field_names = [d3[col] for col in range(1,1+len(d3))]
         TRIALS_INFO = np.rec.fromrecords(\
             saved.__dict__[('TwoAltChoice_%s_TRIALS_INFO' % self._vstring)],
             titles=field_names)
@@ -663,7 +666,7 @@ def dictify_mat_struct(mat_struct, flatten_0d=True, max_depth=-1):
             # dict-like
             return dict(
                 [(key, dictify_mat_struct(val, flatten_0d, max_depth=max_depth-1))
-                    for key, val in mat_struct.items()])
+                    for key, val in list(mat_struct.items())])
         elif hasattr(mat_struct, '__len__'):
             # list-like
             # this case now seems to catch strings too!
@@ -769,7 +772,7 @@ def generate_event_list_from_trial(trial, trialnumber=None, stimnumber=None):
     """
     rec_l = []
     states = trial['states']
-    for key, val in states.items():
+    for key, val in list(states.items()):
         if key == 'starting_state':
             # field for starting state, error check
             assert val == 'state_0'            
@@ -851,7 +854,7 @@ def demung_trials_info(bcl, TRIALS_INFO=None, CONSTS=None, sound_name=None,
     
     # Replace each integer in each column with appropriate string from CONSTS
     if replace_consts:
-        for col, col_consts in col2consts.items():
+        for col, col_consts in list(col2consts.items()):
             newcol = np.empty(df[col].shape, dtype=np.object)
             for col_const in col_consts:
                 #df[col][df[col] == CONSTS[col_const]] = col_const.lower()
