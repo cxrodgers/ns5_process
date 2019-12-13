@@ -8,17 +8,19 @@ Experimental-specific
 Wraps RecordingSession
 * loads audio data, detects onsets, tells RecordingSession the timestamps
 """
+from __future__ import print_function
+from __future__ import absolute_import
 
 import os
 import time
-import RecordingSession
+from . import RecordingSession
 import numpy as np
-import ns5
-import AudioTools
+from . import ns5
+from . import AudioTools
 try:
     import OpenElectrophy as OE
 except:
-    print "cannot import OE"
+    print("cannot import OE")
     pass
 import matplotlib
 matplotlib.rcParams['figure.subplot.hspace'] = .5
@@ -27,14 +29,14 @@ matplotlib.rcParams['font.size'] = 8.0
 matplotlib.rcParams['xtick.labelsize'] = 'small'
 matplotlib.rcParams['ytick.labelsize'] = 'small'
 import matplotlib.pyplot as plt
-import DataSession
+from . import DataSession
 import collections
 import re
-import SpikeTrainContainers
-import bcontrol
+from . import SpikeTrainContainers
+from . import bcontrol
 import os.path
 import shutil
-from myutils import printnow, parse_bitstream
+from .myutils import printnow, parse_bitstream
 import pandas
 
 
@@ -87,17 +89,17 @@ def link_file(filename, final_dir, verbose=False, dryrun=False, force_run=True):
     # Deal with the case where the link exists, in a couple of ways
     if os.path.islink(target_filename) or os.path.exists(target_filename):
         if not force_run and verbose:
-            print "link already exists, giving up"
+            print("link already exists, giving up")
             return
         if verbose:
-            print "link already exists, deleting"
+            print("link already exists, deleting")
         if not dryrun:
             os.remove(target_filename)
     
     # Do the link
     sys_call_str = 'ln -s %s %s' % (filename, target_filename)
     if verbose:
-        print sys_call_str
+        print(sys_call_str)
     if not dryrun:
         os.system(sys_call_str)
 
@@ -174,7 +176,7 @@ class RecordingSessionMaker:
         if os.path.isfile(ns5_filename):
             link_file(ns5_filename, rs.full_path)
         else:
-            raise(IOError("%s is not a file" % ns5_filename))
+            raise IOError
         
         # Create channel numbering meta file
         #session_SC_list = sorted(list(set(self.SC_list) - set(remove_from_SC)))
@@ -305,7 +307,7 @@ def convert_trial_numbers_to_segments(rs, trial_numbers, block='spike'):
     elif block == 'raw':
         id_block = rs.get_raw_data_block().id
     else:
-        raise(ValueError("block must be 'spike' or 'raw'"))
+        raise ValueError
     
     
     session = self.get_OE_session()
@@ -749,7 +751,7 @@ def add_timestamps_to_session(rs, force=False, drop_first_N_timestamps=0,
         if drop_after_Nth_timestamp is None:
             drop_after_Nth_timestamp = len(t_on) - 1
         if drop_after_Nth_timestamp >= len(t_on):
-            print "warning: drop_after_Nth_timestamp is too high"
+            print("warning: drop_after_Nth_timestamp is too high")
             drop_after_Nth_timestamp = len(t_on) - 1
         if drop_after_Nth_timestamp < drop_first_N_timestamps:
             raise ValueError("warning: incompatible drop indices")
@@ -820,15 +822,15 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
         filename, verbose=verbose, **kwargs)
     if len(trial_start_times) == 0:
         if verbose:
-            print "no times found!"
+            print("no times found!")
         return np.array([]), np.array([])
 
     # Optionally drop trials from beginning
     if drop_first_N_timestamps > 0:
-        print "dropping %d trials from %d to %d labeled %d to %d" % (
+        print("dropping %d trials from %d to %d labeled %d to %d" % (
             drop_first_N_timestamps, 
             trial_start_times[0], trial_start_times[drop_first_N_timestamps-1],
-            trial_numbers[0], trial_numbers[drop_first_N_timestamps-1])
+            trial_numbers[0], trial_numbers[drop_first_N_timestamps-1]))
         trial_start_times = trial_start_times[drop_first_N_timestamps:]
         trial_numbers = trial_numbers[drop_first_N_timestamps:]
     
@@ -839,21 +841,21 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
 
         # Adjust for the case when dropping from both ends (untested)
         if drop_first_N_timestamps > 0:
-            print "warning: really drop from beginning %d and end %d both?" % (
-                drop_first_N_timestamps, drop_after_Nth_timestamp)
+            print("warning: really drop from beginning %d and end %d both?" % (
+                drop_first_N_timestamps, drop_after_Nth_timestamp))
             drop_after_Nth_timestamp = drop_after_Nth_timestamp - \
                 drop_first_N_timestamps
         
         # Drop trials
         if drop_after_Nth_timestamp >= len(trial_numbers) - 1:
-            print "warning: specified drop index is too high, ignoring"
+            print("warning: specified drop index is too high, ignoring")
         else:
             to_drop_times = trial_start_times[drop_after_Nth_timestamp+1:]
             to_drop_numbers = trial_numbers[drop_after_Nth_timestamp+1:]
-            print "dropping %d trials from %d to %d labeled %d to %d" % (
+            print("dropping %d trials from %d to %d labeled %d to %d" % (
                 len(to_drop_numbers), 
                 to_drop_times[0], to_drop_times[-1],
-                to_drop_numbers[0], to_drop_numbers[-1])
+                to_drop_numbers[0], to_drop_numbers[-1]))
             trial_start_times = trial_start_times[:drop_after_Nth_timestamp]
             trial_numbers = trial_numbers[:drop_after_Nth_timestamp]
     
@@ -894,14 +896,14 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
             btrial_starts = btrial_starts[:len(trial_numbers)]
             bstim_onsets = bstim_onsets[:len(trial_numbers)]            
         if verbose:
-            print vmsg
+            print(vmsg)
 
         # check that time syncs up    
         stretch_factors = np.diff(
             trial_start_times / rs.get_sampling_rate()) \
             / np.diff(btrial_starts)
         if np.max(np.abs(stretch_factors - assumed_dilation)) > .001:
-            print "WARNING: dilation is off, suspect sync error"
+            print("WARNING: dilation is off, suspect sync error")
         
         # now account for time to stimulus onset (including temporal dilation)
         if verbose:
@@ -916,7 +918,7 @@ def calculate_timestamps_from_digital_and_sync(rs, verbose=False,
         trial_start_times = trial_start_times + wordlen
         
     elif verbose:
-        print "cannot load bcontrol data, skipping verification"
+        print("cannot load bcontrol data, skipping verification")
 
     return trial_start_times, trial_numbers
 
@@ -955,13 +957,13 @@ def calculate_timestamps(filename, manual_threshhold=None, audio_channels=None,
     # Which audio channels exist in the database?
     existing_audio_channels = l.get_analog_channel_ids()
     if len(existing_audio_channels) == 0:
-        raise(IOError("No audio data exists in file %s" % filename))
+        raise IOError
     
     # If no audio channels were specified, use the first one or two
     if audio_channels is None:
         audio_channels = existing_audio_channels[0:2]
     
-    if len(audio_channels) > 2: print "warning: >2 channel data is not tested"
+    if len(audio_channels) > 2: print("warning: >2 channel data is not tested")
 
     # Now create the numpy array containing mono or stereo data
     if trigger_channel is None:
@@ -1047,15 +1049,15 @@ def calculate_timestamps_from_digital(filename, trial_number_channel=16,
     
     # Return empty if none found
     if len(trial_start_times) == 0:
-        print "warning: no trial numbers found in %s" % filename
+        print("warning: no trial numbers found in %s" % filename)
     else:
         # Some debugging stuff
         if verbose:
-            print "found trials from %d to %d" % (
-                trial_numbers[0], trial_numbers[-1])
+            print("found trials from %d to %d" % (
+                trial_numbers[0], trial_numbers[-1]))
         if np.any((trial_numbers - trial_numbers[0]) != 
             range(len(trial_numbers))):
-            print "warning: trial numbers not ordered correctly"
+            print("warning: trial numbers not ordered correctly")
         
         # Account for truncation
         trial_start_times = trial_start_times + pre_first
@@ -1447,11 +1449,11 @@ def add_behavioral_trial_numbers(rs, bskip=1, copy_corr_files=True):
             # masked trial
             if n_trial == 0:
                 if bskip != 1:
-                    print "warning: can't find behavior trial for n_trial==0, this shouldn't happen with this bskip"
+                    print("warning: can't find behavior trial for n_trial==0, this shouldn't happen with this bskip")
                 #print "WARNING: Assuming this is the dropped first trial"
                 b_trial = bcld.data['TRIALS_INFO']['TRIAL_NUMBER'][0]
             else:
-                print "WARNING: can't find trial"
+                print("WARNING: can't find trial")
                 b_trial = -99
         
         # Store behavioral trial number in the info field
@@ -1503,13 +1505,13 @@ def find_closest_bcontrol_file(bcontrol_folder, ns5_filename, verbose=False,
     
     # Output debugging information
     if verbose:
-        print "BEGIN FINDING FILE"
-        print "target file time: %f = %s" % \
-            (ns5_file_time, time.ctime(ns5_file_time))
-        print "found %d potential matches" % len(potential_file_idxs[0])
+        print("BEGIN FINDING FILE")
+        print("target file time: %f = %s" % \
+            (ns5_file_time, time.ctime(ns5_file_time)))
+        print("found %d potential matches" % len(potential_file_idxs[0]))
         for pfi in potential_file_idxs[0]:
-            print "%s : %f" % (time.ctime(file_times[pfi]),
-                file_times[pfi] - ns5_file_time)
+            print("%s : %f" % (time.ctime(file_times[pfi]),
+                file_times[pfi] - ns5_file_time))
 
     # Choose the last file in the range
     if len(potential_file_idxs[0]) > 0:
@@ -1517,15 +1519,15 @@ def find_closest_bcontrol_file(bcontrol_folder, ns5_filename, verbose=False,
     else:
         # Nothing within range, use closest file
         idx = np.argmin(np.abs(file_times - ns5_file_time))
-        print "warning: no files within target range (" + \
+        print("warning: no files within target range (" + \
             time.ctime(ns5_file_time) + "), using " +  \
-            time.ctime(os.path.getmtime(bc_files[idx]))
+            time.ctime(os.path.getmtime(bc_files[idx])))
     found_file = bc_files[idx]
     
     # Print debugging information
     if verbose:
-        print "Found file at time %s and the diff is %f" % (found_file, 
-            os.path.getmtime(found_file) - ns5_file_time)
+        print("Found file at time %s and the diff is %f" % (found_file, 
+            os.path.getmtime(found_file) - ns5_file_time))
 
     # Return path to best file choice
     return found_file
@@ -1542,7 +1544,7 @@ def guess_session_type(rs):
     try:
         tss = rs.read_timestamps()
     except IOError:
-        print "warning: no timestamps exist, cannot guess session type"
+        print("warning: no timestamps exist, cannot guess session type")
         return "unknown"
     
     if len(tss) < 2:

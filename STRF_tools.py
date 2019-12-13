@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import numpy as np
 import glob
 import os.path
@@ -5,8 +7,8 @@ import matplotlib.mlab as mlab
 import wave
 import struct
 import matplotlib.pyplot as plt
-from myutils import Spectrogrammer
-import myutils
+from .myutils import Spectrogrammer
+from . import myutils
 
 def my_imshow(C, x=None, y=None, ax=None):
     if x is None:
@@ -37,7 +39,7 @@ def clean_up_stimulus(whole_stimulus, silence_value='min_row', z_score=True):
     in the actual signals, and/or the blanking periods.
     """
     if np.any(np.isnan(whole_stimulus)):
-        print "warning: what to do with NaNs?"
+        print("warning: what to do with NaNs?")
     
     
     if silence_value is 'min_row':
@@ -84,7 +86,7 @@ def clean_up_stimulus(whole_stimulus, silence_value='min_row', z_score=True):
     if z_score:
         for n in range(cleaned_stimulus_a.shape[0]):
             s = np.std(cleaned_stimulus_a[n, :])
-            if s < 10**-6: print "warning, std too small"
+            if s < 10**-6: print("warning, std too small")
             cleaned_stimulus_a[n, :] = (
                 cleaned_stimulus_a[n, :] - cleaned_stimulus_a[n, :].mean()) / \
                 np.std(cleaned_stimulus_a[n, :])
@@ -259,7 +261,7 @@ class STRF_experiment:
         the last sample contains the last n_delays samples.
         """   
         if len(self.specgm_list) == 0:
-            print "nothing to concatenate, have you run transform_all_stimuli?"
+            print("nothing to concatenate, have you run transform_all_stimuli?")
             return
         
         # put blanks in front of each stimulus and concatenate
@@ -478,7 +480,7 @@ def clean_up_stimulus(whole_stimulus, silence_value='min_row', z_score=True):
     if z_score:
         for n in range(cleaned_stimulus_a.shape[0]):
             s = np.std(cleaned_stimulus_a[n, :])
-            if s < 10**-6: print "warning, std too small"
+            if s < 10**-6: print("warning, std too small")
             cleaned_stimulus_a[n, :] = (
                 cleaned_stimulus_a[n, :] - cleaned_stimulus_a[n, :].mean()) / \
                 np.std(cleaned_stimulus_a[n, :])
@@ -502,7 +504,7 @@ class DirectFitter:
         if self.X.shape[0] != self.Y.shape[0]:
             raise ValueError("n_timepoints (dim0) is not the same!")
         if self.X.shape[1] > self.X.shape[1]:
-            print "warning: more features than timepoints, possibly transposed"
+            print("warning: more features than timepoints, possibly transposed")
     
     def STA(self):
         """Returns spike-triggered average of stimulus X and response Y.

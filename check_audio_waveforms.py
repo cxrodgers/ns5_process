@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 # Iterates through each trial, grabs audio waveform, checks against
 # other waveforms of same type
 
 import OpenElectrophy as OE
 import numpy as np
-import bcontrol
+from . import bcontrol
 import matplotlib.pyplot as plt
 
 def safe_index(l, val):

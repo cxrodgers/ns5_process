@@ -1,5 +1,7 @@
+from __future__ import print_function
 import numpy as np
 import matplotlib.mlab as mlab
+from functools import reduce
 
 """TODO:
 add __getitem__ to call self._data.__getitem__
@@ -50,7 +52,7 @@ class Picker:
         
         # optionally add a new column
         if len(kwargs) > 0:
-            if len(kwargs) > 1: print "warning: too many arguments"
+            if len(kwargs) > 1: print("warning: too many arguments")
             
             # get the name of the new field and the labels for each Picker
             fieldname = kwargs.keys()[0]
@@ -253,21 +255,21 @@ if __name__ is '__main__':
     p = Picker(data=x, method=1)
     pick_trials = np.arange(N_TRIALS/2)
     pick_units = np.arange(N_UNITS/2)
-    print p.pick_data('spike_time', trial_id=pick_trials, unit_id=pick_units).sum()
+    print(p.pick_data('spike_time', trial_id=pick_trials, unit_id=pick_units).sum())
     
     # Nest test
     # prints data arrays arranged by unit_id
     for pp in p.list_by('unit_id'):
-        print pp._data
+        print(pp._data)
     
     # prints data arrays for unit 1, then 2, then 3
     for pp in p.list_by(unit_id=[1,2,3]):
-        print pp._data
+        print(pp._data)
     
     # prints n, then data array with unit_id==n, unordered
     for unit_id, pp in p.dict_by(unit_id=[1,2,3]):
-        print unit_id
-        print pp._data
+        print(unit_id)
+        print(pp._data)
     
     # add another session
     p.add(q, block=(1,2))

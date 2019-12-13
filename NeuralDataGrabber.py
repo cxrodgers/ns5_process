@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import os
 import shutil
@@ -59,11 +60,11 @@ class NeuralDataGrabber:
         if shove_channels is None:
             shove_channels = self.shove_channels
         elif not os.path.exists(shove_channels):
-            print "warning: %s does not exist for shove_channels" % shove_channels
+            print("warning: %s does not exist for shove_channels" % shove_channels)
         if tetrode_channels is None:
             tetrode_channels = self.tetrode_channels
         elif not os.path.exists(tetrode_channels):
-            print "warning: %s does not exist for tetrode_channels" % tetrode_channels
+            print("warning: %s does not exist for tetrode_channels" % tetrode_channels)
 
         # Make a directory for this date
         date_dir = os.path.join(self.data_analysis_dir, date_string)
@@ -123,8 +124,8 @@ class NeuralDataGrabber:
             
             # Test if multiple bdata mat files now exist
             if len(glob.glob(os.path.join(final_dir, 'data_*.mat'))) > 1:
-                print "warning: bcontrol matfiles already exist."
-                print "you should delete extras in %s" % final_dir
+                print("warning: bcontrol matfiles already exist.")
+                print("you should delete extras in %s" % final_dir)
             
     
     def choose_bdata_file(self, ns5_file_time, verbose=False, pre_time=-1000., 
@@ -147,13 +148,13 @@ class NeuralDataGrabber:
         
         # Output debugging information
         if verbose:
-            print "BEGIN FINDING FILE"
-            print "target file time: %f = %s" % \
-                (ns5_file_time, time.ctime(ns5_file_time))
-            print "found %d potential matches" % len(potential_file_idxs[0])
+            print("BEGIN FINDING FILE")
+            print("target file time: %f = %s" % \
+                (ns5_file_time, time.ctime(ns5_file_time)))
+            print("found %d potential matches" % len(potential_file_idxs[0]))
             for pfi in potential_file_idxs[0]:
-                print "%s : %f" % (time.ctime(file_times[pfi]),
-                    file_times[pfi] - ns5_file_time)
+                print("%s : %f" % (time.ctime(file_times[pfi]),
+                    file_times[pfi] - ns5_file_time))
 
         # Choose the last file in the range
         if len(potential_file_idxs[0]) > 0:
@@ -161,15 +162,15 @@ class NeuralDataGrabber:
         else:
             # Nothing within range, use closest file
             idx = np.argmin(np.abs(file_times - ns5_file_time))
-            print "warning: no files within target range (" + \
+            print("warning: no files within target range (" + \
                 time.ctime(ns5_file_time) + "), using " +  \
-                time.ctime(os.path.getmtime(bc_files[idx]))
+                time.ctime(os.path.getmtime(bc_files[idx])))
         found_file = bc_files[idx]
         
         # Print debugging information
         if verbose:
-            print "Found file at time %s and the diff is %f" % (found_file, 
-                os.path.getmtime(found_file) - ns5_file_time)
+            print("Found file at time %s and the diff is %f" % (found_file, 
+                os.path.getmtime(found_file) - ns5_file_time))
         
         # Return path to best file choice
         return found_file
@@ -206,17 +207,17 @@ class NeuralDataGrabber:
         target_filename = os.path.join(final_dir, os.path.split(filename)[1])
         if os.path.exists(target_filename) and not force_run:
             if verbose:
-                print "link already exists, giving up"
+                print("link already exists, giving up")
             return
         if os.path.exists(target_filename) and force_run:
             if verbose:
-                print "link already exists, deleting"
+                print("link already exists, deleting")
             if not dryrun:
                 os.remove(target_filename)
         
         # Do the link
         sys_call_str = 'ln -s %s %s' % (filename, target_filename)
         if verbose:
-            print sys_call_str
+            print(sys_call_str)
         if not dryrun:
             os.system(sys_call_str)

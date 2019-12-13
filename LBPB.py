@@ -1,4 +1,5 @@
 """Various ways of dealing with stimulus names in LBPB task"""
+from __future__ import print_function
 import numpy as np
 
 short2long = {'lelo': 'LEFT+LOW', 'rilo': 'RIGHT+LOW', 'lehi': 'LEFT+HIGH',
@@ -63,7 +64,7 @@ def stim_onset(trial_events, strict=True):
     """Returns the stimulus onset time in trial_events"""
     subevents = trial_events[trial_events.event == 'play_stimulus_in']
     if len(subevents) != 1:
-        print 'multiple stimulus onsets detected'
+        print('multiple stimulus onsets detected')
         if strict:
             return np.nan
     return subevents.time.values[0]
@@ -72,7 +73,7 @@ def choice_made(trial_events, strict=True):
     """Return end of choosing_side, which can be hit or miss on GO or NOGO"""
     subevents = trial_events[trial_events.event == 'choosing_side_out']
     if len(subevents) != 1:
-        print 'multiple choices detected'
+        print('multiple choices detected')
         if strict:
             return np.nan
     return subevents.time.values[0]  

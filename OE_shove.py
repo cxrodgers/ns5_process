@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 # The purpose of this script is to load binary data from an ns5 file
 # and place the useful part of it into an OE db. The useful part is
 # determined by channels and timestamps that are loaded from disk
@@ -18,7 +20,7 @@
 # The data will be loaded and placed into the db with channel names
 
 # Contains loaders for ns5 files
-import ns5
+from . import ns5
 import OpenElectrophy as OE
 import numpy as np
 import argparse
@@ -58,7 +60,7 @@ def load_control_data():
             path.join(data_dir, 'SHOVE_CHANNELS'), dtype=np.int)
     except IOError:
         # Should probably exit, rather than loading all channels
-        print "CANNOT LOAD SHOVE_CHANNELS"
+        print("CANNOT LOAD SHOVE_CHANNELS")
         SHOVE_CHANNELS = np.array([])
     
     # Which time slices should we load?
@@ -67,7 +69,7 @@ def load_control_data():
             path.join(data_dir, 'TIMESTAMPS'), dtype=np.int)
     except IOError:
         # Should gracefully load all data
-        raise(IOError("CANNOT LOAD TIMESTAMPS IN %s" % data_dir))
+        raise IOError
         #TIMESTAMPS = np.array([])
     
     return (TIMESTAMPS, SHOVE_CHANNELS, pre_slice_len, post_slice_len,
@@ -86,7 +88,7 @@ def stuff(filename, db_name, TIMESTAMPS, SHOVE_CHANNELS,
     # Open connection to OE db and create a block
     if db_type is 'postgres':
         OE.open_db(url=('postgresql://postgres@192.168.0.171/test'))# %s' % db_name))
-        print 'post'
+        print('post')
     else:
         OE.open_db(url=('sqlite:///%s' % db_name))
     #OE.open_db(url=('mysql://root:data@localhost/%s' % db_name))

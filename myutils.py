@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
@@ -288,9 +289,9 @@ def auroc(data1, data2, return_p=False):
         U, p = scipy.stats.mannwhitneyu(data1, data2)
         p = p * 2
     except ValueError:
-        print "some sort of error in MW"
-        print data1
-        print data2
+        print("some sort of error in MW")
+        print(data1)
+        print(data2)
         if return_p:
             return 0.5, 1.0
         else:
@@ -322,7 +323,7 @@ def utest(x, y, return_auroc=False, print_mannwhitneyu_warnings=True,
         p = p * 2
     except ValueError as v:
         if print_mannwhitneyu_warnings:
-            print "Caught exception:", v
+            print("Caught exception:", v)
         badflag = True
 
     # Calculate AUC
@@ -333,7 +334,7 @@ def utest(x, y, return_auroc=False, print_mannwhitneyu_warnings=True,
         AUC = .5
     elif len(x) == 0 or len(y) == 0:
         if print_empty_data_warnings:
-            print "warning: one argument to mannwhitneyu is empty"
+            print("warning: one argument to mannwhitneyu is empty")
         AUC = .5
     else:
         AUC  = 1 - (U / (len(x) * len(y)))
@@ -581,7 +582,7 @@ class Spectrogrammer:
         # Convert to nearest int and test if possible
         self.downsample_ratio = np.rint(self.downsample_ratio).astype(np.int)        
         if self.downsample_ratio == 0:
-            print "requested temporal resolution too high, using maximum"
+            print("requested temporal resolution too high, using maximum")
             self.downsample_ratio = 1
     
         # Default value for noverlap if still None
@@ -1617,7 +1618,7 @@ def apply_and_filter_by_regex(pattern, list_of_strings, sort=True,
         m = re.match(pattern, s)
         if m is None:
             if warn_on_regex_miss:
-                print "warning: regex miss %s" % s
+                print("warning: regex miss %s" % s)
             continue
         else:
             if len(m.groups()) == 1 and squeeze:
@@ -1637,7 +1638,7 @@ def dict_sum(dicts, warn_on_overlap=True):
     if warn_on_overlap:
         overlaps = set.intersection(*[set(dd.keys()) for dd in dicts])
         if len(overlaps) > 0:
-            print "warning: overlapping keys in dict_sum: %r" % overlaps
+            print("warning: overlapping keys in dict_sum: %r" % overlaps)
 
     # Combine
     d = {}

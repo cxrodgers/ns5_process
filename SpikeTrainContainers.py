@@ -1,6 +1,9 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import numpy as np
 from collections import defaultdict
 import matplotlib.pyplot as plt
+from functools import reduce
 
 NO_TRIAL = -99 # flag for spikes not belonging to any trial
 class MultipleUnitSpikeTrain(object):
@@ -175,8 +178,8 @@ class MultipleUnitSpikeTrain(object):
                 spike_trials_idx[n] = NO_TRIAL
 
         if ((no_matches > 0) or (extra_matches > 0)):
-            print ("WARNING: %d spikes matched no trials and " % no_matches) + \
-                ("%d matched more than one" % extra_matches)
+            print(("WARNING: %d spikes matched no trials and " % no_matches) + \
+                ("%d matched more than one" % extra_matches))
 
         # Convert indexes into `onset_trial_numbers` into trial_numbers.        
         self.spike_trials[spike_trials_idx != NO_TRIAL] = \
@@ -368,11 +371,11 @@ class PSTH(object):
         if style == 'rigid':
             trial_count = float(self.n_trials)
             if self.t_starts is not None:
-                print "warning: you should probably call with style='elastic'"
+                print("warning: you should probably call with style='elastic'")
         elif style == 'elastic':
             trial_count = self._trials.astype(np.float) / np.diff(self._bin_edges)
         else:
-            raise(ValueError("style must be rigid or elastic"))
+            raise ValueError
         
         # Return in correct units
         if units is 'spikes':
@@ -469,7 +472,7 @@ class PSTH(object):
         assert (d.max() - d.min()) < 1e-5, "t-values are irregular"
         return np.median(d)
 
-import Picker
+from . import Picker
 class SpikePicker:
     def __init__(self, spiketrains, f_samp):
         N_RECORDS = sum([len(st.spike_times) for st in spiketrains.values()])
@@ -570,7 +573,7 @@ class SpikePicker:
             t_starts, t_stops, t_centers = \
                 p3['t_start'], p3['t_stop'], p3['t_center']
         else:
-            print "warning, no trial info, this is not tested"
+            print("warning, no trial info, this is not tested")
             t_starts, t_stops, t_centers = None, None, None
         
         # Create a new psth using the filtered spike and trial times

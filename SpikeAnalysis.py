@@ -19,12 +19,14 @@ which the plotting functions would use.
 
 Also, a containing object to remember time-parameters like f_samp, binwidth
 """
+from __future__ import print_function
+from __future__ import absolute_import
 import numpy as np
 import pandas
 import glob
 import os.path
-import bcontrol
-import myutils
+from . import bcontrol
+from . import myutils
 import matplotlib.pyplot as plt
 import scipy.stats
 import rpy2.robjects as robjects
@@ -176,7 +178,7 @@ class SpikeServer:
         assert np.all(self.session_names == temp)
         
         if len(self.session_names) == 0:
-            print "warning: no data found"
+            print("warning: no data found")
     
     def read_flat_spikes_and_trials(self, session='all', include_trials='hits',
         unit_filter=None, stim_number_filter=None):
@@ -250,8 +252,8 @@ class SpikeServer:
             if unit_filter is not None:
                 units_to_keep = unit_filter[session_name]
                 if np.any(~np.in1d(units_to_keep, found_units)):
-                    print "warning: could not find all requested units in " + \
-                        "session %s" % session_name
+                    print("warning: could not find all requested units in " + \
+                        "session %s" % session_name)
                 sdf = sdf[sdf.unit.isin(units_to_keep)]
             
             # discard bad trials
@@ -655,7 +657,7 @@ def bin_flat_spike_data(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
         # count trials
         n_trials = None
         if trial_counter is None:
-            print "warnign: no trial info provided, using length"
+            print("warnign: no trial info provided, using length")
             n_trials = len(np.unique(np.asarray(df.trial)))
         else:
             try:
@@ -663,11 +665,11 @@ def bin_flat_spike_data(fsd, trial_counter=None, F_SAMP=30e3, n_bins=75,
                 sound_name = np.unique(np.asarray(df.sound))
                 session = np.unique(np.asarray(df.session))
             except AttributeError:
-                print "warning: cannot get sound/block, using length"
+                print("warning: cannot get sound/block, using length")
                 n_trials = len(np.unique(np.asarray(df.trial)))
         if n_trials is None:
             if len(block_name) > 1 or len(sound_name) > 1 or len(session) > 1:
-                print "warning: non-unique sound/block/session, using length"
+                print("warning: non-unique sound/block/session, using length")
                 n_trials = len(np.unique(np.asarray(df.trial)))
             else:
                 n_trials = trial_counter(session=session, block=block_name, 
@@ -784,7 +786,7 @@ def plot_psths_by_sound_from_flat(fdf, trial_lister=None, fig=None, ymax=1.0,
     # get session name
     session_l = np.unique(np.asarray(fdf.session))
     if len(session_l) != 1:
-        print "error: must be exactly one session!"
+        print("error: must be exactly one session!")
         1/0
     session = session_l[0]
     
@@ -976,7 +978,7 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
         # get session name
         session_l = np.unique(np.asarray(df.session))
         if len(session_l) != 1:
-            print "error: must be exactly one session!"
+            print("error: must be exactly one session!")
             1/0
         session = session_l[0]     
         names.append(key)
@@ -1020,8 +1022,8 @@ def calc_effect_size_by_sound(fdf, trial_lister=None,
         p_d[key] = np.array(p_d[key])
     
     if split_on_filter is not None and len(split_on_filter) != n_incl:
-        print "warning: %d in filter but only found %d" % (len(split_on_filter),
-            n_incl)
+        print("warning: %d in filter but only found %d" % (len(split_on_filter),
+            n_incl))
     
     return mag_d, p_d, names, t
 
@@ -1122,8 +1124,8 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
     # Double-check we didn't lose data
     #if len(df) != pdata['counts'].shape[0] * pdata['counts'].shape[1]:
     if len(df) != np.sum(~np.isnan(pdata['counts'].values)):    
-        print "warning: refolded data doesn't match shape"
-        print "avoid this warning by passing a single trace, or specifying merge column"
+        print("warning: refolded data doesn't match shape")
+        print("avoid this warning by passing a single trace, or specifying merge column")
     
     # Iterate over sounds (one axis per sound)
     for n, sound_name in enumerate(['lehi', 'rihi', 'lelo', 'rilo']):
@@ -1148,7 +1150,7 @@ def plot_psths_by_sound(df, plot_difference=True, split_on=None,
         bad_cols1 = np.array([np.all(t == 0) for t in LB_trials.transpose()])
         bad_cols2 = np.array([np.all(t == 0) for t in PB_trials.transpose()])
         bad_cols = bad_cols1 | bad_cols2
-        print "dropping %d sessions with insufficient trials" % np.sum(bad_cols)
+        print("dropping %d sessions with insufficient trials" % np.sum(bad_cols))
         LB_trials = LB_trials[:, ~bad_cols]
         LB_counts = LB_counts[:, ~bad_cols]
         PB_trials = PB_trials[:, ~bad_cols]

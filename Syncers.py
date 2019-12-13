@@ -1,7 +1,8 @@
 """Module containing objects to sync data"""
+from __future__ import absolute_import
 import numpy as np
 import scipy.signal
-import AudioTools
+from . import AudioTools
 
 
 def find_audio_onsets_by_bout(rs=None, raudio=None, stop_at=None, 

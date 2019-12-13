@@ -1,8 +1,10 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import numpy as np
-from myutils import printnow
-import RecordingSession
-import myutils
-import RecordingSessionMaker as rswrap
+from .myutils import printnow
+from . import RecordingSession
+from . import myutils
+from . import RecordingSessionMaker as rswrap
 import matplotlib.pyplot as plt
 import os
 import datetime
@@ -97,8 +99,8 @@ def run_tones(rs=None,
     Other parameters should be same as other Dailies.
     """
     if len(kwargs) > 0:
-        print "unexpected kwargs"
-        print kwargs
+        print("unexpected kwargs")
+        print(kwargs)
     
     # Make session
     if rs is None:
@@ -200,41 +202,41 @@ def run_tones(rs=None,
                     break
 
             # Output debugging info
-            print "I found %d tones in %d files" % (
-                n_found_tones, len(found_files))
+            print("I found %d tones in %d files" % (
+                n_found_tones, len(found_files)))
             if n_found_tones < n_tones:
-                print "insufficient tones found ... try increasing start delta"
+                print("insufficient tones found ... try increasing start delta")
             
             # More debugging info about first file
-            print "Using general offset of " + str(TR_NDAQ_offset_sec) + " ...."
+            print("Using general offset of " + str(TR_NDAQ_offset_sec) + " ....")
             idx1 = np.where(allfiles == found_files[0])[0]
             offsets = bcontrol_filetimes[idx1-1:idx1+2] - ns5_startime
             poffsets1 = [offset.seconds if offset > datetime.timedelta(0) 
                 else -(-offset).seconds for offset in offsets]
-            print "First file (prev,curr,next) offsets from start: %d %d %d" % \
-                (poffsets1[0], poffsets1[1], poffsets1[2])
+            print("First file (prev,curr,next) offsets from start: %d %d %d" % \
+                (poffsets1[0], poffsets1[1], poffsets1[2]))
             
             # And last file
             idx1 = np.where(allfiles == found_files[-1])[0]
             offsets = bcontrol_filetimes[idx1-1:idx1+2] - ns5_stoptime
             poffsets2 = [offset.seconds if offset > datetime.timedelta(0) 
                 else -(-offset).seconds for offset in offsets]
-            print "Last file (prev,curr,next) offsets from stop: %d %d %d" % \
-                (poffsets2[0], poffsets2[1], poffsets2[2])
+            print("Last file (prev,curr,next) offsets from stop: %d %d %d" % \
+                (poffsets2[0], poffsets2[1], poffsets2[2]))
 
             # Now put in forward order
             bcontrol_files = np.asarray(found_files)
             
             # Debugging output
-            print "Like these results? Here's how to replicate:"
-            print "<speakercal_files>"
+            print("Like these results? Here's how to replicate:")
+            print("<speakercal_files>")
             for bcf in bcontrol_files:
-                print os.path.split(bcf)[1]
-            print "</speakercal_files>"
-            print "clock_offset='%d' start_offset='%d %d %d' stop_offset='%d %d %d'" % (
+                print(os.path.split(bcf)[1])
+            print("</speakercal_files>")
+            print("clock_offset='%d' start_offset='%d %d %d' stop_offset='%d %d %d'" % (
                 TR_NDAQ_offset_sec, 
                 poffsets1[0], start_offset, poffsets1[1], 
-                poffsets2[1], stop_offset, poffsets2[2])
+                poffsets2[1], stop_offset, poffsets2[2]))
         
         # Add to RS
         if bcontrol_files is not None:
@@ -257,15 +259,15 @@ def run_tones(rs=None,
         # verify timestamps
         timestamps = rs.read_timestamps()
         if len(timestamps) < len(tones):
-            print "warning not enough timestamps, discarding tones: " + \
+            print("warning not enough timestamps, discarding tones: " + \
                 "%d timestamps but %d tones" % (
-                len(timestamps), len(tones))
+                len(timestamps), len(tones)))
             tones = tones[:len(timestamps)]
             attens = attens[:len(timestamps)]
         elif len(timestamps) > len(tones):
-            print "warning too many timestamps, provide more tones: " + \
+            print("warning too many timestamps, provide more tones: " + \
                 "%d timestamps but %d tones" % (
-                len(timestamps), len(tones))
+                len(timestamps), len(tones)))
         
         # check spectrograms
         # plot debugging spectrograms of audio
@@ -336,15 +338,15 @@ def run_tones(rs=None,
         tones = np.loadtxt(tone_filename)
         attens = np.loadtxt(atten_filename, dtype=np.int)
         if len(timestamps) < len(tones):
-            print "warning not enough timestamps, discarding tones: " + \
+            print("warning not enough timestamps, discarding tones: " + \
                 "%d timestamps but %d tones" % (
-                len(timestamps), len(tones))
+                len(timestamps), len(tones)))
             tones = tones[:len(timestamps)]
             attens = attens[:len(timestamps)]
         elif len(timestamps) > len(tones):
-            print "warning too many timestamps, provide more tones: " + \
+            print("warning too many timestamps, provide more tones: " + \
                 "%d timestamps but %d tones" % (
-                len(timestamps), len(tones))        
+                len(timestamps), len(tones)))        
         
         
         # parameters for tuning curve
@@ -374,7 +376,7 @@ def run_tones(rs=None,
                 tone_idxs = np.where(
                     (tone_freq_bin == n) & (tone_atten_bin == m))[0]
                 if len(tone_idxs) == 0:
-                    print "none in this bin %f %d" % (tc_freq, tc_atten)
+                    print("none in this bin %f %d" % (tc_freq, tc_atten))
                     continue        
                 
                 tc_mean[m, n] = np.mean(spike_counts[tone_idxs])
@@ -427,8 +429,8 @@ def run_tonetask(rs=None,
     **kwargs
     ):
     if len(kwargs) > 0:
-        print "unexpected kwargs"
-        print kwargs
+        print("unexpected kwargs")
+        print(kwargs)
     
     # Make session
     if rs is None:
@@ -510,8 +512,8 @@ def run_wn(rs=None,
     **kwargs
     ):
     if len(kwargs) > 0:
-        print "unexpected kwargs"
-        print kwargs
+        print("unexpected kwargs")
+        print(kwargs)
     
     # Make session
     if rs is None:
@@ -599,8 +601,8 @@ def run_behaving(rs=None,
     **kwargs
     ):
     if len(kwargs) > 0:
-        print "unexpected kwargs"
-        print kwargs
+        print("unexpected kwargs")
+        print(kwargs)
     
     # Make session
     if rs is None:
@@ -643,7 +645,7 @@ def run_behaving(rs=None,
     if do_add_btrial_numbers:
         printnow('adding btrial numbers')
         if len(numbers) == 0:
-            print "warning: no numbers?"
+            print("warning: no numbers?")
             numbers = None # will auto-determine if all is well
         rswrap.add_behavioral_trial_numbers2(rs, known_trial_numbers=numbers, 
             trial_number_channel=16, verbose=True)

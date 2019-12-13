@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 
 def slice_trials(timestamps, soft_limits=(-100,100), hard_limits=(-1,1), 
@@ -65,8 +66,7 @@ def slice_trials(timestamps, soft_limits=(-100,100), hard_limits=(-1,1),
     # Check whether it is even possible to satisfy the constraints
     hard_starts, hard_stops = [timestamps + hl for hl in hard_limits]
     if np.any(hard_stops[:-1] > hard_starts[1:]):
-        raise(ValueError(\
-            "The hard_limits you provided are impossible to satisfy"))    
+        raise ValueError    
 
     # Begin greedily, by taking as much as each trigger wants
     final_starts, final_stops = [timestamps + sl for sl in soft_limits]
@@ -93,7 +93,7 @@ def slice_trials(timestamps, soft_limits=(-100,100), hard_limits=(-1,1),
         final_stops[collisions] = (hard_stops[collisions] + 
             hard_starts[collisions + 1]) / 2
     else:
-        raise(ValueError("Not a valid collision resolution method"))
+        raise ValueError
     
     # Assign the starts of the post-collision trials to be equal to the
     # stops of the pre-collision trials, thus ensuring no overlap.

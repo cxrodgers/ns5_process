@@ -1,4 +1,5 @@
 """Module providing objects to detect audio onsets."""
+from __future__ import print_function
 
 import numpy as np
 import scipy as sp
@@ -60,7 +61,7 @@ def check_audio_alignment(rs=None, ns5_loader=None, timestamps=None,
             res['smoothed'] = scipy.signal.filtfilt(b, [1], 
                 res['raw'] ** 2)
         except:
-            print "warning: smoothing error"
+            print("warning: smoothing error")
             also_smooth = False
         
     
@@ -247,8 +248,8 @@ class OnsetDetector(object):
         # it would pass the minimum duration requirement.
         if self._minimum_duration_samples < \
             self.smoother.smoothing_filter_length:
-            print "WARNING: with current smoothing settings, even an " \
-                "impulse could pass the min_duration requirement!"
+            print("WARNING: with current smoothing settings, even an " \
+                "impulse could pass the min_duration requirement!")
     
     
     def execute(self):
@@ -267,16 +268,16 @@ class OnsetDetector(object):
         # We need to throw out sounds that are too short.
         # Finally, will store self.detected_onsets.
         if self.verbose:
-            print "Error checking"; sys.stdout.flush()
+            print("Error checking"); sys.stdout.flush()
         self._error_check_onsets(sound_bool)
         
         # Check for sounds too close to beginning
         if len(self.detected_onsets >= 1):
             if self.detected_onsets[0] < self.smoother.smoothing_filter_length:
-                print "warning: first onset is within filter width of beginning"
+                print("warning: first onset is within filter width of beginning")
             if self.detected_offsets[-1] > \
                 (len(sound_bool) - self.smoother.smoothing_filter_length):
-                print "warning: last offset is within filter width of end"
+                print("warning: last offset is within filter width of end")
     
     def _find_mono_threshhold_crossings(self, data_vector):
         """Finds threshhold crossings in mono data_vector.
@@ -299,7 +300,7 @@ class OnsetDetector(object):
         # into dB.
         # smooth the audio data     
         if self.verbose:
-            print "Smoothing the data"; sys.stdout.flush()
+            print("Smoothing the data"); sys.stdout.flush()
         smoothed_power_dB = 20*np.log10(\
             self.smoother.execute(data_vector**2))
         
@@ -309,7 +310,7 @@ class OnsetDetector(object):
         # Autoset threshhold if it wasn't set already
         if self.threshhold is None:
             if self.verbose:
-                print "Autosetting threshhold"; sys.stdout.flush()
+                print("Autosetting threshhold"); sys.stdout.flush()
 
             # Instantiate and run threshhold setter
             self.tset = self.thresh_setter(\
@@ -325,7 +326,7 @@ class OnsetDetector(object):
         
         # find when smoothed waveform exceeds threshhold
         if self.verbose:
-            print "Finding threshhold crossings at %0.3f dB" % self.threshhold
+            print("Finding threshhold crossings at %0.3f dB" % self.threshhold)
             sys.stdout.flush()
         if self.plot_debugging_figures:
             plt.figure()
@@ -350,7 +351,7 @@ class OnsetDetector(object):
         """
         
         if data_vector.shape[0] != 2:
-            print "WARNING: audio data should have shape (2,N)."
+            print("WARNING: audio data should have shape (2,N).")
             data_vector = data_vector.transpose()
 
         sound_bool_L = self._find_mono_threshhold_crossings(data_vector[0])
@@ -375,7 +376,7 @@ class OnsetDetector(object):
                 onsets = onsets[:-1]
         except IndexError:
             # apparently no onsets or no offsets
-            print "No sounds found!"
+            print("No sounds found!")
             onsets = np.array([])
             offsets = np.array([])            
         
@@ -388,8 +389,8 @@ class OnsetDetector(object):
             too_short_sounds = ((offsets - onsets) < self._minimum_duration_samples)
             if np.any(too_short_sounds):
                 if self.verbose:
-                    print "Removing %d sounds that violate duration requirement" % \
-                        len(mlab.find(too_short_sounds))
+                    print("Removing %d sounds that violate duration requirement" % \
+                        len(mlab.find(too_short_sounds)))
                 
             onsets = onsets[np.logical_not(too_short_sounds)]
             offsets = offsets[np.logical_not(too_short_sounds)]
@@ -397,13 +398,13 @@ class OnsetDetector(object):
             # Warn when onsets occur very close together. This might occur if the 
             # sound power briefly drops below threshhold.
             if np.any(np.diff(onsets) < self._minimum_duration_samples):                
-                print "WARNING: %d onsets were suspiciously close together." % \
-                    len(find(np.diff(onsets) < self._minimum_duration_samples))
+                print("WARNING: %d onsets were suspiciously close together." % \
+                    len(find(np.diff(onsets) < self._minimum_duration_samples)))
             
             # Print the total number of sounds identified.
             if self.verbose:
-                print "Identified %d sounds with average duration %0.3fs" % \
-                    (len(onsets), (offsets-onsets).mean() / self.F_SAMP)
+                print("Identified %d sounds with average duration %0.3fs" % \
+                    (len(onsets), (offsets-onsets).mean() / self.F_SAMP))
         
         
         # Store detected onsets

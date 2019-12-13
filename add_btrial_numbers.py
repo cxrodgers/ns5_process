@@ -1,11 +1,13 @@
+from __future__ import print_function
+from __future__ import absolute_import
 # Use the foil objects to correlate TIMESTAMPS (detected with cal code
 # on 1-27-11) with the original ns5 file. Put the stim numbers into
 # the database.
 
-import DataSession
+from . import DataSession
 import numpy as np
 import os.path
-import bcontrol
+from . import bcontrol
 import OpenElectrophy as OE
 import re
 
@@ -79,10 +81,10 @@ def run(control_params, auto_validate=True, v2_behavior=False):
         except IndexError:
             # masked trial
             if n_trial == 0:
-                print "WARNING: Assuming this is the dropped first trial"
+                print("WARNING: Assuming this is the dropped first trial")
                 b_trial = bcl.data['TRIALS_INFO']['TRIAL_NUMBER'][0]
             else:
-                print "WARNING: can't find trial"
+                print("WARNING: can't find trial")
                 b_trial = -99
         
         # Store behavioral trial number in the info field

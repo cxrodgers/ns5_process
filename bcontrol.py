@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import os.path
 import scipy.io
@@ -216,7 +217,7 @@ class Bcontrol_Loader_By_Dir(object):
                 data = pickle.load(f)
             except AttributeError:
                 # not sure why this is the pickling error
-                print "bad pickle"
+                print("bad pickle")
                 return (None, False)
             f.close()
         
@@ -424,7 +425,7 @@ class Bcontrol_Loader(object):
 
         # Check that all the columns are named
         if len(d3) != len(d2):
-            print "Multiple columns with same number in TRIALS_INFO_COLS"
+            print("Multiple columns with same number in TRIALS_INFO_COLS")
 
         # Write the column names in order
         # Will error here if the column names are messed up
@@ -558,8 +559,8 @@ class Bcontrol_Loader(object):
             assert(np.all(TRIALS_INFO['OUTCOME'][len(peh):] == \
                 CONSTS['FUTURE_TRIAL']))
         except AssertionError:
-            print "warn: at least one more trial in TRIALS_INFO than peh."
-            print "checking that it is no more than one ..."
+            print("warn: at least one more trial in TRIALS_INFO than peh.")
+            print("checking that it is no more than one ...")
             assert(np.all(TRIALS_INFO['OUTCOME'][len(peh)+1:] == \
                 CONSTS['FUTURE_TRIAL']))
 
@@ -739,7 +740,7 @@ def generate_event_list(peh, TRIALS_INFO=None, TI_start_idx=0, sort=True,
         # error check that TRIALS_INFO is lined up right
         if TRIALS_INFO is not None and error_check_last_trial is not None:
             if TRIALS_INFO.OUTCOME[ti_idx] != error_check_last_trial:
-                print "warning: last trial in TRIALS_INFO not right"
+                print("warning: last trial in TRIALS_INFO not right")
     else:
         # must be a single trial
         res = generate_event_list_from_trial(peh, trialnumber, stimnumber)

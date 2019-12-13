@@ -29,6 +29,7 @@ of the recording session.
 
 Notice that the last line must end with a newline or carriage return. 
 """
+from __future__ import print_function
 
 
 import OpenElectrophy as OE
@@ -139,8 +140,8 @@ def get_all_spike_times(neuron_list):
         for sttn in stt:            
             if len(sttn.spike_times) > 0:
                 spike_time_list.append(sttn.spike_times - sttn.t_start)
-        print n.name
-        print len(spike_time_list)
+        print(n.name)
+        print(len(spike_time_list))
         if len(spike_time_list) > 0:
             big_spiketimes[n.name] = np.concatenate(spike_time_list)
     

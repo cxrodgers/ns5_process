@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import pdb
 import scipy as sp
@@ -127,28 +128,28 @@ class DataSession:
         try:
             self.audio_onsets = np.loadtxt('audio_onsets', dtype=np.int64)
             self.raw_data_loader.audio_onsets = self.audio_onsets
-            print "Loaded %d previously calculated audio onsets." % \
-                len(self.audio_onsets)
+            print("Loaded %d previously calculated audio onsets." % \
+                len(self.audio_onsets))
             return
         except IOError as inst:
             if inst[0] == 'End-of-file reached before encountering data.':
                 # File exists, but contains no data
-                print "Loaded blank audio_onsets, no sounds found."
+                print("Loaded blank audio_onsets, no sounds found.")
                 self.audio_onsets = np.array([])
                 return
             elif inst[0] == 2:
                 # No such file exists. Let's calculate the audio onsets.
                 "Calculating audio onsets..."
             else:
-                print "Unexpected exception: {0}".format(str(inst))
+                print("Unexpected exception: {0}".format(str(inst)))
                 raise
         
         
         min_duration_samples = min_duration_ms / 1000. / \
             (self.raw_data_loader.header.period / 30000.)
         if min_duration_samples < 2*self.smoothing_filter_length:
-            print "WARNING: with current smoothing settings, even an " \
-                "impulse could pass the min_duration requirement!"
+            print("WARNING: with current smoothing settings, even an " \
+                "impulse could pass the min_duration requirement!")
                 
 
         # load into memory
@@ -198,7 +199,7 @@ class DataSession:
                 onsets = onsets[:-1]
         except IndexError:
             # apparently no onsets or no offsets
-            print "No sounds found!"
+            print("No sounds found!")
             onsets = np.array([])
             offsets = np.array([])            
         
@@ -210,8 +211,8 @@ class DataSession:
             # Remove sounds that violate min_duration requirement.
             too_short_sounds = ((offsets - onsets) < min_duration_samples)
             if np.any(too_short_sounds):
-                print "Removing %d sounds that violate duration requirement" % \
-                    len(mlab.find(too_short_sounds))
+                print("Removing %d sounds that violate duration requirement" % \
+                    len(mlab.find(too_short_sounds)))
                 
             onsets = onsets[np.logical_not(too_short_sounds)]
             offsets = offsets[np.logical_not(too_short_sounds)]
@@ -219,13 +220,13 @@ class DataSession:
             # Warn when onsets occur very close together. This might occur if the 
             # sound power briefly drops below threshhold.
             if np.any(np.diff(onsets) < min_duration_samples):
-                print "WARNING: %d onsets were suspiciously close together." % \
-                    len(find(np.diff(onsets) < min_duration_samples))
+                print("WARNING: %d onsets were suspiciously close together." % \
+                    len(find(np.diff(onsets) < min_duration_samples)))
             
             # Print the total number of sounds identified.
-            print "Identified %d sounds with average duration %0.3fs" % \
+            print("Identified %d sounds with average duration %0.3fs" % \
                 (len(onsets), (offsets-onsets).mean() * \
-                (self.raw_data_loader.header.period / 30000.))
+                (self.raw_data_loader.header.period / 30000.)))
                 
         
         # Now actually save and commit the onset times
@@ -487,7 +488,7 @@ class BehavingSyncer:
         if os.path.exists('CORR_BtoN') and not force_run:
             self.CORR_BtoN = np.loadtxt('CORR_BtoN')
             self.CORR_NtoB = np.loadtxt('CORR_NtoB')
-            print "Syncing information exists, great"
+            print("Syncing information exists, great")
             return
 
 
@@ -723,15 +724,15 @@ class BehavingSyncer:
         
         
         # Print status information about the quality of the fit
-        print "Using {0} behavioral trial onsets, identifed\n"\
+        print("Using {0} behavioral trial onsets, identifed\n"\
         "{1} matching trials [min:{2},max:{3}] in the neural data".format\
         (len(b_onsets), len(np.where(map_b_to_n2.mask == 0)[0]),
-        np.min(map_b_to_n2), np.max(map_b_to_n2))
+        np.min(map_b_to_n2), np.max(map_b_to_n2)))
         
-        print "Using {0} neural trial onsets, identifed\n"\
+        print("Using {0} neural trial onsets, identifed\n"\
         "{1} matching trials [min:{2},max:{3}] in the behavioral data".format\
         (len(n_onsets), len(np.where(map_n_to_b2.mask == 0)[0]),
-        np.min(map_n_to_b2), np.max(map_n_to_b2))        
+        np.min(map_n_to_b2), np.max(map_n_to_b2)))        
         
         
         # Store the results for later use

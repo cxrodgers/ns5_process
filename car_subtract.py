@@ -1,3 +1,4 @@
+from __future__ import print_function
 # The purpose of this script is to re-reference each neural channel
 # in the database. We use a common-average reference (CAR).
 # Potentially I might want to go ahead and high pass filter at this
@@ -63,7 +64,7 @@ def run(db_name, CAR=True, smooth_spikes=True):
     # Check that I haven't already run
     id_blocks, = OE.sql("SELECT block.id FROM block WHERE block.name='CAR Tetrode Data'")
     if len(id_blocks) > 0:
-        print "CAR Tetrode Data already exists, no need to recompute"
+        print("CAR Tetrode Data already exists, no need to recompute")
         return
     
     # Find the block
@@ -171,9 +172,9 @@ def run(db_name, CAR=True, smooth_spikes=True):
             
             # Check for infs or nans
             if np.isnan(filtered_signal).any():
-                print "ERROR: Filtered signal contains NaN!"
+                print("ERROR: Filtered signal contains NaN!")
             if np.isinf(filtered_signal).any():
-                print "ERROR: Filtered signal contains Inf!"
+                print("ERROR: Filtered signal contains Inf!")
             
             # Store in db
             new_sig = OE.AnalogSignal(\
@@ -205,4 +206,4 @@ def run(db_name, CAR=True, smooth_spikes=True):
 if __name__ is '__main__':
     # run argparse
     # call run()
-    print "failed"
+    print("failed")

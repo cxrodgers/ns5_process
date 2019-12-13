@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 NS5_PROCESS_PATH = '/home/chris/ns5_process'
 import sys
 # Path to ns5_process
@@ -5,7 +7,7 @@ if NS5_PROCESS_PATH not in sys.path:
     sys.path.append(NS5_PROCESS_PATH)
 
 import numpy as np
-import bcontrol
+from . import bcontrol
 from collections import defaultdict
 import matplotlib
 matplotlib.rcParams['figure.subplot.hspace'] = .5
@@ -16,8 +18,8 @@ matplotlib.rcParams['ytick.labelsize'] = 'small'
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import os.path
-import KlustaKwikIO
-import SpikeTrainContainers
+from . import KlustaKwikIO
+from . import SpikeTrainContainers
 
 
 class SpikeTrainEnsemble:
@@ -242,7 +244,7 @@ class SpikeTrainEnsembleCreator:
         # Iterate through directories and load each
         for data_dir, name in zip(data_dir_list, name_list):
             if verbose:
-                print data_dir
+                print(data_dir)
                 sys.stdout.flush()
             self.load_single_dir(data_dir, name)
         

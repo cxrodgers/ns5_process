@@ -1,3 +1,4 @@
+from __future__ import print_function
 import OpenElectrophy as OE
 import numpy as np
 import matplotlib.pyplot as plt
@@ -54,5 +55,5 @@ def run(db_name, save_fig_name=None):
 
 if __name__ == '__main__':
     fn = sys.argv[1]
-    print fn
+    print(fn)
     run(fn)

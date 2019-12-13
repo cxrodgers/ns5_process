@@ -1,7 +1,8 @@
+from __future__ import absolute_import
 # This file loads binary data and finds timestamps of audio events
 import numpy as np
-import ns5
-import AudioTools
+from . import ns5
+from . import AudioTools
 import os.path
 
 

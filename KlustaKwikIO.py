@@ -29,11 +29,13 @@ of the recording session.
 
 Notice that the last line must end with a newline or carriage return. 
 """
+from __future__ import print_function
+from __future__ import absolute_import
 
 import numpy as np
 import glob
 import matplotlib.mlab as mlab
-from SpikeTrainContainers import MultipleUnitSpikeTrain
+from .SpikeTrainContainers import MultipleUnitSpikeTrain
 import os.path
 import shutil
 
@@ -266,14 +268,14 @@ class KK_loader(object):
                     cluster_ids[n] = int(name)
                 except ValueError:
                     # What is it
-                    print "warning: cannot parse %s" % name
+                    print("warning: cannot parse %s" % name)
                     cluster_ids[n] = 99
 
         # Simple error checking
         if len(np.unique(cluster_ids)) != nbClusters:
             # sometimes klsutakwik doesn't produce a cluster 1
             # but still counts it?
-            print "warning: number cluster ids doesn't match in %s" % clufilename
+            print("warning: number cluster ids doesn't match in %s" % clufilename)
         #assert(len(np.unique(cluster_names)) == nbClusters)
 
         return cluster_ids

@@ -1,10 +1,12 @@
+from __future__ import print_function
+from __future__ import absolute_import
 import numpy as np
 import matplotlib.pyplot as plt
 import os.path
 import glob
 import pandas
-import SpikeAnalysis
-import myutils
+from . import SpikeAnalysis
+from . import myutils
 from matplotlib import mlab
 import scipy.stats
 
@@ -141,7 +143,7 @@ class SingleServeLFP:
         try:
             self._tdf = pandas.load(self.tdf_file)
         except IOError:
-            print "warning: cannot load trials %s" % self.tdf_file
+            print("warning: cannot load trials %s" % self.tdf_file)
             self._tdf = None
     
     def _read_numpy_z_format(self, fn):

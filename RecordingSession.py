@@ -17,25 +17,27 @@ RecordingSession spec:
 * TIMESTAMPS with times in samples to extract
 * Time limits filename with soft limits on first line, then hard
 """
+from __future__ import print_function
+from __future__ import absolute_import
 
 import shutil
 import glob
 import os.path
-import ns5
+from . import ns5
 import time
 import numpy as np
-import TrialSlicer
+from . import TrialSlicer
 try:
     import OpenElectrophy as OE
 except:
-    print "cannot import OE"
+    print("cannot import OE")
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
-import KlustaKwikIO
+from . import KlustaKwikIO
 import scipy.signal
-import SpikeTrainContainers
-from myutils import printnow
-import myutils
+from . import SpikeTrainContainers
+from .myutils import printnow
+from . import myutils
 import datetime
 import warnings
 
@@ -188,7 +190,7 @@ class RecordingSession:
         return os.path.join(self.full_path, self.session_name + '.db')
     
     def open_db(self):
-        print "deprecated, go through get_OE_session"
+        print("deprecated, go through get_OE_session")
         OE.open_db('sqlite:///' + self.get_db_filename())
         self.session = OE.Session()
     
@@ -268,7 +270,7 @@ class RecordingSession:
             return None        
         
         if len(filename_list) > 1:
-            print "warning: multiple ns5 files exist in %s" % self.full_path
+            print("warning: multiple ns5 files exist in %s" % self.full_path)
         
         return filename_list[0]
 
@@ -443,7 +445,7 @@ class RecordingSession:
                 #e.save()
                 seg._events.append(e)
         else:
-            print "warning: timestamps were dropped so I can't add events"
+            print("warning: timestamps were dropped so I can't add events")
 
         # Save to database
         if verbose:
@@ -587,9 +589,9 @@ class RecordingSession:
             referenced_signal = sig.signal - car_sig.signal
             filtered_signal = self.filterer.filter(referenced_signal)
             if np.isnan(filtered_signal).any():
-                print "ERROR: Filtered signal contains NaN!"
+                print("ERROR: Filtered signal contains NaN!")
             if np.isinf(filtered_signal).any():
-                print "ERROR: Filtered signal contains Inf!"
+                print("ERROR: Filtered signal contains Inf!")
             
             # Store in db
             new_sig = OE.AnalogSignal(\
@@ -710,7 +712,7 @@ class RecordingSession:
         sig_idseg_list = [sig.id_segment for sig in signal_list]        
         ev_idseg_list = [e.id_segment for e in event_list]
         if len(np.unique(ev_idseg_list)) != len(ev_idseg_list):
-            raise(ValueError("More than one of the specified event per segment"))        
+            raise ValueError        
         signal_list = [signal_list[sig_idseg_list.index(id_seg)] \
             for id_seg in ev_idseg_list]
 
@@ -769,7 +771,7 @@ class RecordingSession:
             
             # Warn
             if len(Pxx_list_db) != len(Pxx_list):
-                print "warning: discarding spectra with infs"
+                print("warning: discarding spectra with infs")
             
             # Average and return
             return (np.mean(np.array(Pxx_list_db), axis=0), freqs)
@@ -966,7 +968,7 @@ class RecordingSession:
         elif len(fet0) == 0 and len(clu0) == 0:
             renumber = False
         else:
-            print "error: cannot renumber fet and clu files"
+            print("error: cannot renumber fet and clu files")
             return
         
         if force_renumber:
@@ -988,7 +990,7 @@ class RecordingSession:
         newxmlname = os.path.join(kdir, self.session_name + '.xml')
         if not force and os.path.exists(newxmlname):
             if verbose:
-                print "%s already exists" % newxmlname
+                print("%s already exists" % newxmlname)
         else:
             groups = self.read_channel_groups()
             self.write_klusters_xml_file(newxmlname, groups)
@@ -1111,7 +1113,7 @@ class RecordingSession:
             # this is going to require rewriting the add_trial_info method
             1/0
         else:
-            print "warning: unrecognized window"
+            print("warning: unrecognized window")
         
         return spiketrain_dict
     
@@ -1131,10 +1133,10 @@ class RecordingSession:
                 psths[groupnum] = {}
                 uids = st.get_unique_unit_IDs()
                 if np.all(uids == np.array(None)) or len(uids) == 0:
-                    print "no units, help"
+                    print("no units, help")
                     1/0
                 elif len(uids) == 1:
-                    print "this is where code for MUA goes"
+                    print("this is where code for MUA goes")
                     1/0
                 else:                
                     for uid in uids:
@@ -1280,7 +1282,7 @@ class RecordingSession:
     
         # Warn if couldn't parse the info field
         if warnt:
-            print "warning: auto assigned trial numbers"
+            print("warning: auto assigned trial numbers")
         
         # Error check trial labels and times
         if len(t_nums) != len(np.unique(t_nums)):
@@ -1296,7 +1298,7 @@ class RecordingSession:
             try:
                 t_starts2, t_stops2 = self.calculate_trial_boundaries()
             except IOError:
-                print "warning: you requested trial checking but can't load ns5"
+                print("warning: you requested trial checking but can't load ns5")
                 skip_assert = True
             if not skip_assert:
                 assert np.all(np.asarray(t_starts) == np.asarray(t_starts2))
@@ -1333,7 +1335,7 @@ class RecordingSession:
         # Check if klustakwik has already been run
         klg_list = glob.glob(os.path.join(subdir, '*.klg.*'))
         if len(klg_list) > 0 and not force:
-            print "klustakwik already ran in %s, continuing" % subdir
+            print("klustakwik already ran in %s, continuing" % subdir)
             return
         
         p = multiprocessing.Pool(processes)
@@ -1357,7 +1359,7 @@ class RecordingSession:
             try:
                 p.join()
                 notintr = True
-            except OSError, ose:
+            except OSError as ose:
                 if ose.errno != errno.EINTR:
                     raise ose
         

@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 # I think this can be broken into data container (MultipleUnitSpikeTrain),
 # loading into this container (KK_loader), display object (PSTH),
 # and initializing display object from bcontrol (various helper functions)
@@ -8,9 +10,10 @@ import glob
 import matplotlib
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
-import bcontrol
+from . import bcontrol
 import pickle
 from collections import defaultdict
+from functools import reduce
 matplotlib.rcParams['figure.subplot.hspace'] = .5
 matplotlib.rcParams['figure.subplot.wspace'] = .5
 matplotlib.rcParams['font.size'] = 8.0
@@ -195,8 +198,8 @@ class MultipleUnitSpikeTrain(object):
                 spike_trials_idx[n] = np.nan
 
         if ((no_matches > 0) or (extra_matches > 0)):
-            print ("WARNING: %d spikes matched no trials and " % no_matches) + \
-                ("%d matched more than one" % extra_matches)
+            print(("WARNING: %d spikes matched no trials and " % no_matches) + \
+                ("%d matched more than one" % extra_matches))
 
         # Convert indexes into `onset_trial_numbers` into trial_numbers.
         self.spike_trials = onset_trial_numbers[spike_trials_idx]
@@ -388,7 +391,7 @@ class PSTH(object):
 # # # CODE GRAVEYARD
 # # # DELETE THIS
 def calc_psth(st):   
-    print "DEPRECATED, USE PSTH OBJECT"
+    print("DEPRECATED, USE PSTH OBJECT")
     if len(st) == 0:
         return (np.array([]), np.array([]))
     h, bin_edges = np.histogram(st, bins=100)
@@ -396,7 +399,7 @@ def calc_psth(st):
     return (h, bin_centers/30000.)
 
 def MUA_PSTH_vs_sn2(spiketrain, sn2trials, sn2name, nbins=300):
-    print "DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY"
+    print("DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY")
     tet_psth_vs_sn = dict()
     for sn, trial_list in sn2trials.items():
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list)
@@ -404,7 +407,7 @@ def MUA_PSTH_vs_sn2(spiketrain, sn2trials, sn2name, nbins=300):
     return tet_psth_vs_sn    
 
 def SUA_PSTH_vs_sn2(spiketrain, uid, sn2trials, sn2name, nbins=300, range=None):
-    print "DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY"
+    print("DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY")
     uu_psth_vs_sn = dict()
     for sn, trial_list in sn2trials.items():
         keepspikes = spiketrain.pick_spikes(pick_trials=trial_list, pick_units=[uid])
@@ -413,7 +416,7 @@ def SUA_PSTH_vs_sn2(spiketrain, uid, sn2trials, sn2name, nbins=300, range=None):
     
 
 def MUA_PSTH_vs_sn(spiketrain, sn2trials, sn2name, savename=None):
-    print "DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY"
+    print("DEPRECATED, CONSTRUCT PSTH FROM SPIKETRAIN DIRECTLY")
     """Given spiketrain from tetrode and mappings of stimuli names
     and trials, plots an MUA PSTH."""
     plt.figure()            
@@ -432,7 +435,7 @@ def MUA_PSTH_vs_sn(spiketrain, sn2trials, sn2name, savename=None):
 
 
 def get_trial_numbers_vs_sn(TRIALS_INFO, CONSTS):
-    print "DEPRECATED, USE BCONTROL.BCONTROL_LOADER_BY_DIR(DATA_DIR).GET_SN2TRIALS()"
+    print("DEPRECATED, USE BCONTROL.BCONTROL_LOADER_BY_DIR(DATA_DIR).GET_SN2TRIALS()")
     trial_numbers_vs_sn = dict()
     for sn in np.unique(TRIALS_INFO['STIM_NUMBER']):
         keep_rows = \
@@ -444,7 +447,7 @@ def get_trial_numbers_vs_sn(TRIALS_INFO, CONSTS):
 
 
 def get_bdata_pickle(data_dir):
-    print "DEPRECATED, USE BCONTROL.BCONTROL_LOADER_BY_DIR(DATA_DIR).LOAD()"
+    print("DEPRECATED, USE BCONTROL.BCONTROL_LOADER_BY_DIR(DATA_DIR).LOAD()")
     
     # Get behavioral data, pickling as necessary
     # Move this into bcontrol.py

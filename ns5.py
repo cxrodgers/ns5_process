@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import struct
     
@@ -118,22 +119,22 @@ class Loader(object):
         self.header.File_Type_ID = [chr(ord(c)) \
             for c in self.file_handle.read(8)]
         if "".join(self.header.File_Type_ID) != 'NEURALSG':
-            print "Incompatible ns5 file format. Only v2.1 is supported.\n" + \
-                "This will probably not work."          
+            print("Incompatible ns5 file format. Only v2.1 is supported.\n" + \
+                "This will probably not work.")          
         
         
         # Read File_Spec and check compatibility.
         self.header.File_Spec = [chr(ord(c)) \
             for c in self.file_handle.read(16)]
         if "".join(self.header.File_Spec[:8]) != '30 kS/s\0':
-            print "File_Spec seems to indicate you did not sample at 30KHz."
+            print("File_Spec seems to indicate you did not sample at 30KHz.")
         
         
         #R ead Period and verify that 30KHz was used. If not, the code will
         # still run but it's unlikely the data will be useful.
         self.header.period, = struct.unpack('<I', self.file_handle.read(4))
         if self.header.period != 1:
-            print "Period seems to indicate you did not sample at 30KHz."
+            print("Period seems to indicate you did not sample at 30KHz.")
         self.header.f_samp = self.header.period * 30000.0
 
 
@@ -159,10 +160,10 @@ class Loader(object):
         if self.header.sample_width * self.header.Channel_Count * \
             self.header.n_samples + \
             self.header.Header != self.header.file_total_size:
-            print "I got header of %dB, %d channels, %d samples, \
+            print("I got header of %dB, %d channels, %d samples, \
                 but total file size of %dB" % (self.header.Header, 
                 self.header.Channel_Count, self.header.n_samples, 
-                self.header.file_total_size)
+                self.header.file_total_size))
 
         # close file
         self.file_handle.close()
@@ -203,7 +204,7 @@ class Loader(object):
         
         # error check
         if (start + n_samples) > self.header.n_samples:
-            print "warning: you have requested more than the available data"
+            print("warning: you have requested more than the available data")
             start = 0
             n_samples = self.header.n_samples
         count = n_samples * self.header.Channel_Count
