@@ -240,7 +240,7 @@ class OnsetDetector(object):
         # is set based on the delayed data, it doesn't matter too much.
         # Check debugging figure to reassure yourself that the delay is not
         # significant.
-        flen = np.rint(.003*self.F_SAMP) # 3ms
+        flen = int(np.rint(.003*self.F_SAMP)) # 3ms
         self.smoother = CausalRectangularSmoother(smoothing_filter_length=flen)
         
         
@@ -324,7 +324,7 @@ class OnsetDetector(object):
             th = self.tset.execute()
             
             # Apply minimum threshhold test
-            if th > self._minimum_threshhold:
+            if self._minimum_threshhold is None or th > self._minimum_threshhold:
                 self.threshhold = th
             else:
                 self.threshhold = self._minimum_threshhold        
@@ -368,8 +368,8 @@ class OnsetDetector(object):
     def _error_check_onsets(self, sound_bool):
         # Find when the threshhold crossings first happen. `onsets` and
         # `offsets` are inclusive bounds on audio power above threshhold.
-        onsets = mlab.find(np.diff(np.where(sound_bool, 1, 0)) == 1) + 1
-        offsets = mlab.find(np.diff(np.where(sound_bool, 1, 0)) == -1)
+        onsets = np.where(np.diff(np.where(sound_bool, 1, 0)) == 1)[0] + 1
+        offsets = np.where(np.diff(np.where(sound_bool, 1, 0)) == -1)[0]
         
         # check that we don't start or end in the middle of a sound
         try:
@@ -395,7 +395,7 @@ class OnsetDetector(object):
             if np.any(too_short_sounds):
                 if self.verbose:
                     print("Removing %d sounds that violate duration requirement" % \
-                        len(mlab.find(too_short_sounds)))
+                        len(np.where(too_short_sounds)[0]))
                 
             onsets = onsets[np.logical_not(too_short_sounds)]
             offsets = offsets[np.logical_not(too_short_sounds)]
